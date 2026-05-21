@@ -1,4 +1,26 @@
-## 6. Faza 0 — formalności i ustawienie projektu
+# Roadmap
+
+Roadmapa dla `rankr` - projektu inżynierskiego aplikacji webowej do scoringu i rankingowania instrumentów GPW.
+
+MVP:
+
+- GPW/WIG20 end-of-day data.
+- Deterministyczny scoring i ranking.
+- Prosty backend, frontend, baza danych i wykresy.
+- Backtesting wystarczający do opisania wyników w pracy.
+
+Poza MVP:
+
+- Dane real-time.
+- Logika bota inwestycyjnego.
+- Integracja z brokerem.
+- Uczenie maszynowe.
+
+Zasada ogólna: kod źródłowy, testy i dokumentacja powinny powstawać stopniowo, razem z kolejnymi fazami.
+
+---
+
+## Faza 0 - Formalności i ustawienie projektu
 
 ### Cel
 
@@ -18,19 +40,17 @@ Ustawić temat, zakres, repozytorium i dokumentację startową.
 - Utworzyć strukturę katalogów.
 - Utworzyć katalog `docs/polish_thesis/`.
 
-### Deliverables
+### Rezultaty
 
-```text
-README.md
-AI_CONTEXT.md
-NAMING_IDEAS.md
-docs/project_scope.md
-docs/development_plan.md
-docs/polish_thesis/temat_pracy.md
-docs/polish_thesis/zakres_pracy.md
-```
+- `README.md`
+- `AI_CONTEXT.md`
+- `NAMING_IDEAS.md`
+- `docs/project_scope.md`
+- `docs/development_plan.md`
+- `docs/polish_thesis/temat_pracy.md`
+- `docs/polish_thesis/zakres_pracy.md`
 
-### Definition of Done
+### Gotowe, gdy
 
 - Jest repozytorium.
 - Jest robocza nazwa projektu.
@@ -40,7 +60,7 @@ docs/polish_thesis/zakres_pracy.md
 
 ---
 
-## 7. Faza 1 — analiza źródeł danych
+## Faza 1 - Analiza źródeł danych
 
 ### Cel
 
@@ -53,45 +73,43 @@ Sprawdzić, skąd i jak pobierać dane EOD dla GPW.
 - Sprawdzić indeksy: WIG, WIG20, mWIG40, sWIG80.
 - Pobrać ręcznie próbki CSV/XLS.
 - Sprawdzić format danych.
-- Sprawdzić kolumny: date, open, high, low, close, volume.
+- Sprawdzić kolumny: `date`, `open`, `high`, `low`, `close`, `volume`.
 - Sprawdzić braki danych.
+- Sprawdzić zasady użycia i redystrybucji danych.
 - Opisać ograniczenia źródeł.
-- Przygotować sample data w `data/raw/`.
+- Przygotować przykładowe dane w `data/raw/`.
 
-### Deliverables
+### Rezultaty
 
-```text
-docs/data_sources.md
-data/raw/kgh_sample.csv
-data/raw/wig20_sample.csv
-docs/polish_thesis/metodyka.md
-```
+- `docs/data_sources.md`
+- `data/raw/kgh_sample.csv`
+- `data/raw/wig20_sample.csv`
+- `docs/polish_thesis/metodyka.md`
 
-### Definition of Done
+### Gotowe, gdy
 
 - Istnieją próbki danych.
 - Wiadomo, jak wygląda format danych.
 - Wiadomo, jakie są ograniczenia źródeł.
+- Wiadomo, czy dane można trzymać w repozytorium.
 - Da się ręcznie przejść od pliku danych do planowanego modelu OHLCV.
 
 ---
 
-## 8. Faza 2 — projekt danych i bazy
+## Faza 2 - Projekt danych, bazy i kontraktów
 
 ### Cel
 
-Zaprojektować model danych przed implementacją logiki.
+Zaprojektować model danych oraz podstawowe kontrakty przed implementacją logiki.
 
 ### Planowane kolekcje/tabele
 
-```text
-instrument
-price_daily
-score_result
-score_config
-backtest_result
-data_source_log
-```
+- `instrument`
+- `price_daily`
+- `score_result`
+- `score_config`
+- `backtest_result`
+- `data_source_log`
 
 ### Zadania
 
@@ -103,28 +121,29 @@ data_source_log
 - Zaprojektować `data_source_log`.
 - Ustalić unikalność danych cenowych: `instrument_id + date`.
 - Ustalić unikalność scoringu: `instrument_id + date + config_id`.
+- Opisać podstawowy kontrakt API w `docs/api.md`.
 - Przygotować `schema.surql`.
 - Przygotować `seed.surql`.
 
-### Deliverables
+### Rezultaty
 
-```text
-database/schema.surql
-database/seed.surql
-docs/architecture.md
-```
+- `database/schema.surql`
+- `database/seed.surql`
+- `docs/architecture.md`
+- `docs/api.md`
 
-### Definition of Done
+### Gotowe, gdy
 
 - Wiadomo, gdzie zapisywać instrumenty.
 - Wiadomo, gdzie zapisywać ceny.
 - Wiadomo, gdzie zapisywać scoringi.
 - Wiadomo, gdzie zapisywać konfiguracje.
 - Wiadomo, gdzie zapisywać wyniki backtestów.
+- Wiadomo, jakie dane frontend będzie pobierał z backendu.
 
 ---
 
-## 9. Faza 3 — minimalny backend
+## Faza 3 - Minimalny backend
 
 ### Cel
 
@@ -142,33 +161,31 @@ Uruchomić backend Axum i pierwszy endpoint.
 - Dodać konfigurację `.env`.
 - Dodać `AppState`.
 - Dodać endpoint `/api/health`.
+- Dodać minimalny test healthchecka.
 
 ### Endpointy startowe
 
-```text
-GET /api/health
-GET /api/instruments
-GET /api/instruments/{symbol}
-```
+- `GET /api/health`
+- `GET /api/instruments`
+- `GET /api/instruments/{symbol}`
 
-### Deliverables
+### Rezultaty
 
-```text
-backend/
-shared/
-.env.example
-```
+- `backend/`
+- `shared/`
+- `.env.example`
 
-### Definition of Done
+### Gotowe, gdy
 
 - Backend startuje.
 - `/api/health` zwraca JSON.
 - Istnieje podstawowa struktura modułów.
 - Backend nie zawiera jeszcze niepotrzebnej logiki biznesowej.
+- Healthcheck jest testowany.
 
 ---
 
-## 10. Faza 4 — integracja z SurrealDB
+## Faza 4 - Integracja z SurrealDB
 
 ### Cel
 
@@ -184,32 +201,32 @@ Backend zapisuje i odczytuje dane z bazy.
 - Dodać endpoint `GET /api/instruments`.
 - Dodać endpoint `GET /api/instruments/{symbol}`.
 - Obsłużyć błędy połączenia z bazą.
+- Dodać testy repository lub testy integracyjne dla krytycznych zapytań.
 
-### Deliverables
+### Rezultaty
 
-```text
-backend/src/db/
-backend/src/repositories/
-database/schema.surql
-database/seed.surql
-```
+- `backend/src/db/`
+- `backend/src/repositories/`
+- `database/schema.surql`
+- `database/seed.surql`
 
-### Definition of Done
+### Gotowe, gdy
 
 - Backend łączy się z SurrealDB.
 - Można pobrać listę instrumentów.
 - Można pobrać pojedynczy instrument.
-- Dane pochodzą z bazy, nie z hardcode’u.
+- Dane pochodzą z bazy, nie z hardcode'u.
+- Błędy bazy są obsłużone czytelną odpowiedzią API.
 
 ---
 
-## 11. Faza 5 — import danych EOD
+## Faza 5 - Import danych EOD
 
 ### Cel
 
 Zbudować pipeline pobierania i zapisywania danych OHLCV.
 
-### Etap 5A — manual CSV import
+### Etap 5A - Manual CSV import
 
 #### Zadania
 
@@ -221,21 +238,21 @@ Zbudować pipeline pobierania i zapisywania danych OHLCV.
 - Usuwać duplikaty.
 - Zapisywać dane do `price_daily`.
 - Logować import.
+- Dodać testy parsera CSV.
 
 #### Endpointy
 
-```text
-POST /api/data/import-csv
-GET  /api/prices/{symbol}
-```
+- `POST /api/data/import-csv`
+- `GET /api/prices/{symbol}`
 
-#### Definition of Done
+#### Gotowe, gdy
 
 - Da się zaimportować dane dla jednego instrumentu.
 - Ceny są zapisane w SurrealDB.
 - API zwraca serię cenową.
+- Parser ma testy dla poprawnych i błędnych danych.
 
-### Etap 5B — downloader Stooq/GPW
+### Etap 5B - Downloader Stooq/GPW
 
 #### Zadania
 
@@ -249,87 +266,83 @@ GET  /api/prices/{symbol}
 
 #### Endpoint
 
-```text
-POST /api/data/update
-```
+- `POST /api/data/update`
 
-#### Definition of Done
+#### Gotowe, gdy
 
 - Da się pobrać dane dla jednego instrumentu.
 - Da się pobrać dane dla listy WIG20.
 - System nie crashuje przy braku danych.
+- Log importu pokazuje źródło i status pobrania.
 
 ---
 
-## 12. Faza 6 — moduł analityczny R
+## Faza 6 - Metodyka scoringu i moduł analityczny R
 
 ### Cel
 
-R liczy wskaźniki i scoring, a Rust potrafi odpalić skrypt przez Rscript.
-
-### Pliki
-
-```text
-analytics/io.R
-analytics/indicators.R
-analytics/scoring.R
-analytics/backtest.R
-```
+Zdefiniować explainable scoring, a następnie policzyć go w R i uruchomić przez `Rscript` z Rust.
 
 ### Minimalne wskaźniki
 
-```text
-SMA50
-SMA200
-return_1m
-return_3m
-return_6m
-volatility_20d
-max_drawdown
-relative_strength_vs_wig20
-avg_volume_20d
-```
+- `SMA50`
+- `SMA200`
+- `return_1m`
+- `return_3m`
+- `return_6m`
+- `volatility_20d`
+- `max_drawdown`
+- `relative_strength_vs_wig20`
+- `avg_volume_20d`
 
-### Komponenty score’u
+### Komponenty score'u
 
-```text
-trend_score
-momentum_score
-risk_score
-volume_score
-relative_strength_score
-final_score
-label
-```
+- `trend_score`
+- `momentum_score`
+- `risk_score`
+- `volume_score`
+- `relative_strength_score`
+- `final_score`
+- `label`
+
+### Pliki
+
+- `analytics/io.R`
+- `analytics/indicators.R`
+- `analytics/scoring.R`
+- `analytics/backtest.R`
 
 ### Zadania
 
+- Opisać wzory i założenia w `docs/scoring_methodology.md`.
+- Ustalić progi etykiet score'u.
 - R czyta CSV/JSON.
 - R liczy wskaźniki.
-- R normalizuje wyniki do skali 0–100.
+- R normalizuje wyniki do skali 0-100.
 - R zwraca JSON.
 - Rust odpala `Rscript`.
 - Rust czyta output JSON.
 - Rust zapisuje score do bazy.
+- Dodać testy dla wskaźników i normalizacji.
 
-### Deliverables
+### Rezultaty
 
-```text
-analytics/scoring.R
-analytics/indicators.R
-backend/src/analytics/rscript_runner.rs
-```
+- `docs/scoring_methodology.md`
+- `analytics/scoring.R`
+- `analytics/indicators.R`
+- `backend/src/analytics/rscript_runner.rs`
 
-### Definition of Done
+### Gotowe, gdy
 
 - Dla jednego instrumentu powstaje final score.
 - Wynik jest zapisany w bazie.
 - Wynik można pobrać przez API.
 - Score jest wyjaśnialny przez komponenty.
+- Wzory scoringu są opisane w dokumentacji.
 
 ---
 
-## 13. Faza 7 — scoring wielu instrumentów i ranking
+## Faza 7 - Scoring wielu instrumentów i ranking
 
 ### Cel
 
@@ -339,32 +352,32 @@ Aplikacja zaczyna wykonywać główną funkcję: ranking instrumentów.
 
 - Pobrać ceny dla wielu instrumentów.
 - Wygenerować input dla R.
-- Policz scoring dla każdego instrumentu.
+- Policzyć scoring dla każdego instrumentu.
 - Zapisać `score_result`.
 - Dodać endpoint `GET /api/ranking`.
 - Dodać sortowanie po `final_score`.
-- Dodać filtrowanie po label.
+- Dodać filtrowanie po `label`.
 - Dodać endpoint `GET /api/scores/{symbol}`.
-- Dodać historię score’u.
+- Dodać historię score'u.
+- Dodać testy sortowania i filtrowania rankingu.
 
 ### Endpointy
 
-```text
-POST /api/score/recalculate
-GET  /api/ranking
-GET  /api/scores/{symbol}
-```
+- `POST /api/score/recalculate`
+- `GET /api/ranking`
+- `GET /api/scores/{symbol}`
 
-### Definition of Done
+### Gotowe, gdy
 
 - Istnieje ranking WIG20.
 - Każdy instrument ma score.
-- Można pobrać historię score’u.
-- Ranking jest sortowany według final score.
+- Można pobrać historię score'u.
+- Ranking jest sortowany według `final_score`.
+- Ranking jest wystarczająco opisany do użycia w pracy.
 
 ---
 
-## 14. Faza 8 — frontend shell
+## Faza 8 - Frontend shell
 
 ### Cel
 
@@ -372,22 +385,18 @@ Uruchomić Leptos i podstawowy interfejs.
 
 ### Strony
 
-```text
-/dashboard
-/instrument/{symbol}
-/backtest
-/settings/scoring
-```
+- `/dashboard`
+- `/instrument/{symbol}`
+- `/backtest`
+- `/settings/scoring`
 
 ### Komponenty
 
-```text
-Layout
-RankingTable
-ScoreBadge
-ScoreBreakdown
-MetricCard
-```
+- `Layout`
+- `RankingTable`
+- `ScoreBadge`
+- `ScoreBreakdown`
+- `MetricCard`
 
 ### Zadania
 
@@ -400,7 +409,7 @@ MetricCard
 - Obsłużyć loading state.
 - Obsłużyć error state.
 
-### Definition of Done
+### Gotowe, gdy
 
 - Frontend startuje.
 - Dashboard pobiera `/api/ranking`.
@@ -409,7 +418,7 @@ MetricCard
 
 ---
 
-## 15. Faza 9 — Plotters i wykresy
+## Faza 9 - Plotters i wykresy
 
 ### Cel
 
@@ -417,12 +426,12 @@ Dodać wizualizację danych.
 
 ### Kolejność wykresów
 
-1. Close price line chart.
-2. SMA50/SMA200 chart.
-3. Score history chart.
-4. Equity curve.
-5. Drawdown chart.
-6. Candlestick chart jako opcjonalne rozszerzenie.
+1. Wykres ceny zamknięcia.
+2. Wykres SMA50/SMA200.
+3. Wykres historii score'u.
+4. Wykres equity curve.
+5. Wykres drawdown.
+6. Wykres candlestick jako opcjonalne rozszerzenie.
 
 ### Zadania
 
@@ -433,16 +442,16 @@ Dodać wizualizację danych.
 - Obsłużyć puste dane.
 - Dodać podstawową responsywność.
 
-### Definition of Done
+### Gotowe, gdy
 
 - Widok instrumentu pokazuje wykres ceny.
-- Widok instrumentu pokazuje historię score’u.
+- Widok instrumentu pokazuje historię score'u.
 - Wykresy są generowane przez Plotters.
 - Nie użyto JS charting libraries.
 
 ---
 
-## 16. Faza 10 — widok instrumentu
+## Faza 10 - Widok instrumentu
 
 ### Cel
 
@@ -450,20 +459,18 @@ Użytkownik może przeanalizować pojedynczy instrument.
 
 ### Widok
 
-```text
-/instrument/{symbol}
-```
+- `/instrument/{symbol}`
 
 ### Elementy widoku
 
-- nazwa instrumentu,
-- aktualny final score,
-- label,
-- breakdown score’u,
-- wykres ceny,
-- wykres historii score’u,
-- podstawowe statystyki,
-- ostatnia data aktualizacji.
+- Nazwa instrumentu.
+- Aktualny final score.
+- Label.
+- Breakdown score'u.
+- Wykres ceny.
+- Wykres historii score'u.
+- Podstawowe statystyki.
+- Ostatnia data aktualizacji.
 
 ### Zadania
 
@@ -474,7 +481,7 @@ Użytkownik może przeanalizować pojedynczy instrument.
 - Dodać linki z rankingu do widoku instrumentu.
 - Dodać fallback dla braku danych.
 
-### Definition of Done
+### Gotowe, gdy
 
 - Kliknięcie w instrument z rankingu otwiera szczegóły.
 - Widok instrumentu jest kompletny.
@@ -482,7 +489,7 @@ Użytkownik może przeanalizować pojedynczy instrument.
 
 ---
 
-## 17. Faza 11 — backtesting
+## Faza 11 - Backtesting
 
 ### Cel
 
@@ -490,43 +497,39 @@ Zweryfikować scoring historycznie.
 
 ### Strategia bazowa
 
-```text
 Co miesiąc:
-  1. oblicz scoring dla wszystkich instrumentów,
-  2. wybierz top N,
-  3. trzymaj przez miesiąc,
-  4. wykonaj rebalancing,
-  5. porównaj z WIG20.
-```
+
+1. Oblicz scoring dla wszystkich instrumentów.
+2. Wybierz top N.
+3. Trzymaj przez miesiąc.
+4. Wykonaj rebalancing.
+5. Porównaj z WIG20.
 
 ### Parametry
 
-```text
-start_date
-end_date
-top_n
-rebalance_frequency = monthly
-benchmark = WIG20
-score_config_id
-```
+- `start_date`
+- `end_date`
+- `top_n`
+- `rebalance_frequency = monthly`
+- `benchmark = WIG20`
+- `score_config_id`
 
 ### Metryki
 
-```text
-strategy_return
-benchmark_return
-excess_return
-max_drawdown
-volatility
-sharpe_proxy
-win_rate
-number_of_rebalances
-```
+- `strategy_return`
+- `benchmark_return`
+- `excess_return`
+- `max_drawdown`
+- `volatility`
+- `sharpe_proxy`
+- `win_rate`
+- `number_of_rebalances`
 
 ### Zadania
 
+- Opisać założenia w `docs/backtesting_methodology.md`.
 - Dodać `backtest.R`.
-- Przygotować input: ceny + historyczne score’y.
+- Przygotować input: ceny + historyczne score'y.
 - Przygotować output JSON.
 - Backend odpala backtest.
 - Zapis do `backtest_result`.
@@ -535,17 +538,18 @@ number_of_rebalances
 - Wykres equity curve.
 - Wykres drawdown.
 
-### Definition of Done
+### Gotowe, gdy
 
 - Da się odpalić backtest.
 - Widać wynik strategii.
 - Widać benchmark.
 - Są metryki.
 - Wyniki nadają się do opisania w pracy.
+- Ograniczenia backtestu są opisane w dokumentacji.
 
 ---
 
-## 18. Faza 12 — konfiguracja scoringu
+## Faza 12 - Konfiguracja scoringu
 
 ### Cel
 
@@ -553,13 +557,11 @@ Umożliwić zmianę wag modelu.
 
 ### Parametry
 
-```text
-trend_weight
-momentum_weight
-risk_weight
-volume_weight
-relative_strength_weight
-```
+- `trend_weight`
+- `momentum_weight`
+- `risk_weight`
+- `volume_weight`
+- `relative_strength_weight`
 
 ### Zadania
 
@@ -567,10 +569,10 @@ relative_strength_weight
 - Endpoint zapisywania konfiguracji.
 - Walidacja sumy wag.
 - UI settings.
-- Recalculate score with config.
-- Backtest with selected config.
+- Przeliczanie score'u z wybraną konfiguracją.
+- Backtest z wybraną konfiguracją.
 
-### Definition of Done
+### Gotowe, gdy
 
 - Użytkownik może zmienić wagi.
 - Ranking można przeliczyć z nowymi wagami.
@@ -578,57 +580,56 @@ relative_strength_weight
 
 ---
 
-## 19. Faza 13 — testy
+## Faza 13 - Testy i walidacja
 
 ### Cel
 
-Sprawdzić krytyczne części systemu.
+Sprawdzić krytyczne części systemu i zebrać materiał do pracy.
 
 ### Testy backendu
 
-- healthcheck,
-- parsing CSV,
-- walidacja danych,
-- score label mapping,
-- repository functions,
+- Healthcheck.
+- Parsing CSV.
+- Walidacja danych.
+- Mapowanie etykiet score'u.
+- Repository functions.
 - API response shape.
 
 ### Testy R
 
-- scoring dla krótkiej serii danych,
-- brakujące wartości,
-- max drawdown,
-- normalizacja 0–100,
-- output JSON.
+- Scoring dla krótkiej serii danych.
+- Brakujące wartości.
+- Max drawdown.
+- Normalizacja 0-100.
+- Output JSON.
 
 ### Testy UI
 
-- dashboard ładuje ranking,
-- instrument detail działa,
-- wykres nie crashuje na pustych danych,
-- backtest wyświetla wynik.
+- Dashboard ładuje ranking.
+- Instrument detail działa.
+- Wykres nie crashuje na pustych danych.
+- Backtest wyświetla wynik.
 
-### Deliverables
+### Rezultaty
 
-```text
-tests/
-docs/testing.md
-docs/polish_thesis/testy.md
-```
+- `tests/`
+- `docs/testing.md`
+- `docs/polish_thesis/testy.md`
 
-### Definition of Done
+### Gotowe, gdy
 
 - Istnieją testy dla krytycznych elementów.
 - Istnieje opis testów w dokumentacji.
 - Istnieją screenshoty wyników.
+- Wyniki testów da się opisać w pracy.
 
 ---
 
-## 20. Faza 14 — polish, demo i zamknięcie aplikacji
+## Faza 14 - Dopracowanie, demo i zamknięcie aplikacji
 
 ### Cel
 
-Zamrozić ficzery i przygotować projekt do pokazania.
+Zamrozić funkcje i przygotować projekt do pokazania.
 
 ### Zadania
 
@@ -643,7 +644,7 @@ Zamrozić ficzery i przygotować projekt do pokazania.
 - Przygotować backup lokalny.
 - Stworzyć finalny branch/tag.
 
-### Definition of Done
+### Gotowe, gdy
 
 - Projekt da się uruchomić z instrukcji.
 - Istnieją dane demo.
@@ -652,11 +653,11 @@ Zamrozić ficzery i przygotować projekt do pokazania.
 
 ---
 
-## 21. Faza 15 — pisanie pracy inżynierskiej
+## Faza 15 - Pisanie pracy inżynierskiej
 
 ### Cel
 
-Napisać pracę równolegle z projektem, a nie po projekcie.
+Napisać pracę równolegle z projektem, a nie dopiero po projekcie.
 
 ### Kolejność pisania
 
@@ -674,21 +675,15 @@ Napisać pracę równolegle z projektem, a nie po projekcie.
 
 ### Co dopisywać co tydzień
 
-W pliku:
+W pliku `notes/thesis_log.md` zapisywać:
 
-```text
-docs/polish_thesis/thesis_log.md
-```
+- Co zostało zrobione.
+- Jakie decyzje techniczne podjęto.
+- Jakie problemy wystąpiły.
+- Co nadaje się do pracy.
+- Jakie screenshoty/wykresy powstały.
 
-Zapisywać:
-
-- co zostało zrobione,
-- jakie decyzje techniczne podjęto,
-- jakie problemy wystąpiły,
-- co nadaje się do pracy,
-- jakie screenshoty/wykresy powstały.
-
-### Definition of Done
+### Gotowe, gdy
 
 - Jest pełny draft pracy.
 - Są screeny aplikacji.
@@ -699,3 +694,11 @@ Zapisywać:
 - Praca jest sformatowana zgodnie z wymaganiami uczelni/promotora.
 
 ---
+
+## Uwagi po analizie
+
+- Roadmapa ma sens jako plan pracy inżynierskiej, bo prowadzi od zakresu i danych do implementacji, walidacji, demo oraz pisania pracy.
+- Największe ryzyko to zbyt duży zakres. Jeśli czas zacznie się kurczyć, priorytetem powinny zostać fazy 0-9 oraz minimalny backtest z fazy 11.
+- Konfiguracja scoringu z fazy 12 jest wartościowa, ale może być potraktowana jako rozszerzenie po działającym rankingu.
+- Testy nie powinny czekać wyłącznie do fazy 13. W roadmapie zostały dopisane także do wcześniejszych faz.
+- Przed commitowaniem większych próbek danych warto ustalić zasady licencji i redystrybucji danych Stooq/GPW.
