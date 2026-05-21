@@ -1,0 +1,323 @@
+\documentclass[12pt,a4paper,twoside]{report}
+
+\def\chapterstyletype{classic}
+
+\newcommand{\AuthorName}{Marek Karbarz}
+\newcommand{\SupervisorName}{dr Mariusz Startek}
+\newcommand{\FieldName}{Inżynieria i analiza danych}
+\newcommand{\StudyYear}{3}
+\newcommand{\ThesisYear}{2026}
+\newcommand{\ThesisTitle}{System webowy do scoringu i rankingowania instrumentów Giełdy Papierów Wartościowych na podstawie danych dziennych}
+\newcommand{\ThesisTitleEnglish}{Web system for scoring and ranking Warsaw Stock Exchange instruments using end-of-day data}
+
+\usepackage[left=3cm, right=2.5cm, top=2.5cm, bottom=2.5cm, headsep=1.2cm]{geometry}
+\linespread{1.3}
+\usepackage{polski}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{microtype}
+\usepackage{pdflscape}
+\usepackage{amsmath}
+\usepackage{amsfonts}
+\usepackage{amssymb}
+\usepackage{amsthm}
+\usepackage{graphicx}
+\usepackage{subcaption}
+\usepackage[all]{nowidow}
+\emergencystretch=\maxdimen
+\hyphenpenalty=10000
+\hbadness=10000
+\usepackage{xcolor}
+\usepackage{textcomp}
+\usepackage[official]{eurosym}
+\usepackage[colorlinks=true,allcolors=black,plainpages=false]{hyperref}
+\usepackage{indentfirst}
+\usepackage{enumitem}
+\setlist[enumerate]{noitemsep,nolistsep}
+\setlist[itemize]{noitemsep,nolistsep}
+\usepackage{tocloft}
+\usepackage{tabularx}
+\usepackage{multirow}
+\usepackage{diagbox}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{caption}
+\usepackage{lscape}
+\usepackage[numbers]{natbib}
+\usepackage{xurl}
+\usepackage{titlesec}
+\usepackage{ifthen}
+\usepackage{ragged2e}
+
+\graphicspath{{assets/}}
+\newcolumntype{Y}{>{\centering\arraybackslash}X}
+\newcolumntype{j}{>{\raggedleft}p{200pt}}
+
+\hypersetup{
+    pdftitle={rankr - praca inżynierska},
+    pdfauthor={\AuthorName}
+}
+
+\renewcommand*{\figurename}{Rys.}
+\renewcommand*{\tablename}{Tab.}
+\captionsetup{font=small, labelsep=period, justification=centerlast}
+
+\renewcommand{\thesection}{\arabic{chapter}.\arabic{section}.}
+\renewcommand{\thesubsection}{\arabic{chapter}.\arabic{section}.\arabic{subsection}.}
+\setlength{\cftbeforechapskip}{0pt}
+\renewcommand{\cftchapaftersnum}{.}
+
+\ifthenelse{\equal{\chapterstyletype}{classic}}{
+  \titleformat{\chapter}[display]
+    {\normalfont\LARGE\bfseries\RaggedRight}
+    {\chaptertitlename\ \thechapter}
+    {0pt}
+    {\LARGE}
+}{%
+  \titleformat{\chapter}[block]
+    {\normalfont\LARGE\bfseries\RaggedRight}
+    {}
+    {0pt}
+    {%
+      \makebox[1em][l]{\thechapter.}%
+      \hangindent=1em
+      \hangafter=1
+      \ignorespaces
+    }
+}
+
+\titleformat{name=\chapter, numberless}[block]
+  {\normalfont\LARGE\bfseries\RaggedRight}
+  {}
+  {0pt}
+  {\hangindent=1em\hangafter=1}
+
+\titleformat{\section}[hang]
+  {\normalfont\Large\bfseries\RaggedRight}
+  {\thesection}
+  {0.3em}
+  {}
+\titleformat{\subsection}[hang]
+  {\normalfont\large\bfseries\RaggedRight}
+  {\thesubsection}
+  {0.3em}
+  {}
+\titleformat{\subsubsection}[hang]
+  {\normalfont\normalsize\bfseries}
+  {}
+  {0pt}
+  {}
+
+\titlespacing*{\chapter}{0pt}{0pt}{\baselineskip}
+
+\begin{document}
+
+\hypersetup{pageanchor=false}
+
+\thispagestyle{empty}
+\linespread{1.0}
+\newgeometry{top=2.5cm, bottom=2.5cm, left=3cm, right=3cm}
+
+\begin{titlepage}
+    \def\dystans{1cm}
+    \begin{center}
+        \Large
+        \begin{figure}[h]
+            \centering
+            \includegraphics[height=3.2cm]{prz_pl.png}%
+            \hfill
+            \includegraphics[height=3.2cm]{wmifs_pl.png}
+        \end{figure}
+        {\large\scshape Politechnika Rzeszowska}
+
+        {\large im. Ignacego Łukasiewicza}
+
+        {\large\scshape\MakeUppercase{Wydział Matematyki i Fizyki Stosowanej}}
+    \end{center}
+    \vspace{1.3cm}
+
+    \begin{center}
+        \begin{minipage}[c][5cm][c]{10cm}
+            \centering
+            {\Large \AuthorName} \par\vspace{0.4cm}
+            {\Large\textbf{\textsc{\ThesisTitle}}} \par\vspace{0.4cm}
+            Promotor: \SupervisorName
+        \end{minipage}
+    \end{center}
+
+    \vspace{2cm}
+
+    \begin{center}
+        {\large \textsc{Praca inżynierska} \\
+            \vspace{0.5cm}
+            \large kierunek studiów: \FieldName \\
+            \large rok studiów: \StudyYear}
+    \end{center}
+    \vspace{1.1cm}
+
+    \vfill
+    \begin{center}
+        {\large Rzeszów \ThesisYear}
+    \end{center}
+\end{titlepage}
+\restoregeometry
+\linespread{1.3}
+
+\newpage
+\thispagestyle{empty}
+~\vfill
+\newpage
+
+\hypersetup{pageanchor=true}
+\renewcommand{\contentsname}{\LARGE Spis treści}
+\tableofcontents
+\setcounter{tocdepth}{1}
+\cleardoublepage
+
+\chapter*{Wstęp}
+\addcontentsline{toc}{chapter}{Wstęp}
+
+TODO: Opisać motywację, problem badawczo-inżynierski oraz cel pracy.
+
+Celem pracy jest przygotowanie aplikacji webowej do oceny i rankingowania instrumentów Giełdy Papierów Wartościowych w Warszawie na podstawie danych end-of-day. Minimalny zakres projektu obejmuje instrumenty WIG20, dane dzienne OHLCV, deterministyczny scoring, ranking, podstawowe wykresy oraz minimalny backtesting.
+
+Poza zakresem MVP znajdują się dane czasu rzeczywistego, logika bota inwestycyjnego, integracja z brokerem oraz uczenie maszynowe.
+
+\cleardoublepage
+\chapter{Analiza problemu i źródła danych}
+
+TODO: Opisać GPW, WIG20, dane EOD, źródła Stooq/GPW, ograniczenia danych oraz kwestie licencyjne.
+
+\cleardoublepage
+\chapter{Architektura systemu}
+
+TODO: Opisać architekturę aplikacji.
+
+Planowany stos technologiczny:
+
+\begin{itemize}
+    \item frontend: Rust, Leptos, WebAssembly,
+    \item backend: Rust, Axum, Tokio,
+    \item baza danych: SurrealDB,
+    \item wykresy: Plotters,
+    \item analityka pomocnicza: R i Rscript,
+    \item wymiana danych: JSON i CSV.
+\end{itemize}
+
+\cleardoublepage
+\chapter{Model danych}
+
+TODO: Opisać encje instrumentów, cen dziennych, wyników scoringu, konfiguracji scoringu oraz wyników backtestów.
+
+\cleardoublepage
+\chapter{Metodyka scoringu}
+
+TODO: Opisać wskaźniki, normalizację do skali 0--100, komponenty score'u oraz sposób wyznaczania finalnego rankingu.
+
+Planowane komponenty scoringu:
+
+\begin{itemize}
+    \item trend,
+    \item momentum,
+    \item ryzyko,
+    \item wolumen,
+    \item siła relatywna względem benchmarku.
+\end{itemize}
+
+\cleardoublepage
+\chapter{Implementacja}
+
+TODO: Opisać implementację backendu, frontendu, importu danych, integracji z bazą oraz uruchamiania części analitycznej.
+
+\cleardoublepage
+\chapter{Testy i walidacja}
+
+TODO: Opisać testy backendu, parsera danych, scoringu, interfejsu użytkownika oraz wyniki backtestingu.
+
+\cleardoublepage
+\chapter{Podsumowanie}
+
+TODO: Podsumować wykonany projekt, ograniczenia rozwiązania oraz możliwe kierunki rozwoju.
+
+\cleardoublepage
+\addcontentsline{toc}{chapter}{Bibliografia}
+\begin{thebibliography}{9}
+
+\bibitem{rust}
+Rust Project Developers.
+\newblock \textit{The Rust Programming Language}.
+\newblock Dostępne online: \url{https://doc.rust-lang.org/book/}.
+
+\bibitem{gpw}
+Giełda Papierów Wartościowych w Warszawie.
+\newblock \textit{Oficjalny serwis GPW}.
+\newblock Dostępne online: \url{https://www.gpw.pl/}.
+
+\bibitem{stooq}
+Stooq.
+\newblock \textit{Dane historyczne}.
+\newblock Dostępne online: \url{https://stooq.pl/}.
+
+\end{thebibliography}
+
+\cleardoublepage
+\thispagestyle{empty}
+\setlength{\parindent}{0in}
+\setlength{\parskip}{0em}
+\addcontentsline{toc}{chapter}{Streszczenie}
+
+\textbf{POLITECHNIKA RZESZOWSKA} \hfill Rzeszów \ThesisYear \\
+\textbf{im. Ignacego Łukasiewicza} \\
+\textbf{WYDZIAŁ MATEMATYKI I FIZYKI STOSOWANEJ} \\
+
+\begin{center}
+    \textbf{STRESZCZENIE PRACY DYPLOMOWEJ}
+\end{center}
+
+\textbf{Tytuł:} \ThesisTitle \\
+\textbf{Autor:} \AuthorName \\
+\textbf{Promotor:} \SupervisorName \\
+\textbf{Słowa kluczowe:} GPW, WIG20, scoring, ranking, Rust, aplikacja webowa
+\\
+
+Niniejsza praca inżynierska opisuje projekt i implementację aplikacji webowej \textit{rankr}, której celem jest ocena oraz rankingowanie instrumentów Giełdy Papierów Wartościowych w Warszawie na podstawie danych dziennych. Minimalny zakres projektu obejmuje dane end-of-day dla instrumentów WIG20, deterministyczny scoring, prezentację rankingu oraz podstawową walidację wyników historycznych.
+
+\vfill
+$$\noindent\rule{\textwidth}{2pt}$$
+
+\textbf{RZESZOW UNIVERSITY OF TECHNOLOGY} \hfill Rzeszów \ThesisYear \\
+\textbf{FACULTY OF MATHEMATICS AND APPLIED PHYSICS} \\
+
+\begin{center}
+    \textbf{DIPLOMA THESIS ABSTRACT}
+\end{center}
+
+\textbf{Title:} \ThesisTitleEnglish \\
+\textbf{Author:} \AuthorName \\
+\textbf{Supervisor:} Mariusz Startek, PhD \\
+\textbf{Key words:} Warsaw Stock Exchange, WIG20, scoring, ranking, Rust, web application
+\\
+
+This engineering thesis describes the design and implementation of \textit{rankr}, a web application for scoring and ranking instruments listed on the Warsaw Stock Exchange using end-of-day market data. The minimum viable product focuses on WIG20 instruments, deterministic scoring, ranking presentation, and basic historical validation.
+
+\vfill
+
+\cleardoublepage
+\thispagestyle{empty}
+\addcontentsline{toc}{chapter}{Wykaz wykorzystania narzędzi GenAI}
+
+\begin{center}
+    Wykaz obszarów i narzędzi GenAI \\
+    wykorzystanych przez autora w trakcie wykonywania pracy dyplomowej
+\end{center}
+
+\begin{table}[ht]
+    \centering
+    \begin{tabularx}{\linewidth}{|c|X|X|}\hline
+       \textbf{Lp.} & \multicolumn{1}{c|}{\textbf{Obszar wykorzystywania}} & \multicolumn{1}{c|}{\textbf{Narzędzie}} \\ \hline
+       1 & Redakcja, korekta techniczna oraz porządkowanie struktury repozytorium i dokumentacji. & ChatGPT / Codex \\ \hline
+       2 & Wsparcie przy tworzeniu szkieletu pracy dyplomowej i planowaniu zakresu projektu. & ChatGPT / Codex \\ \hline
+    \end{tabularx}
+\end{table}
+
+\end{document}

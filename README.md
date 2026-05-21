@@ -27,6 +27,11 @@ Engineering thesis project for scoring and ranking Polish stock market instrumen
 
 Source code will be added gradually during project development.
 
+## Thesis
+
+- LaTeX source: `thesis/main.tex`
+- Final PDF target: `thesis/main.pdf`
+
 ## License
 
 MIT
