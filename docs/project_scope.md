@@ -1,6 +1,6 @@
 # Project Scope
 
-Rankr is an engineering thesis project for a Rust-first web application that scores and ranks Polish stock market instruments from GPW.
+rankr is an engineering thesis project for a Rust-first web application that scores and ranks Polish stock market instruments from GPW.
 
 MVP scope:
 - End-of-day data ingestion for GPW instruments, starting with WIG20.
@@ -16,4 +16,3 @@ Out of scope for the MVP:
 - Machine learning.
 
 Source code will be added gradually during project development. This repository currently starts with documentation and placeholder structure only.
-

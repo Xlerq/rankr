@@ -1,6 +1,6 @@
 # Opis architektury
 
-Planowana architektura systemu Rankr:
+Planowana architektura systemu rankr:
 - frontend w Rust, Leptos i WebAssembly,
 - backend w Rust z wykorzystaniem Axum i Tokio,
 - baza danych SurrealDB,
@@ -9,4 +9,3 @@ Planowana architektura systemu Rankr:
 - wymiana danych przez JSON i CSV.
 
 MVP koncentruje się na rankingu GPW/WIG20 dla danych dziennych. Architektura będzie rozwijana stopniowo wraz z dodawaniem kodu źródłowego.
-

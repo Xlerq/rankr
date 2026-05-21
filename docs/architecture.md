@@ -1,6 +1,6 @@
 # Architecture
 
-Rankr is planned as a Rust-first engineering thesis web application for scoring and ranking Polish stock market instruments from GPW.
+rankr is planned as a Rust-first engineering thesis web application for scoring and ranking Polish stock market instruments from GPW.
 
 Planned components:
 - Frontend: Rust, Leptos, WebAssembly.
@@ -13,4 +13,3 @@ Planned components:
 The MVP architecture should support GPW/WIG20 end-of-day ingestion, calculation of ranking metrics, storage of processed results, and presentation of ranked instruments in the web UI.
 
 Source code will be added gradually. This file describes the target architecture only and does not define code modules.
-
