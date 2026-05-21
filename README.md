@@ -27,3 +27,6 @@ Engineering thesis project for scoring and ranking Polish stock market instrumen
 
 Source code will be added gradually during project development.
 
+## License
+
+MIT
