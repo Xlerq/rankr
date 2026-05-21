@@ -1,0 +1,922 @@
+\documentclass[12pt,a4paper,twoside]{report}
+
+% Wybierz styl nagłówka rozdziału:
+% 'classic' — Rozdział X (nad tytułem)
+% 'inline'  — X. Tytuł rozdziału (w jednej linii)
+
+\def\chapterstyletype{classic}  % lub zmień na 'inline'
+
+%MARGINESY
+\usepackage[left=3cm, right=2.5cm, top=2.5cm, bottom=2.5cm, headsep=1.2cm]{geometry}
+
+%INTERLINIA
+\linespread{1.3}
+
+%Język polski
+\usepackage{polski}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+
+% Pakiet, który poprawia typografię: kerning, justowanie i drobne szczegóły tekstu
+\usepackage{microtype}
+
+%landscape obrocone
+\usepackage{pdflscape}
+
+%tekst matematyczny
+\usepackage{amsmath}
+\usepackage{amsfonts}
+\usepackage{amssymb}
+\usepackage{amsthm}
+
+%dodawanie grafiki
+\usepackage{graphicx}
+
+%do grupowania rysunków
+\usepackage{subcaption}
+
+%brak wdów - pojedyncze linie
+\usepackage[all]{nowidow}
+
+%Zapobieganie dzieleniu się wyrazów
+%\tolerance=1
+\emergencystretch=\maxdimen
+\hyphenpenalty=10000
+\hbadness=10000
+
+%do kolorów
+%\usepackage{color}
+\usepackage{xcolor}
+
+\usepackage{textcomp}%do symbolu euro
+\usepackage[official]{eurosym}%drugi symbol euro
+
+\usepackage[colorlinks=true,allcolors=black]{hyperref}
+
+\usepackage{indentfirst} %dodaje wcięcie w pierwszym akapicie
+
+%listy numerowane
+\usepackage{enumitem}
+\setlist[enumerate]{noitemsep,nolistsep}
+\setlist[itemize]{noitemsep,nolistsep} 
+
+%do modyfikacji wyglądu spisu treści, listy rysunków i tabel
+\usepackage{tocloft}
+
+%do tabel
+\usepackage{tabularx}
+\usepackage{multirow} %do połączenia wierszy
+\usepackage{diagbox}%do ukośnej linii w tabelii
+\usepackage{booktabs}
+\usepackage{array}
+\newcolumntype{Y}{>{\centering\arraybackslash}X}
+\newcolumntype{j}{>{\raggedleft}p{200pt}}
+\usepackage{caption}
+\usepackage{lscape}
+
+
+
+
+
+%podpisy rysunków i tabel
+\renewcommand*{\figurename}{Rys.} %zmiana podpisu rysunku
+\renewcommand*{\tablename}{Tab.} %zmiana podpisu tabeli
+\captionsetup{font=small, labelsep=period, justification=centerlast} % Modyfikacja stylu podpisów: 
+% - font=small ustawia rozmiar czcionki podpisu na 11 pt (można użyć footnotesize dla 10 pt),
+% - labelsep=period wprowadza kropkę po numerze (zamiast dwukropka),
+% - justification=centerlast centrowanie podpisu z wyrównaniem ostatniego wiersza do środka.
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% Ustawienie niestandardowej numeracji sekcji i podsekcji.
+% Dodanie kropki po numerach (np. z "2.1 Rozdział" na "2.1. Rozdział").
+% Można odkomentować, jeśli chcemy standardową formę numeracji - wtedy odkomentować wszystko poniżej do %%spis treści%%%%
+\renewcommand{\thesection}{\arabic{chapter}.\arabic{section}.} % Numeracja sekcji w formacie: numer_rozdziału.numer_sekcji (np. 2.3.)
+\renewcommand{\thesubsection}{\arabic{chapter}.\arabic{section}.\arabic{subsection}.} % Numeracja podsekcji w formacie: numer_rozdziału.numer_sekcji.numer_podsekcji (np. 2.3.1.)
+
+
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%Spis treści%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\setlength{\cftbeforechapskip}{0pt} %ustawia odstęp przed rozdziałami w spisie treści na 0pt; można zmienić wartość (np. 10pt), by zwiększyć odstęp, lub zakomentować tę linię, by przywrócić domyślne ustawienie
+
+%%%%%%%%%%%%%%%%%%%%%%%%Tytuły rozdziałów%%%%%%%%%%%%%%%%%%%%%%%
+\usepackage{titlesec}
+\renewcommand{\cftchapaftersnum}{.}%ustawia, że po numerze rozdziału w spisie treści pojawi się kropka .
+%\renewcommand{\chaptername}{}
+%\renewcommand{\thechapter}{\arabic{chapter}.} % Dodaje kropkę po numerze rozdziału
+
+\usepackage{ifthen}
+\usepackage{ragged2e}  % do lewego wyrównania z lepszym łamaniem niż standardowy \raggedright
+
+%instrukcja warunkowa pozwalająca na wybór formatowania nagłówka/tytułu rozdziału
+
+\ifthenelse{\equal{\chapterstyletype}{classic}}{
+  % Styl: Rozdział X (na górze), tytuł pod spodem
+  \titleformat{\chapter}[display]
+    {\normalfont\LARGE\bfseries\RaggedRight}
+    {\chaptertitlename\ \thechapter} % np. "Rozdział 1"
+    {0pt}
+    {\LARGE}
+}{%
+  % Styl: X. Tytuł rozdziału (inline) z wiszącym wcięciem i wyrównaniem wielowierszowym
+  \titleformat{\chapter}[block]
+    {\normalfont\LARGE\bfseries\RaggedRight}
+    {}
+    {0pt}
+    {%
+      \makebox[1em][l]{\thechapter.}%
+      \hangindent=1em
+      \hangafter=1
+      \ignorespaces
+    }
+}
+
+% Styl rozdziału bez numeru (dla Bibliografii, Streszczenia itd.)
+\titleformat{name=\chapter, numberless}[block]
+  {\normalfont\LARGE\bfseries\RaggedRight}
+  {}
+  {0pt}
+  {\hangindent=1em\hangafter=1}
+
+%styl sekcji
+\titleformat{\section}[hang]
+  {\normalfont\Large\bfseries\RaggedRight} % format
+  {\thesection}               % section number with dot
+  {0.3em}                       % space between number and title
+  {}                          % before title code
+%styl podsekcji
+  \titleformat{\subsection}[hang]
+  {\normalfont\large\bfseries\RaggedRight} % format
+  {\thesubsection}               % section number with dot
+  {0.3em}                       % space between number and title
+  {}                          % before title code
+%stylpodpodsekcji
+  \titleformat{\subsubsection}[hang]
+  {\normalfont\normalsize\bfseries} % format
+  {}               % brak numeru, czyli pusty label
+  {0pt}            % odstęp między label a tytułem (brak, bo label pusty)
+  {}                % before title code
+
+% Ustawienie odstępów wokół tytułu rozdziału:
+% \titlespacing*{<komenda>}{<lewy margines>}{<przed tytułem>}{<po tytule>}
+% Tutaj:
+% - lewy margines       = 0pt (brak wcięcia)
+% - odstęp przed tytułem = 0pt (brak pustego miejsca na górze)
+% - odstęp po tytule     = \baselineskip (dokładnie jeden wiersz odstępu przed tekstem)
+\titlespacing*{\chapter}{0pt}{0pt}{\baselineskip}
+
+
+%definicje, twierdzenia,...
+\newtheorem{twierdzenie}{Twierdzenie}[chapter]
+\newtheorem{lemat}[twierdzenie]{Lemat}
+\newtheorem{wniosek}[twierdzenie]{Wniosek}
+\newtheorem{obserwacja}[twierdzenie]{Obserwacja}
+\newtheorem{uwaga}[twierdzenie]{Uwaga}
+\theoremstyle{definition} %prostowanie czcionki
+\newtheorem{przyklad}[twierdzenie]{Przykład}
+\newtheorem{definicja}[twierdzenie]{Definicja}
+
+
+%używane pakiety
+%\usepackage{setspace}
+%\usepackage{cite}
+%\usepackage{tikz}
+%\usepackage{subcaption}
+
+
+\usepackage{algorithm}
+\usepackage{algpseudocode}
+\usepackage{listings}
+
+
+
+
+
+
+\definecolor{niebieski}{RGB}{0,130,150} %kolor niebieski
+\definecolor{mygray}{gray}{0.6} 		% kolor szary
+\definecolor{zielony}{rgb}{0.98, 1.0, 0.98} % kolor zielony
+
+\lstset{ 
+	backgroundcolor=\color{zielony},   % choose the background color; you must add \usepackage{color} or \usepackage{xcolor}; should come as last argument
+	basicstyle=\sffamily, %\footnotesize\ttfamily\fontsize{11}{0.8em}\selectfont,        % the size of the fonts that are used for the code
+	breakatwhitespace=false,         % sets if automatic breaks should only happen at whitespace
+	breaklines=true,                 % sets automatic line breaking
+	captionpos=b,                    % sets the caption-position to bottom
+	columns=fullflexible,
+	commentstyle=\color{mygreen},    % comment style
+	escapeinside={\%*}{*)},          % if you want to add LaTeX within your code
+	extendedchars=true,              % lets you use non-ASCII characters; for 8-bits encodings only, does not work with UTF-8
+	firstnumber=1,                   % start line enumeration with line 1
+	frame=single,	                   % adds a frame around the code
+	keepspaces=true,                 % keeps spaces in text, useful for keeping indentation of code (possibly needs columns=flexible)
+	keywordstyle=\color{blue},       % keyword style
+	numbers=left,                    % where to put the line-numbers; possible values are (none, left, right)
+	numbersep=5pt,                   % how far the line-numbers are from the code
+	numberstyle=\tiny\color{mygray}, % the style that is used for the line-numbers
+	rulecolor=\color{black},         % if not set, the frame-color may be changed on line-breaks within not-black text (e.g. comments (green here))
+	xleftmargin=0pt,%\parindent,
+	showspaces=false,                % show spaces everywhere adding particular underscores; it overrides 'showstringspaces'
+	showstringspaces=false,          % underline spaces within strings only
+	showtabs=false,                  % show tabs within strings adding particular underscores
+	language=python,
+	morekeywords={*, end, function, ...}
+	stepnumber=1,                    % the step between two line-numbers. If it's 1, each line will be numbered
+	stringstyle=\color{mymauve},     % string literal style
+	tabsize=2	                   % sets default tabsize to 2 spaces
+}
+
+
+
+%parametry dla kodów źródłowych
+\definecolor{mygreen}{rgb}{0,0.6,0}
+\definecolor{mygray}{rgb}{0.5,0.5,0.5}
+\definecolor{mymauve}{rgb}{0.58,0,0.82}
+
+
+
+
+\begin{document}
+
+%-----------------------------------------------------------------------------------
+%                            STRONA TYTUŁOWA
+%-----------------------------------------------------------------------------------
+% W zależności od potrzeb można załadować jedną z dwóch wersji strony tytułowej:
+%
+% 1. strona_tytulowa-1
+%    - Klasyczna wersja strony tytułowej
+%    - Tytuł pracy oraz dane autora/promotora są wyśrodkowane
+%    - NIE jest dostosowana do okładki PRz (brak zgodności z okienkiem)
+%
+% 2. strona_tytulowa-2
+%    - Wersja dopasowana do obowiązującego wzoru okładki PRz
+%    - Tytuł, autor, promotor są umieszczone tak, aby były widoczne
+%      w okienku okładki zgodnej z Systemem Identyfikacji Wizualnej PRz
+%
+% ABY WYBRAĆ WŁAŚCIWĄ STRONĘ TYTUŁOWĄ:
+% - pozostaw aktywną linię \input{strona_tytulowa-1} lub
+% - zamień ją na:        \input{strona_tytulowa-2}
+%
+% UWAGA: Nie należy używać obu jednocześnie!
+
+    
+    \input{strona_tytulowa-1} %lub strona_tytulowa-2
+    \linespread{1.3}
+    \newpage 
+%----------------------------------------------------------------------------------
+%                       PUSTA STRONA PO STRONIE TYTUŁOWEJ
+%----------------------------------------------------------------------------------
+
+
+    \thispagestyle{empty} %pusta strona bez numeru po stronie tytułowej
+    ~\vfill
+	\newpage
+    
+%---------------------------------------------------------------------------------
+%                      STRONA Z PODZIĘKOWANIEM
+%---------------------------------------------------------------------------------
+\vspace*{16cm}
+\thispagestyle{empty}
+\begin{flushright}
+\textit{Miejsce na ewentualne podziękowania.\\
+W przypadku braku podziękowań, tę stronę wraz z następującą po niej pustą stroną\\
+należy usunąć z wersji końcowej pracy.}%-- -Wypełnia student. Jeśli nie ma podziękowań, to można odkomentować stronę z podziękowaniem i stronę po stronie z podziękowaniem.
+\end{flushright}
+\newpage
+
+%----------------------------------------------------------------------------------
+%                       PUSTA STRONA PO STRONIE Z PODZIĘKOWANIEM
+%----------------------------------------------------------------------------------
+
+\thispagestyle{empty}
+~\vfill
+\newpage
+
+%---------------------------------------------------------------------------------
+%                      SPIS TREŚCI
+%---------------------------------------------------------------------------------
+	\renewcommand{\contentsname}{\LARGE Spis treści}
+    \tableofcontents
+    \setcounter{tocdepth}{1}
+    %\setcounter{page}{1} %numeracja stron od 1
+	%\thispagestyle{headings}
+    \cleardoublepage %wymusza rozpoczęcie nowego rozdziału na stronie nieparzystej (prawej); dodaje pustą stronę, jeśli potrzeba
+    %\clearpage  %kończy bieżącą stronę i wypisuje wszystkie zaległe elementy (np. rysunki, tabele), ale nie wymusza rozpoczęcia nowego rozdziału na stronie nieparzystej
+    %\newpage %Wymusza przejście do nowej strony, ale nie kończy otwartych elementów
+
+%---------------------------------------------------------------------------------
+%                      WSTĘP
+%---------------------------------------------------------------------------------
+	
+	\chapter*{Wstęp} 
+    \addcontentsline{toc}{chapter}{Wstęp}
+	%\thispagestyle{empty}%strona nie jest numerowana
+
+Szablon został przygotowany zgodnie z obowiązującymi wytycznymi dotyczącymi przygotowania prac dyplomowych. Został zaprojektowany w edytorze \LaTeX{}, umożliwiającym wygodne formatowanie tekstu.  
+\textbf{Może być dostosowany do indywidualnych wymagań promotora pracy dyplomowej i modyfikowany w~porozumieniu promotorem.}
+
+Zgodnie z procedurą, praca dyplomowa powinna zostać napisana w edytorze umożliwiającym zapis w formacie \texttt{.docx} lub \texttt{.tex}. Należy zachować następujące ustawienia marginesów:
+\begin{itemize}
+    \item margines górny – 25 mm,
+    \item margines dolny – 25 mm,
+    \item margines wewnętrzny – 30 mm,
+    \item margines zewnętrzny – 25 mm.
+\end{itemize}
+
+Praca powinna być przygotowana dwustronnie na papierze formatu A4, z użyciem czcionki o rozmiarze 10–12 pt, z interlinią 1,5. Tekst należy justować (wyrównać do lewej i prawej strony). Zaleca się, aby tytuły rozdziałów były pisane pogrubioną czcionką w~rozmiarze 16 pt, a podrozdziały w romiarze 14 pt.
+
+Strony powinny być numerowane automatycznie. Wszystkie główne elementy struktury pracy dyplomowej, takie jak: wstęp, kolejne rozdziały, spisy rysunków, tabel, wykresów, bibliografia, aneksy oraz streszczenie, muszą zaczynać się od nowej strony.
+
+Należy unikać sytuacji, w której tytuł podrozdziału znajduje się na końcu strony bez towarzyszącej treści. Tytułów rozdziałów, a także podpisów rysunków i tabel, nie należy kończyć kropką.
+
+Wzory matematyczne powinny być umieszczane centralnie na stronie, a każdy numerowany wzór powinien znajdować się w osobnej linii.
+
+Wszystkie wykresy, rysunki, tabele i zdjęcia muszą być podpisane i umieszczone centralnie między marginesem wewnętrznym a zewnętrznym. Podpisy rysunków umieszcza się pod nimi, a podpisy tabel – nad nimi. Powinny być one wykonane czcionką o rozmiarze mniejszym niż podstawowy, np. 9, 10 lub 11 pt. Każda tabela i~każdy rysunek powinny mieć odwołanie w treści pracy.
+
+Prezentowana formatka w wersji elektronicznej zawiera podstawowy styl formatowania zgodny z powyższymi zasadami i może stanowić punkt wyjścia do opracowania własnej pracy dyplomowej.
+
+	
+    \cleardoublepage %
+
+%%%%%%%%%%%%%%%%%%%%% --- Zasadnicza treść rozprawy zaczyna się tutaj --- %%%%%%%%%%%%%%%%%%%%%
+
+        \chapter{Instrukcja obsługi szablonu}
+
+\section{Zmiana stylu nagłówków rozdziałów}
+
+W pliku preambuły znajduje się definicja zmiennej odpowiedzialnej za styl nagłówków rozdziałów:
+
+\begin{verbatim}
+\def\chapterstyletype{classic}
+\end{verbatim}
+
+Dostępne opcje to:
+
+\begin{itemize}
+    \item \texttt{classic} — nagłówek w stylu „Rozdział X” nad tytułem rozdziału, np.:
+
+    \medskip
+    \textit{Rozdział 1} \\
+    \textit{Wprowadzenie}
+    
+    \medskip
+    \item \texttt{inline} — numer i tytuł rozdziału w jednej linii, np.:
+    
+    \medskip
+    \textit{1. Wprowadzenie}
+\end{itemize}
+
+Aby zmienić styl, należy w preambule ustawić:
+
+\begin{verbatim}
+\def\chapterstyletype{inline} % lub 'classic'
+\end{verbatim}
+
+Po zmianie stylu należy skompilować dokument.
+
+\section{Wybór strony tytułowej}
+
+Szablon udostępnia dwie wersje strony tytułowej:
+
+\begin{itemize}
+    \item \texttt{strona\_tytulowa-1} — klasyczna, z tytułem wyśrodkowanym na stronie, tytuł zajmuje całą szerokość strony.
+    \item \texttt{strona\_tytulowa-2} — dostosowana do okienka okładki PRz, tytuł wyśrodkowany, nie wychodzi poza ramy okienka. 
+\end{itemize}
+
+Aby wybrać odpowiednią stronę tytułową, w głównym pliku dokumentu należy znaleźć sekcję oznaczoną komentarzem \textit{Strona tytułowa} i w tym miejscu wybrać jedną z~poniższych instrukcji:
+
+\begin{verbatim}
+\input{strona_tytulowa-1} % lub
+\input{strona_tytulowa-2}
+\end{verbatim}
+Należy pozostawić aktywną tylko jedną z nich. Nie używać obu jednocześnie.
+
+\section{Sterowanie łamaniem stron i układ rozdziałów}
+
+
+\textbf{Uwaga:} Szablon pracy został przygotowany z myślą o wydruku dwustronnym (\texttt{twoside}), dlatego zaleca się, aby każda zasadnicza część dokumentu — takie jak strona tytułowa, spis treści, wstęp, poszczególne rozdziały oraz zakończenie — rozpoczynała się od strony nieparzystej (czyli prawej w układzie książkowym).
+
+Dla głównych rozdziałów w części zasadniczej wystarczające może być rozpoczęcie od nowej strony (bez wymuszania strony nieparzystej), ale warto zadbać o spójność wizualną całego dokumentu. W tym celu \LaTeX\ oferuje trzy podstawowe polecenia do kontrolowania łamania stron:
+
+\begin{itemize}
+  \item \texttt{\textbackslash newpage} — natychmiast przechodzi do nowej strony, ale nie kończy przetwarzania zaległych elementów pływających (np. rysunków, tabel). Używaj tylko wtedy, gdy chcesz po prostu przerwać stronę w danym miejscu.
+  
+  \item \texttt{\textbackslash clearpage} — kończy aktualną stronę, wypisuje wszystkie zaległe elementy pływające, a następnie przechodzi do nowej strony. Nie wymusza rozpoczęcia od strony nieparzystej.
+  
+  \item \texttt{\textbackslash cleardoublepage} — działa jak \texttt{\textbackslash clearpage}, ale dodatkowo wymusza rozpoczęcie kolejnej treści (np. rozdziału) na stronie nieparzystej. Jeśli bieżąca strona jest nieparzysta, dodaje pustą stronę.
+\end{itemize}
+
+\medskip
+
+\textbf{Przykład użycia:}
+
+\begin{verbatim}
+\chapter{Poprzedni rozdział}
+
+% Treść rozdziału
+
+\cleardoublepage % Wymusza rozpoczęcie nowego rozdziału na stronie nieparzystej
+
+\chapter{Następny rozdział}
+\end{verbatim}
+
+\medskip
+
+\textbf{Zalecenia:}
+
+\begin{itemize}
+  \item Przed każdą zasadniczą częścią pracy (np. wstępem, zakończeniem, bibliografią) stosuj \texttt{\textbackslash cleardoublepage}, aby zaczynała się na stronie nieparzystej.
+  \item Przed kolejnymi rozdziałami możesz używać \texttt{\textbackslash clearpage}, jeżeli nie chcesz wymuszać strony nieparzystej.
+  \item \texttt{\textbackslash newpage} stosuj jedynie wyjątkowo – np. gdy chcesz rozpocząć nową stronę w~środku rozdziału, bez kończenia pływających obiektów.
+\end{itemize}
+
+    \section{Wskazówki typograficzne}
+
+    W celu zapewnienia poprawności typograficznej dokumentu, należy unikać tzw. sierot – czyli pozostawiania na końcu wiersza jednoznakowych wyrazów, takich jak: „i”, „a”, „o”, „w”, „z”, „u”. W LaTeX-u można temu zapobiec, stosując niełamliwą spację (\verb|~|), np.:
+
+    \begin{verbatim}
+        Niepoprawnie:  z kotem
+        Poprawnie:     z~kotem
+    \end{verbatim}
+
+    Niełamliwe spacje warto stosować szczególnie tam, gdzie krótkie przyimki lub spójniki mogą pozostać samotnie na końcu linii. Nie jest jednak konieczne używanie ich bezwzględnie – wystarczy zadbać o sytuacje, w których rzeczywiście dochodziłoby do nieestetycznego złamania wiersza.
+
+    W tekstach technicznych należy również dbać o prawidłowe odstępy między liczbami a jednostkami, uniemożliwiając ich rozdzielenie na końcu wiersza. Tu także przydatna jest spacja nierozdzielająca `\verb|~|`. 
+
+    \begin{verbatim}
+    Niepoprawnie:  100km
+    Poprawnie:     100~km
+    \end{verbatim}
+    
+Istnieją jednak symbole i znaki, po których nie stosuje się odstępu od liczby. Zapisuje się je bezpośrednio za nią. Do takich należą między innymi: znak procenta ($\%$), stopnie Celsjusza ($^\circ$C), minuty ($'$) i sekundy kątowe ($''$).
+
+W Microsoft Word spację nierozdzielającą (tzw. spację twardą) wstawia się skrótem klawiszowym:
+
+\begin{itemize}
+    \item Windows: Ctrl + Shift + Spacja
+    \item Mac: Option (Alt) + Spacja
+\end{itemize}
+
+ Zapobiega to złamaniu linii między wyrazami połączonymi taką spacją.
+
+
+
+\section{Dodatkowe uwagi}
+
+\begin{itemize}
+    \item Marginesy, interlinia oraz ustawienia typograficzne są już skonfigurowane w~preambule i zwykle nie wymagają zmian.
+    \item Środowiska twierdzeń, definicji i przykładów są gotowe do użycia.
+    \item Po większych zmianach w strukturze dokumentu kompiluj go co najmniej dwukrotnie, aby spis treści i numeracja były poprawne.
+\end{itemize}
+    
+	\chapter{Tytuł rozdziału}
+	\section{Tytuł podrozdział}
+	\subsection{Tytuł podpodrozdziału}
+    \subsubsection{Tytułpodpodrozdziału}
+	
+	\begin{twierdzenie}\label{tw1}
+		Treść twierdzenia
+	\end{twierdzenie}
+	
+	Odwołanie do twierdzenia \ref{tw1}.
+	
+	\begin{wniosek}
+		Treść wniosku
+	\end{wniosek}
+	
+	
+	\begin{twierdzenie}
+		Treść twierdzenia
+	\end{twierdzenie}
+	
+	\begin{wniosek}
+		Treść wniosku
+	\end{wniosek}
+	
+	\begin{definicja}
+		Graf $G$
+	\end{definicja}
+
+    \cleardoublepage
+	
+	\chapter{Potrzebne informacje}
+	
+	Przypisy \footnote{Treść przypisu}
+	
+	
+	\section{Formatowanie tekstu}
+	
+	\textbf{Mamy tekst pogrubiony} \\
+	\textit{Mamy tekst pochylony} \\
+	\underline{Mamy tekst podkreślony}\\
+	\textsc{Tekst zapisany kapitalikami}
+	
+	
+	\subsection{Wielkość tekstu}
+
+W LaTeX istnieje szeroka gama rozmiarów czcionek. Warto jednak pamiętać, że wymagania dotyczące przygotowania pracy dyplomowej nakładają ograniczenia co do wielkości czcionki. W związku z tym zmiana rozmiaru czcionki powinna być stosowana tylko w wyjątkowych przypadkach, takich jak długie cytaty, które mogą być zapisane mniejszym rozmiarem czcionki, aby wyróżnić je od głównego tekstu.
+	
+	\tiny{tekst}\\
+	\scriptsize{tekst}\\
+	\footnotesize{jeszcze trochę większy}\\
+	\small{mały}\\
+	\normalsize{normalna czcionka}\\
+	\large{większa czcionka}\\
+	\Large{jeszcze większa czcionka}\\
+	\LARGE{ duża czcionka}\\ 
+	\huge{duża czcionka}\\
+	\Huge{Największa czcionka}
+	
+	
+	
+	\subsection{Kolorowy tekst}
+	\normalsize{
+		\textcolor{green}{Zielony tekst}}
+	\textcolor{red}{Czerwony tekst}
+	
+	
+	\subsection{Wyrównanie tekstu}
+	\begin{center}
+		Tekst jest wyśrodkowany
+	\end{center}
+	
+	\begin{flushright}
+		tekst jest wyrównany do prawej
+	\end{flushright}
+	
+	\begin{flushleft}
+		Tekst jest wyrównany do lewej
+	\end{flushleft}
+	
+	\subsection{Znaki specjalne}
+	\$, \&, \%, \#, \_, \{, \}, \texteuro, \euro, \\
+	wielokropek: \ldots
+	
+	\section{Numeracja}
+	
+	\begin{itemize}
+		\item lista wypunktowana
+		\item punkt nr 2	
+	\end{itemize}
+	
+	\begin{itemize}
+		\item[--] zmiana na pauzy
+		\item[a)] zmiana na a)
+	\end{itemize}
+	
+	\begin{enumerate}
+		\item punkt nr 1\begin{enumerate}
+			\item podpunkt pierwszy
+			\item podpunkt drugi
+		\end{enumerate}
+		\item punkt 2
+	\end{enumerate}
+	
+	\section{Tekst matematyczny}
+	Tekst matematyczny jest na równi z tekstem $\sum\limits_{k=0}^n {{n}\choose{k}}=2^n$.
+	\newline
+	Tekst matematyczny jest wyróżniony na środku, ale nie można się do niego odwołać.
+	$$\sum\limits_{k=0}^n {{n}\choose{k}}=2^n$$
+	
+	Tekst matematyczny jest wyróżniony na środku i ma nadany numer
+	\begin{equation}\label{wzór}
+		\sum\limits_{k=0}^n {{n}\choose{k}}=2^n
+	\end{equation}
+	
+	
+	
+	Mamy tekst, chcemy się odwołać do wzoru \eqref{wzór}.
+	
+	
+	Indeksy górny i dolny: $a_{1,2} x^{2y+5z}=e^{-\alpha t}$, $
+	a^{3}_{ij} e^{x^2} \neq {e^x}^2$
+	\vspace{1cm}
+	
+	Pierwiastki: $\sqrt{x}$, $\sqrt[3]{2} $
+	
+	\vspace{1cm}
+	Klamra pod/nad wyrażeniem: $\underbrace{ a+b+\cdots+z }_{15}$, $\overbrace{ a+b+\cdots+z }^{20}$
+	
+	\vspace{1cm}
+	
+	Ułamki: $\frac{3}{2}$, $\dfrac{7}{6}$
+	
+	\vspace{1cm}
+	
+	Suma, iloczyn: $\sum\limits_{i=1}^n$, $\prod\limits_\epsilon$
+	
+	
+	
+	Nawiasy: $(\dfrac{3}{2})$, $\left(\dfrac{3}{2}\right)$, $\big( \Big( \bigg( \Bigg($
+	
+	Wzór z przypadkami:
+	
+	\begin{align*}
+		y = \left\{ \begin{array}{ll}
+			a & \textrm{jeżeli $d>c$}\\
+			b+x & \textrm{rano}\\
+			l & \textrm{w~ciągu dnia}
+		\end{array} \right.
+	\end{align*}
+	
+	Kilka numerowanych wzorów pod sobą:
+	\begin{eqnarray}
+		f(x) & = & \cos x \\
+		f’(x) & = & -\sin x \\
+		\int_{0}^{x} f(y)dy &
+		= & \sin x
+	\end{eqnarray}
+	
+	\begin{equation}\label{suma}
+		\sum\limits_{e\in E(G)}c(e)
+	\end{equation}
+	
+	Odwołanie do wzoru \eqref{suma}
+	
+	$$ \sum\nolimits'$$
+	
+	$$\sideset{}{'}\sum_{e\in E(G)} c(e)$$
+	
+	Przykład kodu programu:	
+    \begin{lstlisting}[language=Python,caption=Wyznaczenie przykładowej ramki,label={}]
+	# Inicjalizacja zmiennych algorytmu
+	W, L = 1, 1 # Wymiary ramki
+	area = W * L
+	n = 5
+	k = math.sqrt(area / n)
+	t = 0.1 * math.sqrt(area)
+	iteracje = 10\end{lstlisting}
+
+    \section{Rysunki}
+    
+Rysunki zamieszczone w pracy powinny być opatrzone podpisem wykonanym czcionką o rozmiarze mniejszym niż podstawowy, np. 10 lub 11 pt. Podpis powinien być wyśrodkowany i umieszczony pod rysunkiem. Rysunki należy umieszczać możliwie blisko pierwszego odwołania do nich w tekście.
+
+Aby poprawnie wstawić grafikę w LaTeX-u, należy użyć polecenia \verb|\includegraphics{...}|. Plik graficzny musi znajdować się w folderze projektu (np.~w~tym samym katalogu co plik \texttt{.tex}) lub należy podać do niego poprawną ścieżkę względną. W przypadku korzystania z Overleaf, plik należy wcześniej wgrać do projektu za pomocą przycisku „Upload”.
+
+Podpisy rysunków dodaje się za pomocą polecenia \verb|\caption{...}|, które należy umieścić wewnątrz środowiska \texttt{figure}, po komendzie \verb|\includegraphics|. Przykład wstawienia rysunku z podpisem i etykietą umożliwiającą odwoływanie się do niego w~tekście:
+
+\begin{verbatim}
+\begin{figure}[ht]
+    \centering
+    \includegraphics[width=0.7\linewidth]{przykladowy_plik}
+    \caption{Przykładowy rysunek}
+    \label{fig:przyklad}
+\end{figure}
+\end{verbatim}
+
+Dzięki użyciu poleceń \verb|\caption| i \verb|\label|, możliwe jest odwoływanie się do rysunku w treści pracy za pomocą komendy \verb|\ref{...}|.
+
+
+Aby dostosować rozmiar grafiki do szerokości strony lub kolumny, można użyć argumentu \verb|width| w poleceniu \verb|\includegraphics|, np.:
+
+\begin{verbatim}
+\includegraphics[width=\linewidth]{nazwa_pliku}
+\end{verbatim}
+
+Przydatne może być także ustawienie opcji lokalizacji rysunku, które sugerują LaTeX-owi, gdzie powinien wstawić grafikę, np.:
+
+\begin{itemize}
+    \item \texttt{[h]} - here (tu, gdzie pojawia się w kodzie),
+    \item \texttt{[t]} - top (góra strony),
+    \item \texttt{[b]} - bottom (dół strony)
+    \item \texttt{!} -  ignoruje niektóre ograniczenia LaTeX-a (np. zbyt mało miejsca).
+\end{itemize} 
+
+Rysunek \ref{fig:example} przedstawia przykładową ilustrację testową. 
+
+\begin{figure}[h!]
+    \centering
+    \includegraphics[width=0.6\linewidth]{example-image}
+    \caption{Przykładowy rysunek}
+    \label{fig:example}
+\end{figure}
+
+
+
+W przypadku grupowania kilku rysunków obok siebie lub tworzenia galerii, można użyć środowiska \texttt{subfigure} wewnątrz środowiska \texttt{figure}, co pozwala na niezależne podpisywanie każdego rysunku z osobna.
+
+
+
+\begin{figure}[h!]
+    \centering
+    \begin{subfigure}[t]{0.4\textwidth}
+        \includegraphics[width=\textwidth]{prz_pl.png}
+        \caption{logo PRz}
+        \label{logo PRz}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}[t]{0.4\textwidth}
+        \includegraphics[width=\textwidth]{wmifs_pl.png}
+        \caption{logo WMiFS}
+        \label{logo_wmifs}
+    \end{subfigure}
+    \caption{Przykład zastosowania grupowania rysunków}
+    \label{fig:grupowanie}
+\end{figure}
+
+\newpage
+Dodanie polecenia \verb|\label{...}| wewnątrz każdego środowiska \texttt{subfigure} umożliwia niezależne odwoływanie się do poszczególnych rysunków, np. \verb|\ref{logo_PRz}|: \ref{logo PRz} oraz \verb|\ref{logo_wmifs}|: \ref{logo_wmifs}.
+ 
+ \section{Tabele}
+
+   Tabele powinny być opatrzone podpisem wykonanym czcionką o takiej samej wielkości jak podpisy rysunków. Podpis należy umieścić nad tabelą. W LaTeX-u, aby podpis tabeli znajdował się nad tabelą (a nie pod, jak domyślnie), należy umieścić komendę \verb|\caption{...}| przed środowiskiem \texttt{tabular}, wewnątrz otoczenia \texttt{table}.
+
+
+   W tej sekcji zaprezentowano kilka przykładów tabel. Poniżej przedstawiono tabelę wstawioną w sposób niepoprawny – brakuje podpisu oraz wyśrodkowania  (nie została umieszczona w środowisku \texttt{table}).\\
+   
+	\begin{tabular}{|c|l|r|}
+		\hline
+		tekst & tekst& tekst\\
+		wyrównany do & 	wyrównany do& 	wyrównany do\\
+		\hline
+		środka& lewej& prawej\\
+		\cline{1-2}
+		A& B& C\\
+		\hline
+		\hline
+	\end{tabular}\\
+	
+
+
+Tabela \ref{tabela1} została umieszczona w sposób poprawny. Umieszczono ją wewnątrz otoczenia \texttt{table}, co umożliwia dodawanie podpisów za pomocą polecenia \verb|\caption{...}| oraz etykiet poprzez \verb|\label{...}|. Dzięki temu możliwe jest odwoływanie się do tabeli w tekście przy użyciu polecenia \verb|\ref{...}|.
+    
+	\begin{table}[h!]
+		\begin{center}
+        \caption{Tabela nr 1}
+			\begin{tabular}{|c|l|r|}
+				\hline
+				tekst & tekst& tekst\\
+				wyrównany do & 	wyrównany do& 	wyrównany do\\
+				\hline
+				środka& lewej& prawej\\
+				\cline{1-2}
+				A& B& C\\
+				\hline
+				\hline
+			\end{tabular}
+			\label{tabela1}
+		\end{center}
+	\end{table}
+	
+	\newpage
+	Do łączenia kolumn w tabelach stosuje się polecenie \verb|\multicolumn{}{}{}|, które przyjmuje trzy argumenty: liczbę kolumn do połączenia, wyrównanie zawartości (np.~c~dla wyśrodkowania, l dla wyrównania do lewej, r dla prawej) oraz tekst, który ma się znaleźć w scalonej komórce. Przykład takiego użycia przedstawiono w tabeli \ref{laczenie kolumn}.
+    
+    
+	
+	\begin{table}[h!]
+		\begin{center}
+            \caption{Tabela z połączonymi kolumnami}
+			\begin{tabular}{|c|c|c|c|}
+				\hline
+				\multicolumn{4}{|c|}{1234} \\ \hline
+				1& \multicolumn{2}{|c|}{23} & 4 \\ \hline
+				1& 2& 3& 4\\ \hline	
+			\end{tabular}
+			\label{laczenie kolumn}
+		\end{center}
+	\end{table}
+
+Natomiast do łączenia wierszy wykorzystuje się polecenie \verb|\multirow{}{}{}|, wymagające podania liczby scalanych wierszy, szerokości komórki (można użyć *, by szerokość została dopasowana automatycznie), oraz zawartości komórki. Działanie tego polecenia zaprezentowano w tabeli \ref{laczenie wierszy}.
+	
+	\begin{table}[h!]
+		\begin{center}
+            \caption{Tabela z połączonymi wierszami}
+			\begin{tabular}{|c|c|c|c|}
+				\hline
+				\multirow{2}{*}{1} & 2& 3& 4\\ \cline{2-4}
+				& 2& 3 & 4 \\ \hline
+				1& 2& 3& 4\\ \hline	
+			\end{tabular}
+			\label{laczenie wierszy}
+		\end{center}
+	\end{table}
+	
+
+    
+    W przypadku umieszczenia w komórkach dłuższego tekstu, zawartość nie jest automatycznie zawijana – zamiast tego komórki ulegają rozszerzeniu, co może skutkować przekroczeniem marginesów kolumny i zaburzeniem układu strony. Aby temu zapobiec, warto stosować tabele ze zdefiniowaną szerokością kolumn. Przykład takiego rozwiązania przedstawiono w tabeli \ref{tab:szerokosc-kolumn}. Szerokość kolumn określa się poprzez zastosowanie typu kolumny \texttt{p\{...\}}, który umożliwia sterowanie jej szerokością z~użyciem jednostek długości, takich jak \texttt{pt}, \texttt{cm} czy \verb|\linewidth|.
+
+\newpage
+    \begin{table}
+    \begin{center}
+        \caption{Tabela ze zdefiniowaną szerokością kolumn}
+	\begin{tabular}{|lp{0.25\linewidth}|
+			p{0.25\linewidth}|}
+		
+		\hline
+		a1 & a2 & a3\\
+		\hline
+		b1 & b2 & b3\\
+		c1 & c2 & c3\\
+		\hline
+		\hline
+		długi tekst &
+		bardzo długi tekst &
+		jeszcze jeden bardzo długi tekst\\
+		\hline
+	\end{tabular}
+        \label{tab:szerokosc-kolumn}
+    \end{center}
+    \end{table}
+	
+	Tabela \ref{tab:szerokosc-tabeli} przedstawia przykład tabeli rozciągającej się na całą szerokość strony. Do tworzenia tego typu tabel wykorzystuje się środowisko \texttt{tabularx}, które umożliwia automatyczne dopasowanie szerokości kolumn do zadanego wymiaru — najczęściej \verb|\linewidth|. W tym celu należy zadeklarować kolumny typu \texttt{X}, które dzielą dostępną przestrzeń proporcjonalnie między siebie. Pozostałe kolumny mogą pozostać w~standardowych formatach, takich jak \texttt{l}, \texttt{c} czy \texttt{r}. Dzięki zastosowaniu kolumn typu \texttt{X}, dłuższe fragmenty tekstu są automatycznie zawijane w obrębie komórki.
+
+    
+	\begin{table}[h!]
+        \begin{center}
+        \caption{Tabela na szerokość całej strony}
+		\begin{tabularx}{\linewidth}{|c|X|X|l|}
+			\hline
+			\hline
+			tekst & pierwsza szeroka kolumna & druga szeroka kolumna& tekst\\
+			\hline
+			tekst & tu znajduje się długo tekst, który powinien się zwinąć & tekst & tekst \\
+			\hline
+		\end{tabularx}
+            \label{tab:szerokosc-tabeli}
+        \end{center}
+	\end{table}
+
+    W przypadku bardzo szerokich tabel, które nie mieszczą się w orientacji pionowej strony, można skorzystać z poziomego układu strony. W LaTeX-u służą do tego dwa pakiety: lscape oraz pdflscape. Oba umożliwiają wstawienie fragmentu dokumentu w orientacji poziomej przy użyciu środowiska landscape. Różnica polega na tym, że pakiet~~pdflscape dodatkowo automatycznie obraca stronę w pliku PDF, dzięki czemu tabela jest od razu wyświetlana poziomo w przeglądarce PDF, co znacznie poprawia czytelność.
+    
+    Środowisko landscape działa na poziomie całej strony i zawsze powoduje rozpoczęcie nowej strony — poziomej — od miejsca jego użycia. Poziome tabele można umieszczać w dodatkach, aby nie zaburzały ciągłości tekstu. Przykładem takiej tabeli jest tab. \ref{tab:pozioma} wstawiona jako dodatek A.
+    
+	\section{Odwołanie do bibliografii}
+	
+	Aby odwołać się w tekście do konkretnej pozycji z bibliografii, należy użyć polecenia \verb|\cite{klucz}|, gdzie klucz to identyfikator przypisany danej pozycji w~środowisku \texttt{thebibliography}. Przed odwołaniem się do wybranej pozycji, należy najpierw dodać ją do bibliografii. Przykładowo, polecenie \verb|\cite{diestel}| wstawi numer odpowiadający pozycji oznaczonej jako \texttt{diestel}, czyli odwołanie do pracy R. Diestela Graph Theory – \cite{diestel}. Przykłady poprawnego zapisu różnych typów źródeł, takich jak książki, artykuły naukowe, normy czy materiały internetowe, przedstawiono w zamieszczonej bibliografii. Dodatkowe wytyczne i przykłady można znaleźć również w pozycji \cite{internet}.
+
+
+    
+    \cleardoublepage
+    
+
+
+    %-----------------------------------------------------------------------------------
+    %                            BIBLIOGRAFIA
+    %-----------------------------------------------------------------------------------
+    \begin{thebibliography}{3}
+    \addcontentsline{toc}{chapter}{Bibliografia}
+	\bibitem{lipski}  W. Lipski, W. Marek, \emph{Analiza kombinatoryczna}, Wyd. Naukowe PWN, Warszawa 1986.
+	\bibitem{diestel} R. Diestel, \emph{Graph theory}, Electronic Edition, 2005. Dostępne online: \url{https://diestel-graph-theory.com/} [dostęp: 30.04.2025].
+        \bibitem{artykul} A. Nowak, B. Kowalski, „Złożoność obliczeniowa wybranych algorytmów grafowych”, \emph{Prace Naukowe Politechniki Warszawskiej. Informatyka}, nr 123, s. 45–56, 2019.
+        \bibitem{norma} PN-EN ISO 9001:2015-10, \emph{Systemy zarządzania jakością — Wymagania}, Polski Komitet Normalizacyjny, Warszawa 2015.
+        \bibitem{internet} Centrum Informacyjno-biblioteczne Politechniki Rzeszowskiej, \emph{Jak sporządzić bibliografię?}. Dostępne online: \url{https://biblio.prz.edu.pl/studenci/jak-sporzadzic-bibliografie#www} [dostęp: 30.04.2025].
+        
+	\end{thebibliography}
+    \cleardoublepage
+
+    %-----------------------------------------------------------------------------------
+    %                            SPISY RYSUNKÓW/TABEL
+    %-----------------------------------------------------------------------------------
+    %\renewcommand{\listfigurename}{\LARGE Spis rysunków}
+    %\addcontentsline{toc}{chapter}{Spis rysunków}
+    %\listoffigures
+    %\cleardoublepage
+
+    %\renewcommand{\listtablename}{\LARGE Spis tabel}
+    %\addcontentsline{toc}{chapter}{Spis tabel}
+    %\listoftables
+    %\cleardoublepage
+
+    %-----------------------------------------------------------------------------------
+    %                            DODATKI/ANEKSY
+    %-----------------------------------------------------------------------------------
+	
+
+    \begin{landscape}	
+        \begin{table}[hbt!]
+        \section*{Dodatek A. Pozioma tabela}
+        \addcontentsline{toc}{chapter}{Dodatek A}
+        \caption{Pozioma tabela}
+		\begin{tabularx}{24.5cm}[h]{c|c c c c c c c c c c c*{5}Y}	
+			\hline
+			\diagbox{$k$}{$n$} & 0 & 1 & 2 & 3 & 4 & 5 & 6 & 7 & 8 & 9 & 10 & 11& 12& 13& 14& 15\\
+			\hline
+			$1$ & 0& \textcolor{red}{1}& \textcolor{red}{1}& \textcolor{red}{2}& \textcolor{red}{3}& \textcolor{red}{5}& \textcolor{red}{8}& \textcolor{red}{13}& \textcolor{red}{21}& \textcolor{red}{34}& \textcolor{red}{55}& \textcolor{red}{89}& \textcolor{red}{144}&\textcolor{red}{233}& \textcolor{red}{377}& \textcolor{red}{610}\\
+			\hline
+			$2$  & \textcolor{orange}{0}&	\textcolor{orange}{1}&	\textcolor{orange}{2}&	\textcolor{orange}{5}&	\textcolor{orange}{12}&	\textcolor{orange}{29}&	\textcolor{orange}{70}&	\textcolor{orange}{169}&	\textcolor{orange}{408}&	\textcolor{orange}{985}&	\textcolor{orange}{2378} & \textcolor{orange}{5741}& \textcolor{orange}{13860} & \textcolor{orange}{33461}& \textcolor{orange}{80782}& \textcolor{orange}{195025}\\
+			\hline
+		\end{tabularx}
+        \label{tab:pozioma}
+        \end{table}
+	\end{landscape}
+    
+
+    %-----------------------------------------------------------------------------------
+    %                            STRESZCZENIA
+    %-----------------------------------------------------------------------------------
+	
+
+    \cleardoublepage
+	\include{Streszczenie}
+    \thispagestyle{empty}
+
+    %-----------------------------------------------------------------------------------
+    %                            TABELA GENAI
+    %-----------------------------------------------------------------------------------
+    \cleardoublepage
+	\include{tabela_genai} %obowiązkowe dla studentów wybierających tematy od semestru letniego 2024/2025, pozostali mogą usunąć
+	
+	\end{document}
+
+	
