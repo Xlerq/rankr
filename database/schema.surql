@@ -172,3 +172,31 @@ DEFINE INDEX fundamental_snapshot_unique
   ON TABLE fundamental_snapshot
   FIELDS instrument, report_period, source
   UNIQUE;
+
+
+-- Macro, FX and gold observations from NBP.
+DEFINE TABLE macro_observation SCHEMAFULL;
+
+DEFINE FIELD date ON TABLE macro_observation TYPE datetime;
+
+DEFINE FIELD series ON TABLE macro_observation TYPE string
+  ASSERT $value INSIDE ["USDPLN", "EURPLN", "GOLD_PLN"];
+
+DEFINE FIELD value ON TABLE macro_observation TYPE number
+  ASSERT $value >= 0;
+
+DEFINE FIELD unit ON TABLE macro_observation TYPE string
+  ASSERT $value INSIDE ["pln_per_usd", "pln_per_eur", "pln_per_gram"];
+
+DEFINE FIELD source ON TABLE macro_observation TYPE string
+  ASSERT $value INSIDE ["nbp"];
+
+DEFINE FIELD source_url ON TABLE macro_observation TYPE option<string>;
+
+DEFINE FIELD created_at ON TABLE macro_observation TYPE datetime
+  DEFAULT time::now();
+
+DEFINE INDEX macro_observation_unique
+  ON TABLE macro_observation
+  FIELDS date, series, source
+  UNIQUE;

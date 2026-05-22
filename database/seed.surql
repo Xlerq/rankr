@@ -130,3 +130,27 @@ CREATE fundamental_snapshot:bit11_2025_iv_gpw_notoria SET
   debt_service_ratio = 144.81,
 
   parse_notes = [];
+
+CREATE macro_observation:usdpln_2024_01_02 SET
+  date = d"2024-01-02T00:00:00Z",
+  series = "USDPLN",
+  value = 3.9432,
+  unit = "pln_per_usd",
+  source = "nbp",
+  source_url = "https://api.nbp.pl/api/exchangerates/rates/a/usd/2024-01-01/2024-01-31/?format=json";
+
+CREATE macro_observation:eurpln_2024_01_02 SET
+  date = d"2024-01-02T00:00:00Z",
+  series = "EURPLN",
+  value = 4.3434,
+  unit = "pln_per_eur",
+  source = "nbp",
+  source_url = "https://api.nbp.pl/api/exchangerates/rates/a/eur/2024-01-01/2024-01-31/?format=json";
+
+CREATE macro_observation:gold_pln_2024_01_02 SET
+  date = d"2024-01-02T00:00:00Z",
+  series = "GOLD_PLN",
+  value = 262.94,
+  unit = "pln_per_gram",
+  source = "nbp",
+  source_url = "https://api.nbp.pl/api/cenyzlota/2024-01-01/2024-01-31/?format=json";
