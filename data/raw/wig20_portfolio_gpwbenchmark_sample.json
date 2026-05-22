@@ -1,8 +1,8 @@
 {
   "source": "GPW Benchmark WIG20 portfolio",
   "page_url": "https://gpwbenchmark.pl/karta-indeksu?isin=PL9999999987",
-  "source_url": "https://gpwbenchmark.pl/ajaxindex.php?action=GPWIndexes&start=ajaxPortfolio&format=html&lang=PL&isin=PL9999999987&cmng_id=1010&time=1779455231096",
-  "fetched_at": "2026-05-22T13:07:10.035365+00:00",
+  "source_url": "https://gpwbenchmark.pl/ajaxindex.php?action=GPWIndexes&start=ajaxPortfolio&format=html&lang=PL&isin=PL9999999987&cmng_id=1010&time=1779457406821",
+  "fetched_at": "2026-05-22T13:43:25.976542+00:00",
   "http_status": 200,
   "index": "WIG20",
   "index_isin": "PL9999999987",
@@ -494,10 +494,10 @@
       "checked_at": "2026-05-22"
     },
     {
-      "symbol": "SPL",
-      "name": "Santander Bank Polska SA",
+      "symbol": "EBP",
+      "name": "Erste Bank Polska SA",
       "isin": "PLBZ00000044",
-      "stooq_symbol": "spl",
+      "stooq_symbol": "ebp",
       "gpw_code": "ERSTEPL",
       "gpwbenchmark_name": "ERSTEPL",
       "sector": "Banking",
@@ -650,10 +650,10 @@
       "checked_at": "2026-05-22"
     },
     {
-      "symbol": "CCC",
+      "symbol": "MDV",
       "name": "Modivo SA",
       "isin": "PLCCC0000016",
-      "stooq_symbol": "ccc",
+      "stooq_symbol": "mdv",
       "gpw_code": "MODIVO",
       "gpwbenchmark_name": "MODIVO",
       "sector": "Retail",

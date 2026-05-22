@@ -6,7 +6,7 @@ PEO,Bank Polska Kasa Opieki SA,PLPEKAO00016,peo,PEKAO,PEKAO,Banking,PLN,8.438,GP
 PZU,Powszechny Zaklad Ubezpieczen SA,PLPZU0000011,pzu,PZU,PZU,Insurance,PLN,7.432,GPWBenchmark_WIG20_portfolio,2026-05-22
 ALE,Allegro.eu SA,LU2237380790,ale,ALLEGRO,ALLEGRO,E-commerce,PLN,5.864,GPWBenchmark_WIG20_portfolio,2026-05-22
 LPP,LPP SA,PLLPP0000011,lpp,LPP,LPP,Retail,PLN,5.426,GPWBenchmark_WIG20_portfolio,2026-05-22
-SPL,Santander Bank Polska SA,PLBZ00000044,spl,ERSTEPL,ERSTEPL,Banking,PLN,5.097,GPWBenchmark_WIG20_portfolio,2026-05-22
+EBP,Erste Bank Polska SA,PLBZ00000044,ebp,ERSTEPL,ERSTEPL,Banking,PLN,5.097,GPWBenchmark_WIG20_portfolio,2026-05-22
 CDR,CD Projekt SA,PLOPTTC00011,cdr,CDPROJEKT,CDPROJEKT,Gaming,PLN,3.664,GPWBenchmark_WIG20_portfolio,2026-05-22
 MBK,mBank SA,PLBRE0000012,mbk,MBANK,MBANK,Banking,PLN,3.230,GPWBenchmark_WIG20_portfolio,2026-05-22
 DNP,Dino Polska SA,PLDINPL00011,dnp,DINOPL,DINOPL,Retail,PLN,3.085,GPWBenchmark_WIG20_portfolio,2026-05-22
@@ -18,4 +18,4 @@ BDX,Budimex SA,PLBUDMX00013,bdx,BUDIMEX,BUDIMEX,Construction,PLN,1.818,GPWBenchm
 PGE,PGE Polska Grupa Energetyczna SA,PLPGER000010,pge,PGE,PGE,Utilities,PLN,1.791,GPWBenchmark_WIG20_portfolio,2026-05-22
 KRU,Kruk SA,PLKRK0000010,kru,KRUK,KRUK,Financial services,PLN,1.548,GPWBenchmark_WIG20_portfolio,2026-05-22
 PCO,Pepco Group NV,NL0015000AU7,pco,PEPCO,PEPCO,Retail,PLN,1.378,GPWBenchmark_WIG20_portfolio,2026-05-22
-CCC,Modivo SA,PLCCC0000016,ccc,MODIVO,MODIVO,Retail,PLN,0.808,GPWBenchmark_WIG20_portfolio,2026-05-22
+MDV,Modivo SA,PLCCC0000016,mdv,MODIVO,MODIVO,Retail,PLN,0.808,GPWBenchmark_WIG20_portfolio,2026-05-22

@@ -4,7 +4,7 @@
   "start": "showNotoria",
   "source": "GPW ajaxindex.php / Notoria financial data",
   "source_url": "https://www.gpw.pl/ajaxindex.php?action=GPWListaSp&code=11BIT&format=html&isin=PL11BTS00015&lang=PL&start=showNotoria",
-  "fetched_at": "2026-05-22T13:08:19.739255+00:00",
+  "fetched_at": "2026-05-22T13:43:32.377729+00:00",
   "http_status": 200,
   "report_period": "I-IV kw. 2025",
   "unit": "tys. PLN",
