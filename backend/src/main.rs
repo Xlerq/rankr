@@ -1,25 +1,13 @@
-use axum::{Json, Router, routing::get};
-use serde::Serialize;
 use tokio::net::TcpListener;
 
-#[derive(Serialize)]
-struct HealthResponse {
-    status: &'static str,
-    service: &'static str,
-}
-
-async fn health() -> Json<HealthResponse> {
-    Json(HealthResponse {
-        status: "ok",
-        service: "rankr_backend",
-    })
-}
+mod app;
+mod routes;
 
 #[tokio::main]
 async fn main() {
     tracing_subscriber::fmt::init();
 
-    let app = Router::new().route("/api/health", get(health));
+    let app = app::router();
 
     let listener = TcpListener::bind("127.0.0.1:3000")
         .await
