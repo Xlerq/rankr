@@ -29,14 +29,14 @@ Do not recreate scattered thesis documentation in `docs/`. Put thesis content in
 
 Build around this flow:
 
-1. Import GPW/WIG20 EOD OHLCV data.
-2. Store daily prices in SurrealDB.
-3. Calculate deterministic scoring.
-4. Store score results.
+1. Import WIG20 reference data, OHLCV prices, fundamentals, and macro samples.
+2. Store instruments, prices, fundamentals, macro observations, score configs, score results, and source logs in SurrealDB.
+3. Calculate deterministic fundamental-first scoring.
+4. Store score results over time.
 5. Expose ranking through the backend API.
 6. Show ranking and instrument details in Leptos.
 7. Render charts with Plotters.
-8. Run a simple historical backtest.
+8. Compare score history with price history for validation notes.
 
 ## Stack
 
@@ -67,15 +67,19 @@ Keep the repository minimal. Do not add extra documentation files unless they cl
 
 The scoring must be deterministic and explainable.
 
+The current direction is `fundamental-first scoring`. Fundamentals dominate the final score, while price action is only a supporting signal.
+
 Expected components:
 
-- trend,
-- momentum,
-- risk,
-- volume,
-- relative strength.
+- `profitability_score`,
+- `financial_strength_score`,
+- `cashflow_quality_score`,
+- `efficiency_score`,
+- `trend_score` as a light technical filter,
+- `macro_context_score` as optional context, disabled by default in MVP.
 
 The final score should be explainable through component scores and normalized to a `0-100` scale.
+Trend has a low weight. Profitability, financial strength, cashflow quality, and efficiency are the dominant parts of the MVP scoring model.
 
 ## Out of Scope for MVP
 
@@ -95,17 +99,17 @@ The final score should be explainable through component scores and normalized to
 
 Preferred order:
 
-1. Backend healthcheck.
-2. SurrealDB connection.
-3. Instrument and price models.
-4. Manual CSV import.
-5. Stooq/GPW data download.
-6. Basic scoring.
+1. SurrealDB schema and seed.
+2. Data sample validation.
+3. Backend healthcheck.
+4. SurrealDB connection.
+5. Importers for Stooq, GPW Benchmark, GPW / Notoria, and NBP.
+6. Fundamental-first scoring.
 7. Ranking API.
 8. Leptos dashboard.
 9. Plotters chart.
 10. Instrument detail view.
-11. Basic backtest.
+11. Score history versus price validation.
 12. Thesis write-up in `thesis/main.tex`.
 
 ## Style

@@ -40,6 +40,13 @@ reject_grep() {
   fi
 }
 
+seed_value() {
+  local field="$1"
+  grep -E "^[[:space:]]+${field} = " "$SEED" |
+    head -n 1 |
+    sed -E 's/.*= ([0-9.]+),?/\1/'
+}
+
 table_block() {
   local table="$1"
   awk -v table="$table" '
@@ -142,6 +149,18 @@ for expected in \
   'is_active = true'; do
   grep -Fq "$expected" "$SEED" || die "default score_config seed missing: $expected"
 done
+
+weight_sum="$(
+  awk -v a="$(seed_value profitability_weight)" \
+      -v b="$(seed_value financial_strength_weight)" \
+      -v c="$(seed_value cashflow_quality_weight)" \
+      -v d="$(seed_value efficiency_weight)" \
+      -v e="$(seed_value trend_weight)" \
+      -v f="$(seed_value macro_context_weight)" \
+      'BEGIN { printf "%.2f", a + b + c + d + e + f }'
+)"
+[[ "$weight_sum" == "1.00" ]] ||
+  die "default score_config weights must sum to 1.00, got ${weight_sum}"
 
 for field in instrument config score_date fundamental_snapshot profitability_score financial_strength_score cashflow_quality_score efficiency_score trend_score macro_context_score final_score label data_quality_score explanation; do
   require_table_field score_result "$field"
