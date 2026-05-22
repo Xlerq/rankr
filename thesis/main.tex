@@ -186,7 +186,17 @@ Poza zakresem MVP znajdują się dane czasu rzeczywistego, logika bota inwestycy
 \cleardoublepage
 \chapter{Analiza problemu i źródła danych}
 
-TODO: Opisać GPW, WIG20, dane EOD, źródła Stooq/GPW, ograniczenia danych oraz kwestie licencyjne.
+Projekt zakłada przygotowanie aplikacji do wieloczynnikowego rankingu polskich spółek giełdowych. Z tego powodu pojedyncze źródło danych nie jest wystarczające. Ceny dzienne pozwalają ocenić zachowanie instrumentu na rynku, ale nie opisują kondycji fundamentalnej spółki ani otoczenia makroekonomicznego. Warstwa danych została więc zaplanowana jako rozwiązanie wieloźródłowe, w którym każde źródło pełni inną rolę.
+
+Podstawowym źródłem danych cenowych jest Stooq. Źródło to ma dostarczać dzienne dane OHLCV, czyli cenę otwarcia, maksimum, minimum, zamknięcie oraz wolumen. Dane te będą używane do obliczania wskaźników trendu, momentum, zmienności, płynności oraz do przygotowania podstawowego backtestingu. W pierwszym etapie projekt koncentruje się na instrumentach WIG20 oraz indeksie WIG20 jako punkcie odniesienia.
+
+Drugim źródłem jest EODHD. W projekcie pełni ono rolę dostawcy danych fundamentalnych i metadanych instrumentów. Obejmuje to między innymi listy symboli dla rynku warszawskiego, identyfikatory instrumentów, informacje o spółkach oraz dane finansowe możliwe do wykorzystania w modelu scoringowym. Dane z EODHD mają uzupełniać część techniczną o komponent fundamentalny.
+
+Trzecim źródłem jest Narodowy Bank Polski. Dane NBP są wykorzystywane jako kontekst makroekonomiczny i walutowy. W szczególności dotyczy to kursów USD/PLN, EUR/PLN oraz ceny złota. Takie dane mogą zostać użyte jako tło dla interpretacji zachowania spółek z GPW, zwłaszcza tych, których wyniki są wrażliwe na kursy walut, surowce lub sytuację makroekonomiczną.
+
+Takie podejście pozwala rozdzielić odpowiedzialności: Stooq odpowiada za warstwę cenową, EODHD za fundamenty i metadane, a NBP za kontekst makro/FX. Dzięki temu model rankingowy może być rozwijany stopniowo, bez wiązania całej aplikacji z jednym dostawcą danych.
+
+Istnieją jednak istotne ograniczenia. Zewnętrzne API mogą mieć limity zapytań, zmiany formatu odpowiedzi albo okresowe przerwy dostępności. Dane fundamentalne mogą być niepełne, opóźnione lub niedostępne dla części spółek. Nie ma też gwarancji, że pełna historia danych fundamentalnych będzie dostępna w sposób spójny dla wszystkich instrumentów. Dodatkowo pełne dane pobierane z zewnętrznych źródeł nie powinny być redystrybuowane przez repozytorium projektu. W repozytorium mogą znajdować się jedynie małe próbki danych oraz mapowania symboli potrzebne do odtworzenia procesu badawczego.
 
 \cleardoublepage
 \chapter{Architektura systemu}

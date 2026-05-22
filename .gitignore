@@ -96,7 +96,11 @@ database/local/
 data/raw/*
 data/processed/*
 analytics/sample_output/*
+
 !data/raw/.gitkeep
+!data/raw/*_sample.csv
+!data/raw/*_sample.json
+!data/raw/wig20_symbols.csv
 !data/processed/.gitkeep
 !analytics/sample_output/.gitkeep
 
@@ -107,4 +111,3 @@ analytics/sample_output/*
 coverage/
 lcov.info
 tarpaulin-report.html
-

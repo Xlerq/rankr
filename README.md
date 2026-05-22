@@ -1,13 +1,21 @@
 # rankr
 
-Engineering thesis project for scoring and ranking Polish stock market instruments from GPW.
+Engineering thesis project for multi-factor scoring and ranking Polish stock market instruments from GPW.
 
 ## MVP
 
-- GPW/WIG20 end-of-day data
-- deterministic scoring and ranking
+- GPW/WIG20 market and reference data
+- deterministic multi-factor scoring and ranking
 - basic charts and backtesting notes
 - Rust-first web application
+
+## Data Sources
+
+- Stooq: end-of-day OHLCV prices for GPW instruments and indices.
+- EODHD: company fundamentals, instrument metadata, and exchange symbol lists.
+- NBP: macro/FX context, including PLN exchange rates and gold prices.
+
+Full datasets are not committed to the repository. Only small samples and symbol maps under `data/raw/` are intended to be tracked.
 
 ## Planned Stack
 

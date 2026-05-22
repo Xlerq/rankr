@@ -1,0 +1,21 @@
+symbol,name,isin,stooq_symbol,eodhd_symbol,sector,currency,source,checked_at
+ALR,Alior Bank SA,PLALIOR00045,alr,ALR.WAR,Banking,PLN,FT_WIG20_constituents,2026-05-22
+ALE,Allegro.eu SA,LU2237380790,ale,ALE.WAR,E-commerce,PLN,FT_WIG20_constituents,2026-05-22
+PEO,Bank Polska Kasa Opieki SA,PLPEKAO00016,peo,PEO.WAR,Banking,PLN,FT_WIG20_constituents,2026-05-22
+BDX,Budimex SA,PLBUDMX00013,bdx,BDX.WAR,Construction,PLN,FT_WIG20_constituents,2026-05-22
+CCC,CCC SA,PLCCC0000016,ccc,CCC.WAR,Retail,PLN,FT_WIG20_constituents,2026-05-22
+CDR,CD Projekt SA,PLOPTTC00011,cdr,CDR.WAR,Gaming,PLN,FT_WIG20_constituents,2026-05-22
+DNP,Dino Polska SA,PLDINPL00011,dnp,DNP.WAR,Retail,PLN,FT_WIG20_constituents,2026-05-22
+KTY,Grupa Kety SA,PLKETY000011,kty,KTY.WAR,Materials,PLN,FT_WIG20_constituents,2026-05-22
+KGH,KGHM Polska Miedz SA,PLKGHM000017,kgh,KGH.WAR,Mining,PLN,FT_WIG20_constituents,2026-05-22
+KRU,Kruk SA,PLKRK0000010,kru,KRU.WAR,Financial services,PLN,FT_WIG20_constituents,2026-05-22
+LPP,LPP SA,PLLPP0000011,lpp,LPP.WAR,Retail,PLN,FT_WIG20_constituents,2026-05-22
+MBK,mBank SA,PLBRE0000012,mbk,MBK.WAR,Banking,PLN,FT_WIG20_constituents,2026-05-22
+OPL,Orange Polska SA,PLTLKPL00017,opl,OPL.WAR,Telecommunications,PLN,FT_WIG20_constituents,2026-05-22
+PKN,Orlen SA,PLPKN0000018,pkn,PKN.WAR,Energy,PLN,FT_WIG20_constituents,2026-05-22
+PCO,Pepco Group NV,NL0015000AU7,pco,PCO.WAR,Retail,PLN,FT_WIG20_constituents,2026-05-22
+PGE,PGE Polska Grupa Energetyczna SA,PLPGER000010,pge,PGE.WAR,Utilities,PLN,FT_WIG20_constituents,2026-05-22
+PKO,PKO Bank Polski SA,PLPKO0000016,pko,PKO.WAR,Banking,PLN,FT_WIG20_constituents,2026-05-22
+PZU,Powszechny Zaklad Ubezpieczen SA,PLPZU0000011,pzu,PZU.WAR,Insurance,PLN,FT_WIG20_constituents,2026-05-22
+SPL,Santander Bank Polska SA,PLBZ00000044,spl,SPL.WAR,Banking,PLN,FT_WIG20_constituents,2026-05-22
+ZAB,Zabka Group SA,LU2910446546,zab,ZAB.WAR,Retail,PLN,FT_WIG20_constituents,2026-05-22
