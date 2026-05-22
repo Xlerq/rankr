@@ -39,3 +39,27 @@ DEFINE FIELD updated_at ON TABLE instrument TYPE datetime
 
 DEFINE INDEX instrument_symbol_unique ON TABLE instrument FIELDS symbol UNIQUE;
 DEFINE INDEX instrument_isin_unique ON TABLE instrument FIELDS isin UNIQUE;
+
+
+-- WIG20 membership and index weights from GPW Benchmark.
+DEFINE TABLE index_membership SCHEMAFULL;
+
+DEFINE FIELD index ON TABLE index_membership TYPE record<instrument>;
+
+DEFINE FIELD instrument ON TABLE index_membership TYPE record<instrument>;
+
+DEFINE FIELD as_of ON TABLE index_membership TYPE datetime;
+
+DEFINE FIELD index_weight ON TABLE index_membership TYPE number
+  ASSERT $value >= 0 AND $value <= 100;
+
+DEFINE FIELD source ON TABLE index_membership TYPE string
+  ASSERT $value INSIDE ["gpwbenchmark"];
+
+DEFINE FIELD created_at ON TABLE index_membership TYPE datetime
+  DEFAULT time::now();
+
+DEFINE INDEX index_membership_unique
+  ON TABLE index_membership
+  FIELDS index, instrument, as_of
+  UNIQUE;
