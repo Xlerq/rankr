@@ -15,7 +15,7 @@ Dokumentacja pracy dyplomowej jest konsolidowana w LaTeX:
 - Frontend Rust + Leptos + WebAssembly.
 - Baza SurrealDB.
 - Wykresy przez Plotters.
-- Minimalny backtesting do opisu wyników w pracy.
+- Analiza historyczna score'u i zestawienie final score z ceną do opisu wyników w pracy.
 
 ## Poza MVP
 
@@ -62,18 +62,21 @@ Gotowe, gdy:
 ### Faza 2 - Model danych i baza
 
 - Zaprojektować `instrument`.
-- Zaprojektować `price_daily`.
-- Zaprojektować `fundamental_snapshot`.
-- Zaprojektować `macro_daily`.
-- Zaprojektować `score_result`.
-- Zaprojektować `score_config`.
-- Zaprojektować `backtest_result`.
+- Zaprojektować `index_membership` dla składu i wag WIG20 z GPW Benchmark.
+- Zaprojektować `price_daily` dla danych OHLCV ze Stooq.
+- Zaprojektować `fundamental_snapshot` dla danych GPW / Notoria.
+- Zaprojektować `macro_observation` dla danych NBP w formacie długim: data, seria, wartość.
+- Zaprojektować `score_config` jako konfigurację fundamental-first scoringu.
+- Zaprojektować `score_result` jako historię wyników scoringu dla instrumentu i daty.
+- Zaprojektować `data_source_log` dla logowania pobrań i importów danych.
 - Zaprojektować mapowanie symboli między Stooq, GPW Benchmark, GPW / Notoria i przyszłą bazą danych.
-- Przygotować schemat SurrealDB.
+- Przygotować schemat SurrealDB i przykładowy seed.
 
 Gotowe, gdy:
 
-- Model danych obsługuje ceny, scoring i wyniki backtestów.
+- Model danych obsługuje instrumenty, skład indeksu, ceny, fundamenty, makro, konfiguracje scoringu, wyniki scoringu i logi importu.
+- `score_config` odzwierciedla fundamental-first scoring, a nie ranking oparty głównie o price action.
+- `score_result` pozwala zapisywać final score dla danej spółki i daty.
 - Backend ma jasny kontrakt danych dla frontendu.
 
 ### Faza 3 - Backend
@@ -107,19 +110,28 @@ Gotowe, gdy:
 - Da się pobrać dane dla listy WIG20.
 - API zwraca serię cenową.
 
-### Faza 5 - Scoring
+### Faza 5 - Fundamental-first scoring
 
 - Opisać wzory scoringu w pracy LaTeX.
-- Policzyć wskaźniki: trend, momentum, ryzyko, wolumen i relative strength.
+- Zdefiniować komponenty scoringu oparte głównie o fundamenty:
+  - `profitability_score`,
+  - `financial_strength_score`,
+  - `cashflow_quality_score`,
+  - `efficiency_score`,
+  - `trend_score` jako lekki filtr techniczny,
+  - `macro_context_score` jako opcjonalny kontekst, domyślnie wyłączony w MVP.
 - Znormalizować komponenty do skali 0-100.
-- Zapisać `final_score` i etykietę.
-- Udostępnić endpointy scoringu.
+- Użyć `score_config` z wagami fundamental-first, np. dominujące fundamenty i niski udział trendu.
+- Zapisać `final_score`, etykietę i jakość danych w `score_result`.
+- Udostępnić endpointy scoringu i rankingu.
 
 Gotowe, gdy:
 
-- Każdy instrument WIG20 ma score.
+- Każdy instrument z badanego uniwersum ma score.
+- Score jest oparty głównie o dane fundamentalne, a nie o price action.
 - Score jest wyjaśnialny przez komponenty.
 - Ranking jest sortowany po `final_score`.
+- Da się pokazać, z jakiego `score_config` i `fundamental_snapshot` powstał wynik.
 
 ### Faza 6 - Frontend
 
@@ -147,18 +159,20 @@ Gotowe, gdy:
 - Widok instrumentu pokazuje cenę i historię score'u.
 - Wykresy są generowane przez Plotters.
 
-### Faza 8 - Backtesting
+### Faza 8 - Analiza historyczna score'u
 
-- Przygotować bazową strategię top N.
-- Porównać wynik z WIG20.
-- Policzyć return, drawdown, volatility i prostą miarę Sharpe proxy.
-- Pokazać equity curve i drawdown.
+- Zapisywać `score_result` dla wybranych dat historycznych.
+- Zestawić historię `final_score` z ceną zamknięcia z `price_daily`.
+- Pokazać wykres ceny i historii score'u dla instrumentu.
+- Policzyć proste metryki walidacyjne, np. korelację score'u z przyszłą stopą zwrotu albo średni future return dla grup o wysokim i niskim score.
+- Opisać ograniczenia: fundamenty są okresowe, publikowane z opóźnieniem i nie muszą działać jako krótkoterminowy sygnał tradingowy.
 
 Gotowe, gdy:
 
-- Backtest działa dla historycznych danych.
-- Wyniki nadają się do opisania w pracy.
-- Ograniczenia backtestu są jasno opisane.
+- Da się zobaczyć historię score'u dla instrumentu.
+- Da się porównać final score z późniejszym zachowaniem ceny.
+- Wyniki nadają się do opisania w pracy bez udawania pełnego systemu tradingowego.
+- Ograniczenia analizy historycznej są jasno opisane.
 
 ### Faza 9 - Testy i demo
 
@@ -189,6 +203,6 @@ Gotowe, gdy:
 
 ## Uwagi
 
-- Priorytetem jest działające MVP, nie rozbudowany system tradingowy.
-- Konfiguracja wag scoringu może być rozszerzeniem po działającym rankingu.
+- Priorytetem jest działające MVP do fundamentalnego rankingu spółek, nie rozbudowany system tradingowy.
+- Konfiguracja wag scoringu pozostaje elementem modelu, ale domyślny scoring jest fundamental-first i globalny; warianty sektorowe mogą być rozszerzeniem.
 - Przed commitowaniem większych danych trzeba sprawdzić zasady licencji i redystrybucji źródeł Stooq/GPW.
