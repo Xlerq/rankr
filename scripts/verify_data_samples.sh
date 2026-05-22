@@ -40,6 +40,31 @@ validate_json() {
   die "jq is required to validate JSON samples. Install jq and rerun this script."
 }
 
+validate_jq_expr() {
+  local file="$1"
+  local expr="$2"
+  local message="$3"
+
+  if ! command -v jq >/dev/null 2>&1; then
+    die "jq is required to validate JSON sample content. Install jq and rerun this script."
+  fi
+
+  jq -e "$expr" "$file" >/dev/null || die "$message"
+}
+
+validate_wig20_symbols_csv() {
+  local file="$1"
+  local header
+  local rows
+
+  header="$(head -n 1 "$file")"
+  [[ "$header" == "symbol,name,isin,stooq_symbol,gpw_code,gpwbenchmark_name,sector,currency,index_weight,source,checked_at" ]] ||
+    die "invalid wig20_symbols.csv header: $header"
+
+  rows="$(( $(wc -l < "$file") - 1 ))"
+  [[ "$rows" -ge 1 ]] || die "wig20_symbols.csv has no data rows"
+}
+
 check_no_hardcoded_keys() {
   local hits
   hits="$(
@@ -47,6 +72,11 @@ check_no_hardcoded_keys() {
       '(api_token|apikey)=[A-Za-z0-9_]{12,}|(EODHD_API_KEY|STOOQ_API_KEY)=[A-Za-z0-9_]{12,}' \
       "$ROOT_DIR" \
       --exclude-dir=.git \
+      --exclude-dir=.venv \
+      --exclude-dir=venv \
+      --exclude-dir=target \
+      --exclude-dir=node_modules \
+      --exclude-dir=__pycache__ \
       --exclude='.env' \
       --exclude='*.pdf' \
       --exclude='*.png' \
@@ -60,22 +90,39 @@ check_no_hardcoded_keys() {
 }
 
 require_file "$RAW_DIR/wig20_symbols.csv"
+require_file "$RAW_DIR/wig20_portfolio_gpwbenchmark_sample.json"
 require_file "$RAW_DIR/kgh_stooq_sample.csv"
 require_file "$RAW_DIR/wig20_stooq_sample.csv"
-require_file "$RAW_DIR/eodhd_war_symbols_sample.json"
-require_file "$RAW_DIR/kgh_eodhd_fundamentals_sample.json"
 require_file "$RAW_DIR/nbp_usdpln_sample.json"
 require_file "$RAW_DIR/nbp_eurpln_sample.json"
 require_file "$RAW_DIR/nbp_gold_sample.json"
+require_file "$RAW_DIR/11bit_gpw_notoria_sample.html"
+require_file "$RAW_DIR/11bit_gpw_notoria_sample.json"
+
+validate_wig20_symbols_csv "$RAW_DIR/wig20_symbols.csv"
 
 validate_stooq_csv "$RAW_DIR/kgh_stooq_sample.csv"
 validate_stooq_csv "$RAW_DIR/wig20_stooq_sample.csv"
 
-validate_json "$RAW_DIR/eodhd_war_symbols_sample.json"
-validate_json "$RAW_DIR/kgh_eodhd_fundamentals_sample.json"
+validate_json "$RAW_DIR/wig20_portfolio_gpwbenchmark_sample.json"
 validate_json "$RAW_DIR/nbp_usdpln_sample.json"
 validate_json "$RAW_DIR/nbp_eurpln_sample.json"
 validate_json "$RAW_DIR/nbp_gold_sample.json"
+validate_json "$RAW_DIR/11bit_gpw_notoria_sample.json"
+
+validate_jq_expr "$RAW_DIR/wig20_portfolio_gpwbenchmark_sample.json" \
+  '.http_status == 200 and (.portfolio | length) >= 1' \
+  "GPW Benchmark sample must have http_status=200 and at least one portfolio row"
+
+validate_jq_expr "$RAW_DIR/11bit_gpw_notoria_sample.json" \
+  '.http_status == 200' \
+  "GPW Notoria sample must have http_status=200"
+
+for field in report_period unit revenue net_income assets equity ebitda; do
+  validate_jq_expr "$RAW_DIR/11bit_gpw_notoria_sample.json" \
+    ".${field} != null" \
+    "GPW Notoria sample is missing required field: ${field}"
+done
 
 check_no_hardcoded_keys
 

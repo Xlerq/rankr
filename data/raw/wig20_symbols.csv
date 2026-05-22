@@ -1,21 +1,21 @@
-symbol,name,isin,stooq_symbol,eodhd_symbol,sector,currency,source,checked_at
-ALR,Alior Bank SA,PLALIOR00045,alr,ALR.WAR,Banking,PLN,FT_WIG20_constituents,2026-05-22
-ALE,Allegro.eu SA,LU2237380790,ale,ALE.WAR,E-commerce,PLN,FT_WIG20_constituents,2026-05-22
-PEO,Bank Polska Kasa Opieki SA,PLPEKAO00016,peo,PEO.WAR,Banking,PLN,FT_WIG20_constituents,2026-05-22
-BDX,Budimex SA,PLBUDMX00013,bdx,BDX.WAR,Construction,PLN,FT_WIG20_constituents,2026-05-22
-CCC,CCC SA,PLCCC0000016,ccc,CCC.WAR,Retail,PLN,FT_WIG20_constituents,2026-05-22
-CDR,CD Projekt SA,PLOPTTC00011,cdr,CDR.WAR,Gaming,PLN,FT_WIG20_constituents,2026-05-22
-DNP,Dino Polska SA,PLDINPL00011,dnp,DNP.WAR,Retail,PLN,FT_WIG20_constituents,2026-05-22
-KTY,Grupa Kety SA,PLKETY000011,kty,KTY.WAR,Materials,PLN,FT_WIG20_constituents,2026-05-22
-KGH,KGHM Polska Miedz SA,PLKGHM000017,kgh,KGH.WAR,Mining,PLN,FT_WIG20_constituents,2026-05-22
-KRU,Kruk SA,PLKRK0000010,kru,KRU.WAR,Financial services,PLN,FT_WIG20_constituents,2026-05-22
-LPP,LPP SA,PLLPP0000011,lpp,LPP.WAR,Retail,PLN,FT_WIG20_constituents,2026-05-22
-MBK,mBank SA,PLBRE0000012,mbk,MBK.WAR,Banking,PLN,FT_WIG20_constituents,2026-05-22
-OPL,Orange Polska SA,PLTLKPL00017,opl,OPL.WAR,Telecommunications,PLN,FT_WIG20_constituents,2026-05-22
-PKN,Orlen SA,PLPKN0000018,pkn,PKN.WAR,Energy,PLN,FT_WIG20_constituents,2026-05-22
-PCO,Pepco Group NV,NL0015000AU7,pco,PCO.WAR,Retail,PLN,FT_WIG20_constituents,2026-05-22
-PGE,PGE Polska Grupa Energetyczna SA,PLPGER000010,pge,PGE.WAR,Utilities,PLN,FT_WIG20_constituents,2026-05-22
-PKO,PKO Bank Polski SA,PLPKO0000016,pko,PKO.WAR,Banking,PLN,FT_WIG20_constituents,2026-05-22
-PZU,Powszechny Zaklad Ubezpieczen SA,PLPZU0000011,pzu,PZU.WAR,Insurance,PLN,FT_WIG20_constituents,2026-05-22
-SPL,Santander Bank Polska SA,PLBZ00000044,spl,SPL.WAR,Banking,PLN,FT_WIG20_constituents,2026-05-22
-ZAB,Zabka Group SA,LU2910446546,zab,ZAB.WAR,Retail,PLN,FT_WIG20_constituents,2026-05-22
+symbol,name,isin,stooq_symbol,gpw_code,gpwbenchmark_name,sector,currency,index_weight,source,checked_at
+PKN,Orlen SA,PLPKN0000018,pkn,PKNORLEN,PKNORLEN,Energy,PLN,16.894,GPWBenchmark_WIG20_portfolio,2026-05-22
+PKO,PKO Bank Polski SA,PLPKO0000016,pko,PKOBP,PKOBP,Banking,PLN,15.382,GPWBenchmark_WIG20_portfolio,2026-05-22
+KGH,KGHM Polska Miedz SA,PLKGHM000017,kgh,KGHM,KGHM,Mining,PLN,8.999,GPWBenchmark_WIG20_portfolio,2026-05-22
+PEO,Bank Polska Kasa Opieki SA,PLPEKAO00016,peo,PEKAO,PEKAO,Banking,PLN,8.438,GPWBenchmark_WIG20_portfolio,2026-05-22
+PZU,Powszechny Zaklad Ubezpieczen SA,PLPZU0000011,pzu,PZU,PZU,Insurance,PLN,7.432,GPWBenchmark_WIG20_portfolio,2026-05-22
+ALE,Allegro.eu SA,LU2237380790,ale,ALLEGRO,ALLEGRO,E-commerce,PLN,5.864,GPWBenchmark_WIG20_portfolio,2026-05-22
+LPP,LPP SA,PLLPP0000011,lpp,LPP,LPP,Retail,PLN,5.426,GPWBenchmark_WIG20_portfolio,2026-05-22
+SPL,Santander Bank Polska SA,PLBZ00000044,spl,ERSTEPL,ERSTEPL,Banking,PLN,5.097,GPWBenchmark_WIG20_portfolio,2026-05-22
+CDR,CD Projekt SA,PLOPTTC00011,cdr,CDPROJEKT,CDPROJEKT,Gaming,PLN,3.664,GPWBenchmark_WIG20_portfolio,2026-05-22
+MBK,mBank SA,PLBRE0000012,mbk,MBANK,MBANK,Banking,PLN,3.230,GPWBenchmark_WIG20_portfolio,2026-05-22
+DNP,Dino Polska SA,PLDINPL00011,dnp,DINOPL,DINOPL,Retail,PLN,3.085,GPWBenchmark_WIG20_portfolio,2026-05-22
+ZAB,Zabka Group SA,LU2910446546,zab,ZABKA,ZABKA,Retail,PLN,2.550,GPWBenchmark_WIG20_portfolio,2026-05-22
+KTY,Grupa Kety SA,PLKETY000011,kty,KETY,KETY,Materials,PLN,2.390,GPWBenchmark_WIG20_portfolio,2026-05-22
+ALR,Alior Bank SA,PLALIOR00045,alr,ALIOR,ALIOR,Banking,PLN,2.220,GPWBenchmark_WIG20_portfolio,2026-05-22
+TPE,Tauron Polska Energia SA,PLTAURN00011,tpe,TAURONPE,TAURONPE,Utilities,PLN,1.986,GPWBenchmark_WIG20_portfolio,2026-05-22
+BDX,Budimex SA,PLBUDMX00013,bdx,BUDIMEX,BUDIMEX,Construction,PLN,1.818,GPWBenchmark_WIG20_portfolio,2026-05-22
+PGE,PGE Polska Grupa Energetyczna SA,PLPGER000010,pge,PGE,PGE,Utilities,PLN,1.791,GPWBenchmark_WIG20_portfolio,2026-05-22
+KRU,Kruk SA,PLKRK0000010,kru,KRUK,KRUK,Financial services,PLN,1.548,GPWBenchmark_WIG20_portfolio,2026-05-22
+PCO,Pepco Group NV,NL0015000AU7,pco,PEPCO,PEPCO,Retail,PLN,1.378,GPWBenchmark_WIG20_portfolio,2026-05-22
+CCC,Modivo SA,PLCCC0000016,ccc,MODIVO,MODIVO,Retail,PLN,0.808,GPWBenchmark_WIG20_portfolio,2026-05-22

@@ -53,7 +53,7 @@ fetch_stooq_csv() {
   local tmp
   tmp="$(mktemp)"
 
-  curl -fsSL --get "https://stooq.pl/q/d/l/" \
+  curl -fsSL --get "https://stooq.com/q/d/l/" \
     --data-urlencode "s=$symbol" \
     --data-urlencode "i=d" \
     --data-urlencode "d1=$STOOQ_START" \

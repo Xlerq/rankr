@@ -190,13 +190,15 @@ Projekt zakłada przygotowanie aplikacji do wieloczynnikowego rankingu polskich 
 
 Podstawowym źródłem danych cenowych jest Stooq. Źródło to ma dostarczać dzienne dane OHLCV, czyli cenę otwarcia, maksimum, minimum, zamknięcie oraz wolumen. Dane te będą używane do obliczania wskaźników trendu, momentum, zmienności, płynności oraz do przygotowania podstawowego backtestingu. W pierwszym etapie projekt koncentruje się na instrumentach WIG20 oraz indeksie WIG20 jako punkcie odniesienia.
 
-Drugim źródłem jest EODHD. W projekcie pełni ono rolę dostawcy danych fundamentalnych i metadanych instrumentów. Obejmuje to między innymi listy symboli dla rynku warszawskiego, identyfikatory instrumentów, informacje o spółkach oraz dane finansowe możliwe do wykorzystania w modelu scoringowym. Dane z EODHD mają uzupełniać część techniczną o komponent fundamentalny.
+Skład indeksu WIG20 oraz wagi instrumentów są pobierane z GPW Benchmark. To źródło pełni rolę punktu odniesienia dla aktualnego portfela indeksu, dzięki czemu lista spółek nie musi być utrzymywana ręcznie. Dane z GPW Benchmark są również potrzebne do mapowania instrumentów między źródłami, ponieważ symbole używane przez GPW, Stooq i inne serwisy mogą się różnić.
 
-Trzecim źródłem jest Narodowy Bank Polski. Dane NBP są wykorzystywane jako kontekst makroekonomiczny i walutowy. W szczególności dotyczy to kursów USD/PLN, EUR/PLN oraz ceny złota. Takie dane mogą zostać użyte jako tło dla interpretacji zachowania spółek z GPW, zwłaszcza tych, których wyniki są wrażliwe na kursy walut, surowce lub sytuację makroekonomiczną.
+Dane fundamentalne spółek są badane na podstawie zakładki finansowej GPW / Notoria dostępnej na kartach spółek GPW. W projekcie jest to eksperymentalne darmowe źródło informacji takich jak przychody, wynik netto, aktywa, kapitał własny, zobowiązania, przepływy pieniężne oraz EBITDA. Dane te mają uzupełniać część techniczną o komponent fundamentalny, ale wymagają ostrożnej walidacji.
 
-Takie podejście pozwala rozdzielić odpowiedzialności: Stooq odpowiada za warstwę cenową, EODHD za fundamenty i metadane, a NBP za kontekst makro/FX. Dzięki temu model rankingowy może być rozwijany stopniowo, bez wiązania całej aplikacji z jednym dostawcą danych.
+Kolejnym źródłem jest Narodowy Bank Polski. Dane NBP są wykorzystywane jako kontekst makroekonomiczny i walutowy. W szczególności dotyczy to kursów USD/PLN, EUR/PLN oraz ceny złota. Takie dane mogą zostać użyte jako tło dla interpretacji zachowania spółek z GPW, zwłaszcza tych, których wyniki są wrażliwe na kursy walut, surowce lub sytuację makroekonomiczną.
 
-Istnieją jednak istotne ograniczenia. Zewnętrzne API mogą mieć limity zapytań, zmiany formatu odpowiedzi albo okresowe przerwy dostępności. Dane fundamentalne mogą być niepełne, opóźnione lub niedostępne dla części spółek. Nie ma też gwarancji, że pełna historia danych fundamentalnych będzie dostępna w sposób spójny dla wszystkich instrumentów. Dodatkowo pełne dane pobierane z zewnętrznych źródeł nie powinny być redystrybuowane przez repozytorium projektu. W repozytorium mogą znajdować się jedynie małe próbki danych oraz mapowania symboli potrzebne do odtworzenia procesu badawczego.
+Takie podejście pozwala rozdzielić odpowiedzialności: Stooq odpowiada za warstwę cenową, GPW Benchmark za skład i wagi WIG20, GPW / Notoria za fundamenty, a NBP za kontekst makro/FX. Dzięki temu model rankingowy może być rozwijany stopniowo, bez wiązania całej aplikacji z jednym dostawcą danych.
+
+Istnieją jednak istotne ograniczenia. Dostęp do danych Stooq wymaga klucza API. GPW / Notoria nie jest stabilnym, publicznie udokumentowanym API, lecz endpointem używanym przez stronę GPW, dlatego struktura HTML może się zmienić. Dane NBP nie wymagają klucza, ale mają określoną częstotliwość publikacji i zakres historyczny zależny od danego endpointu. Dane fundamentalne mogą być niepełne, opóźnione lub niedostępne dla części spółek, a ich historia może być trudniejsza do wykorzystania w backtestingu. Dodatkowo pełne dane pobierane z zewnętrznych źródeł nie powinny być redystrybuowane przez repozytorium projektu. W repozytorium mogą znajdować się jedynie małe próbki danych oraz mapowania symboli potrzebne do odtworzenia procesu badawczego.
 
 \cleardoublepage
 \chapter{Architektura systemu}
@@ -266,7 +268,17 @@ Giełda Papierów Wartościowych w Warszawie.
 \bibitem{stooq}
 Stooq.
 \newblock \textit{Dane historyczne}.
-\newblock Dostępne online: \url{https://stooq.pl/}.
+\newblock Dostępne online: \url{https://stooq.com/}.
+
+\bibitem{gpwbenchmark}
+GPW Benchmark.
+\newblock \textit{Karta indeksu WIG20}.
+\newblock Dostępne online: \url{https://gpwbenchmark.pl/karta-indeksu?isin=PL9999999987}.
+
+\bibitem{nbp}
+Narodowy Bank Polski.
+\newblock \textit{API NBP}.
+\newblock Dostępne online: \url{https://api.nbp.pl/}.
 
 \end{thebibliography}
 

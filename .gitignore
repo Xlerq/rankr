@@ -94,6 +94,8 @@ database/local/
 
 # Market data and generated outputs
 data/raw/*
+data/cache/*
+data/full/*
 data/processed/*
 analytics/sample_output/*
 
@@ -102,6 +104,7 @@ analytics/sample_output/*
 !data/raw/*_sample.html
 !data/raw/*_sample.json
 !data/raw/wig20_symbols.csv
+!data/raw/wig20_portfolio_gpwbenchmark_sample.json
 !data/processed/.gitkeep
 !analytics/sample_output/.gitkeep
 

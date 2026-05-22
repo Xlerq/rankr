@@ -39,27 +39,36 @@ Gotowe, gdy:
 - Istnieje `thesis/main.tex`.
 - README i roadmapa są spójne z zakresem MVP.
 
-### Faza 1 - Dane GPW
+### Faza 1 - Warstwa badawcza danych
 
-- Sprawdzić źródła danych Stooq/GPW.
-- Zweryfikować symbole WIG20.
-- Pobrać próbki danych EOD.
+- Sprawdzić Stooq jako źródło danych EOD OHLCV.
+- Sprawdzić GPW Benchmark jako źródło składu i wag WIG20.
+- Sprawdzić GPW / Notoria jako źródło danych fundamentalnych.
+- Sprawdzić NBP jako źródło danych FX, makro i złota.
+- Pobrać małe próbki danych dla każdego źródła.
 - Sprawdzić format OHLCV.
+- Zweryfikować symbole WIG20 i mapowanie symboli między źródłami.
 - Ustalić zasady trzymania danych w repozytorium.
+- Opisać ograniczenia źródeł danych.
 
 Gotowe, gdy:
 
-- Wiadomo, skąd pobierać dane.
-- Wiadomo, jak wygląda format danych.
+- Repozytorium zawiera próbki Stooq, NBP, GPW / Notoria oraz GPW Benchmark albo czytelny fallback.
+- Istnieją skrypty pobierające próbki i skrypt walidujący.
+- Istnieje `data/raw/wig20_symbols.csv`.
+- Wiadomo, jak wyglądają formaty danych.
 - Znane są ograniczenia źródeł danych.
 
 ### Faza 2 - Model danych i baza
 
 - Zaprojektować `instrument`.
 - Zaprojektować `price_daily`.
+- Zaprojektować `fundamental_snapshot`.
+- Zaprojektować `macro_daily`.
 - Zaprojektować `score_result`.
 - Zaprojektować `score_config`.
 - Zaprojektować `backtest_result`.
+- Zaprojektować mapowanie symboli między Stooq, GPW Benchmark, GPW / Notoria i przyszłą bazą danych.
 - Przygotować schemat SurrealDB.
 
 Gotowe, gdy:
@@ -87,6 +96,9 @@ Gotowe, gdy:
 - Dodać walidację danych OHLCV.
 - Dodać usuwanie duplikatów.
 - Dodać downloader Stooq.
+- Dodać downloader GPW Benchmark.
+- Dodać downloader GPW / Notoria.
+- Dodać downloader NBP.
 - Logować źródło i status importu.
 
 Gotowe, gdy:

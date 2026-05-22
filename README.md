@@ -9,15 +9,27 @@ Engineering thesis project for multi-factor scoring and ranking Polish stock mar
 - basic charts and backtesting notes
 - Rust-first web application
 
-## Data Sources
+## Data sources
 
 - Stooq: end-of-day OHLCV prices for GPW instruments and indices.
-- EODHD: company fundamentals, instrument metadata, and exchange symbol lists.
-- NBP: macro/FX context, including PLN exchange rates and gold prices.
-- GPW Notoria: experimental free source for company financial data from GPW factsheets.
+- GPW Benchmark: current WIG20 composition and index weights.
+- GPW / Notoria: experimental free source for company financial data from GPW factsheets.
+- NBP: FX and gold prices for macro context.
 
-Full datasets are not committed to the repository. Only small samples and symbol maps under `data/raw/` are intended to be tracked.
-GPW Notoria scraping is experimental: the AJAX endpoint and HTML structure may change, so only small local samples are fetched and full raw datasets should not be committed.
+Full datasets are not committed. The repository tracks only small samples and symbol maps under `data/raw/`.
+Private API keys belong in `.env`; this file is ignored by git.
+GPW / Notoria scraping is experimental because the AJAX endpoint and HTML structure may change.
+
+Sample commands:
+
+```bash
+pip install -r requirements-dev.txt
+./scripts/fetch_stooq_samples.sh
+./scripts/fetch_nbp_samples.sh
+python scripts/fetch_gpwbenchmark_wig20_portfolio.py
+python scripts/fetch_gpw_notoria_sample.py
+./scripts/verify_data_samples.sh
+```
 
 ## Planned Stack
 
