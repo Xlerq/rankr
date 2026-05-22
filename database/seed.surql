@@ -158,6 +158,8 @@ CREATE macro_observation:gold_pln_2024_01_02 SET
 CREATE score_config:default_fundamental_v1 SET
   name = "default_fundamental_v1",
   description = "Default fundamental-first scoring configuration. Fundamentals dominate the score, with a small technical trend filter and macro context disabled for MVP.",
+  scope = "global",
+  sector = NONE,
   profitability_weight = 0.35,
   financial_strength_weight = 0.25,
   cashflow_quality_weight = 0.20,
@@ -166,3 +168,21 @@ CREATE score_config:default_fundamental_v1 SET
   macro_context_weight = 0.00,
   is_default = true,
   is_active = true;
+
+CREATE score_result:bit11_2026_05_22_default_fundamental_v1 SET
+  instrument = instrument:bit11,
+  config = score_config:default_fundamental_v1,
+  score_date = d"2026-05-22T00:00:00Z",
+  fundamental_snapshot = fundamental_snapshot:bit11_2025_iv_gpw_notoria,
+
+  profitability_score = 62.00,
+  financial_strength_score = 90.00,
+  cashflow_quality_score = 85.00,
+  efficiency_score = 55.00,
+  trend_score = 50.00,
+  macro_context_score = 50.00,
+
+  final_score = 71.70,
+  label = "good",
+  data_quality_score = 90.00,
+  explanation = "Seed example for fundamental-first scoring based on GPW Notoria fundamentals and default scoring config.";
