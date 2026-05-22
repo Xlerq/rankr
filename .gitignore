@@ -115,3 +115,6 @@ analytics/sample_output/*
 coverage/
 lcov.info
 tarpaulin-report.html
+
+# Database
+history.txt

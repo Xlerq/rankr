@@ -179,7 +179,7 @@
 
 TODO: Opisać motywację, problem badawczo-inżynierski oraz cel pracy.
 
-Celem pracy jest przygotowanie aplikacji webowej do oceny i rankingowania instrumentów Giełdy Papierów Wartościowych w Warszawie na podstawie danych end-of-day. Minimalny zakres projektu obejmuje instrumenty WIG20, dane dzienne OHLCV, deterministyczny scoring, ranking, podstawowe wykresy oraz minimalny backtesting.
+Celem pracy jest przygotowanie aplikacji webowej do oceny i rankingowania instrumentów Giełdy Papierów Wartościowych w Warszawie na podstawie danych dziennych oraz fundamentalnych. Minimalny zakres projektu obejmuje instrumenty WIG20, dane OHLCV, dane fundamentalne, deterministyczny scoring, ranking, podstawowe wykresy oraz analizę historii score'u zestawioną z ceną instrumentu.
 
 Poza zakresem MVP znajdują się dane czasu rzeczywistego, logika bota inwestycyjnego, integracja z brokerem oraz uczenie maszynowe.
 
@@ -188,7 +188,7 @@ Poza zakresem MVP znajdują się dane czasu rzeczywistego, logika bota inwestycy
 
 Projekt zakłada przygotowanie aplikacji do wieloczynnikowego rankingu polskich spółek giełdowych. Z tego powodu pojedyncze źródło danych nie jest wystarczające. Ceny dzienne pozwalają ocenić zachowanie instrumentu na rynku, ale nie opisują kondycji fundamentalnej spółki ani otoczenia makroekonomicznego. Warstwa danych została więc zaplanowana jako rozwiązanie wieloźródłowe, w którym każde źródło pełni inną rolę.
 
-Podstawowym źródłem danych cenowych jest Stooq. Źródło to ma dostarczać dzienne dane OHLCV, czyli cenę otwarcia, maksimum, minimum, zamknięcie oraz wolumen. Dane te będą używane do obliczania wskaźników trendu, momentum, zmienności, płynności oraz do przygotowania podstawowego backtestingu. W pierwszym etapie projekt koncentruje się na instrumentach WIG20 oraz indeksie WIG20 jako punkcie odniesienia.
+Podstawowym źródłem danych cenowych jest Stooq. Źródło to ma dostarczać dzienne dane OHLCV, czyli cenę otwarcia, maksimum, minimum, zamknięcie oraz wolumen. Dane te będą używane do wykresów, prostego filtra trendu oraz późniejszej walidacji historii score'u. W pierwszym etapie projekt koncentruje się na instrumentach WIG20 oraz indeksie WIG20 jako punkcie odniesienia.
 
 Skład indeksu WIG20 oraz wagi instrumentów są pobierane z GPW Benchmark. To źródło pełni rolę punktu odniesienia dla aktualnego portfela indeksu, dzięki czemu lista spółek nie musi być utrzymywana ręcznie. Dane z GPW Benchmark są również potrzebne do mapowania instrumentów między źródłami, ponieważ symbole używane przez GPW, Stooq i inne serwisy mogą się różnić.
 
@@ -198,7 +198,7 @@ Kolejnym źródłem jest Narodowy Bank Polski. Dane NBP są wykorzystywane jako 
 
 Takie podejście pozwala rozdzielić odpowiedzialności: Stooq odpowiada za warstwę cenową, GPW Benchmark za skład i wagi WIG20, GPW / Notoria za fundamenty, a NBP za kontekst makro/FX. Dzięki temu model rankingowy może być rozwijany stopniowo, bez wiązania całej aplikacji z jednym dostawcą danych.
 
-Istnieją jednak istotne ograniczenia. Dostęp do danych Stooq wymaga klucza API. GPW / Notoria nie jest stabilnym, publicznie udokumentowanym API, lecz endpointem używanym przez stronę GPW, dlatego struktura HTML może się zmienić. Dane NBP nie wymagają klucza, ale mają określoną częstotliwość publikacji i zakres historyczny zależny od danego endpointu. Dane fundamentalne mogą być niepełne, opóźnione lub niedostępne dla części spółek, a ich historia może być trudniejsza do wykorzystania w backtestingu. Dodatkowo pełne dane pobierane z zewnętrznych źródeł nie powinny być redystrybuowane przez repozytorium projektu. W repozytorium mogą znajdować się jedynie małe próbki danych oraz mapowania symboli potrzebne do odtworzenia procesu badawczego.
+Istnieją jednak istotne ograniczenia. Dostęp do danych Stooq wymaga klucza API. GPW / Notoria nie jest stabilnym, publicznie udokumentowanym API, lecz endpointem używanym przez stronę GPW, dlatego struktura HTML może się zmienić. Dane NBP nie wymagają klucza, ale mają określoną częstotliwość publikacji i zakres historyczny zależny od danego endpointu. Dane fundamentalne mogą być niepełne, opóźnione lub niedostępne dla części spółek, a ich historia może być trudniejsza do wykorzystania w analizie historycznej. Dodatkowo pełne dane pobierane z zewnętrznych źródeł nie powinny być redystrybuowane przez repozytorium projektu. W repozytorium mogą znajdować się jedynie małe próbki danych oraz mapowania symboli potrzebne do odtworzenia procesu badawczego.
 
 \cleardoublepage
 \chapter{Architektura systemu}
@@ -219,22 +219,29 @@ Planowany stos technologiczny:
 \cleardoublepage
 \chapter{Model danych}
 
-TODO: Opisać encje instrumentów, cen dziennych, wyników scoringu, konfiguracji scoringu oraz wyników backtestów.
+Model danych aplikacji jest projektowany w bazie SurrealDB. Na etapie MVP obejmuje on osiem głównych kolekcji. Kolekcja \texttt{instrument} przechowuje spółki oraz indeksy wraz z identyfikatorami używanymi przez różne źródła danych, takimi jak symbol Stooq, kod GPW, nazwa GPW Benchmark oraz ISIN. Kolekcja \texttt{index\_membership} opisuje skład indeksu WIG20 i wagi instrumentów pobierane z GPW Benchmark.
+
+Dane cenowe są przechowywane w kolekcji \texttt{price\_daily}. Każdy rekord reprezentuje dzienną obserwację OHLCV dla instrumentu i źródła danych. Dane fundamentalne spółek trafiają do kolekcji \texttt{fundamental\_snapshot}, która przechowuje okres raportowy, przychody, wynik operacyjny, wynik netto, aktywa, kapitał własny, zobowiązania, przepływy pieniężne, EBITDA oraz wskaźniki pomocnicze. Dane makroekonomiczne i walutowe z NBP są zapisywane w kolekcji \texttt{macro\_observation} jako obserwacje w formacie długim: data, seria, wartość, jednostka i źródło.
+
+Konfiguracja scoringu jest przechowywana w kolekcji \texttt{score\_config}. Wyniki scoringu są zapisywane w kolekcji \texttt{score\_result}, która wskazuje instrument, konfigurację, datę score'u oraz wykorzystany snapshot fundamentalny. Dzięki temu możliwe będzie przechowywanie historii wyników i późniejsze zestawienie \texttt{final\_score} z ceną instrumentu z kolekcji \texttt{price\_daily}. Kolekcja \texttt{data\_source\_log} zapisuje informacje o pobraniach próbek i przyszłych importach danych, w tym źródło, status, zakres dat, ścieżkę pliku surowego oraz ewentualny błąd.
 
 \cleardoublepage
 \chapter{Metodyka scoringu}
 
-TODO: Opisać wskaźniki, normalizację do skali 0--100, komponenty score'u oraz sposób wyznaczania finalnego rankingu.
+Scoring w projekcie ma charakter fundamental-first. Oznacza to, że główna część oceny wynika z danych finansowych spółki, a dane cenowe pełnią rolę pomocniczą. Domyślna konfiguracja MVP zakłada dominujący udział rentowności, siły finansowej i jakości przepływów pieniężnych. Trend jest tylko lekkim filtrem technicznym, a kontekst makroekonomiczny jest w MVP wyłączony przez wagę równą zero.
 
 Planowane komponenty scoringu:
 
 \begin{itemize}
-    \item trend,
-    \item momentum,
-    \item ryzyko,
-    \item wolumen,
-    \item siła relatywna względem benchmarku.
+    \item rentowność,
+    \item siła finansowa,
+    \item jakość przepływów pieniężnych,
+    \item efektywność,
+    \item lekki filtr trendu,
+    \item opcjonalny kontekst makroekonomiczny.
 \end{itemize}
+
+Klasyczny backtest portfela typu top N nie jest częścią obecnego MVP. Zamiast tego aplikacja będzie przechowywać historię rekordów \texttt{score\_result} i umożliwiać porównanie wartości \texttt{final\_score} z późniejszym wykresem ceny instrumentu. Takie podejście lepiej pasuje do danych fundamentalnych, które są publikowane okresowo i z opóźnieniem.
 
 \cleardoublepage
 \chapter{Implementacja}
@@ -244,7 +251,7 @@ TODO: Opisać implementację backendu, frontendu, importu danych, integracji z b
 \cleardoublepage
 \chapter{Testy i walidacja}
 
-TODO: Opisać testy backendu, parsera danych, scoringu, interfejsu użytkownika oraz wyniki backtestingu.
+TODO: Opisać testy backendu, parsera danych, scoringu, interfejsu użytkownika oraz walidację historii score'u.
 
 \cleardoublepage
 \chapter{Podsumowanie}
