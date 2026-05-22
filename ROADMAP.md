@@ -93,7 +93,7 @@ Gotowe, gdy:
 - Dane są pobierane z bazy, nie z hardcode'u.
 - Krytyczne endpointy mają testy.
 
-### Faza 4 - Import danych EOD
+### Faza 4 - Import danych
 
 - Dodać import CSV.
 - Dodać walidację danych OHLCV.
@@ -106,9 +106,9 @@ Gotowe, gdy:
 
 Gotowe, gdy:
 
-- Da się zaimportować dane dla jednego instrumentu.
+- Da się zaimportować próbki dla jednego instrumentu.
 - Da się pobrać dane dla listy WIG20.
-- API zwraca serię cenową.
+- Dane trafiają do kolekcji zaprojektowanych w Fazie 2.
 
 ### Faza 5 - Fundamental-first scoring
 

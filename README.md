@@ -6,7 +6,7 @@ Engineering thesis project for multi-factor scoring and ranking Polish stock mar
 
 - GPW/WIG20 market and reference data
 - deterministic multi-factor scoring and ranking
-- basic charts and backtesting notes
+- basic charts and score history validation notes
 - Rust-first web application
 
 ## Data sources
@@ -29,6 +29,24 @@ pip install -r requirements-dev.txt
 python scripts/fetch_gpwbenchmark_wig20_portfolio.py
 python scripts/fetch_gpw_notoria_sample.py
 ./scripts/verify_data_samples.sh
+```
+
+## Database model
+
+SurrealDB is the planned project database.
+
+- Schema: `database/schema.surql`
+- Demo seed: `database/seed.surql`
+- Notes: `database/README.md`
+
+The Phase 2 database model is tested locally in `memory` mode:
+
+```bash
+surreal start memory --user root --pass root
+surreal import --endpoint http://localhost:8000 --user root --pass root --ns rankr --db rankr database/schema.surql
+surreal import --endpoint http://localhost:8000 --user root --pass root --ns rankr --db rankr database/seed.surql
+surreal sql --endpoint http://localhost:8000 --user root --pass root --ns rankr --db rankr
+./scripts/verify_phase2_database.sh
 ```
 
 ## Planned Stack
