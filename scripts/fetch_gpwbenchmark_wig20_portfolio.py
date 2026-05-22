@@ -74,10 +74,10 @@ SYMBOL_MAP = {
         "sector": "Retail",
     },
     "ERSTEPL": {
-        "symbol": "SPL",
-        "name": "Santander Bank Polska SA",
-        "stooq_symbol": "spl",
-        "sector": "Banking",
+    "symbol": "EBP",
+    "name": "Erste Bank Polska SA",
+    "stooq_symbol": "ebp",
+    "sector": "Banking",
     },
     "KETY": {
         "symbol": "KTY",
@@ -110,9 +110,9 @@ SYMBOL_MAP = {
         "sector": "Banking",
     },
     "MODIVO": {
-        "symbol": "CCC",
+        "symbol": "MDV",
         "name": "Modivo SA",
-        "stooq_symbol": "ccc",
+        "stooq_symbol": "mdv",
         "sector": "Retail",
     },
     "PEKAO": {
