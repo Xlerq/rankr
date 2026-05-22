@@ -294,3 +294,49 @@ DEFINE INDEX score_config_name_unique
   ON TABLE score_config
   FIELDS name
   UNIQUE;
+
+
+-- Import and downloader execution logs.
+DEFINE TABLE data_source_log SCHEMAFULL;
+
+DEFINE FIELD source ON TABLE data_source_log TYPE string
+  ASSERT $value INSIDE ["stooq", "gpwbenchmark", "gpw_notoria", "nbp", "manual"];
+
+DEFINE FIELD operation ON TABLE data_source_log TYPE string
+  ASSERT $value != "";
+
+DEFINE FIELD status ON TABLE data_source_log TYPE string
+  ASSERT $value INSIDE ["success", "failed", "partial"];
+
+DEFINE FIELD instrument ON TABLE data_source_log TYPE option<record<instrument>>;
+
+DEFINE FIELD target_symbol ON TABLE data_source_log TYPE option<string>;
+
+DEFINE FIELD started_at ON TABLE data_source_log TYPE datetime;
+
+DEFINE FIELD finished_at ON TABLE data_source_log TYPE option<datetime>;
+
+DEFINE FIELD rows_count ON TABLE data_source_log TYPE int
+  DEFAULT 0
+  ASSERT $value >= 0;
+
+DEFINE FIELD date_from ON TABLE data_source_log TYPE option<datetime>;
+
+DEFINE FIELD date_to ON TABLE data_source_log TYPE option<datetime>;
+
+DEFINE FIELD raw_file_path ON TABLE data_source_log TYPE option<string>;
+
+DEFINE FIELD error_message ON TABLE data_source_log TYPE option<string>;
+
+DEFINE FIELD notes ON TABLE data_source_log TYPE option<string>;
+
+DEFINE FIELD created_at ON TABLE data_source_log TYPE datetime
+  DEFAULT time::now();
+
+DEFINE INDEX data_source_log_source_status
+  ON TABLE data_source_log
+  FIELDS source, status;
+
+DEFINE INDEX data_source_log_started_at
+  ON TABLE data_source_log
+  FIELDS started_at;

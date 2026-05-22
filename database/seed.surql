@@ -186,3 +186,69 @@ CREATE score_result:bit11_2026_05_22_default_fundamental_v1 SET
   label = "good",
   data_quality_score = 90.00,
   explanation = "Seed example for fundamental-first scoring based on GPW Notoria fundamentals and default scoring config.";
+
+  CREATE data_source_log:stooq_kgh_sample_2024_01 SET
+  source = "stooq",
+  operation = "fetch_price_sample",
+  status = "success",
+  instrument = instrument:kgh,
+  target_symbol = "kgh",
+  started_at = d"2026-05-22T12:00:00Z",
+  finished_at = d"2026-05-22T12:00:02Z",
+  rows_count = 22,
+  date_from = d"2024-01-01T00:00:00Z",
+  date_to = d"2024-01-31T00:00:00Z",
+  raw_file_path = "data/raw/kgh_stooq_sample.csv",
+  notes = "Phase 1 Stooq OHLCV sample.";
+
+CREATE data_source_log:gpwbenchmark_wig20_sample_2026_05_22 SET
+  source = "gpwbenchmark",
+  operation = "fetch_index_membership_sample",
+  status = "success",
+  instrument = instrument:wig20,
+  target_symbol = "WIG20",
+  started_at = d"2026-05-22T12:10:00Z",
+  finished_at = d"2026-05-22T12:10:03Z",
+  rows_count = 20,
+  raw_file_path = "data/raw/wig20_portfolio_gpwbenchmark_sample.json",
+  notes = "Phase 1 GPW Benchmark WIG20 portfolio sample.";
+
+CREATE data_source_log:gpw_notoria_11bit_sample_2026_05_22 SET
+  source = "gpw_notoria",
+  operation = "fetch_fundamentals_sample",
+  status = "success",
+  instrument = instrument:bit11,
+  target_symbol = "11BIT",
+  started_at = d"2026-05-22T12:32:00Z",
+  finished_at = d"2026-05-22T12:32:28Z",
+  rows_count = 1,
+  raw_file_path = "data/raw/11bit_gpw_notoria_sample.json",
+  notes = "Phase 1 GPW Notoria fundamentals sample.";
+
+CREATE data_source_log:nbp_macro_sample_2024_01 SET
+  source = "nbp",
+  operation = "fetch_macro_sample",
+  status = "success",
+  instrument = NONE,
+  target_symbol = "USDPLN,EURPLN,GOLD_PLN",
+  started_at = d"2026-05-22T12:20:00Z",
+  finished_at = d"2026-05-22T12:20:04Z",
+  rows_count = 66,
+  date_from = d"2024-01-01T00:00:00Z",
+  date_to = d"2024-01-31T00:00:00Z",
+  raw_file_path = "data/raw/nbp_*_sample.json",
+  notes = "Phase 1 NBP macro samples: USDPLN, EURPLN and gold.";
+
+CREATE data_source_log:stooq_wig20_sample_2024_01 SET
+  source = "stooq",
+  operation = "fetch_price_sample",
+  status = "success",
+  instrument = instrument:wig20,
+  target_symbol = "wig20",
+  started_at = d"2026-05-22T12:00:00Z",
+  finished_at = d"2026-05-22T12:00:02Z",
+  rows_count = 22,
+  date_from = d"2024-01-01T00:00:00Z",
+  date_to = d"2024-01-31T00:00:00Z",
+  raw_file_path = "data/raw/wig20_stooq_sample.csv",
+  notes = "Phase 1 Stooq WIG20 OHLCV sample.";
