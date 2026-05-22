@@ -14,8 +14,10 @@ Engineering thesis project for multi-factor scoring and ranking Polish stock mar
 - Stooq: end-of-day OHLCV prices for GPW instruments and indices.
 - EODHD: company fundamentals, instrument metadata, and exchange symbol lists.
 - NBP: macro/FX context, including PLN exchange rates and gold prices.
+- GPW Notoria: experimental free source for company financial data from GPW factsheets.
 
 Full datasets are not committed to the repository. Only small samples and symbol maps under `data/raw/` are intended to be tracked.
+GPW Notoria scraping is experimental: the AJAX endpoint and HTML structure may change, so only small local samples are fetched and full raw datasets should not be committed.
 
 ## Planned Stack
 

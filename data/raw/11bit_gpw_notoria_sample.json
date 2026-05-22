@@ -1,0 +1,260 @@
+{
+  "code": "11BIT",
+  "isin": "PL11BTS00015",
+  "start": "showNotoria",
+  "source": "GPW ajaxindex.php / Notoria financial data",
+  "source_url": "https://www.gpw.pl/ajaxindex.php?action=GPWListaSp&code=11BIT&format=html&isin=PL11BTS00015&lang=PL&start=showNotoria",
+  "fetched_at": "2026-05-22T12:32:28.000233+00:00",
+  "http_status": 200,
+  "report_period": "I-IV kw. 2025",
+  "unit": "tys. PLN",
+  "revenue": {
+    "label": "Przychody ze sprzedaży",
+    "value": "141 034,32",
+    "row": [
+      "Przychody ze sprzedaży",
+      "141 034,32"
+    ],
+    "table_index": 0
+  },
+  "operating_profit": {
+    "label": "Zysk/strata z działalności operacyjnej",
+    "value": "21 893,18",
+    "row": [
+      "Zysk/strata z działalności operacyjnej",
+      "21 893,18"
+    ],
+    "table_index": 0
+  },
+  "net_income": {
+    "label": "zysk/strata netto udziałowców jednostki dominującej",
+    "value": "6 942,67",
+    "row": [
+      "zysk/strata netto udziałowców jednostki dominującej",
+      "6 942,67"
+    ],
+    "table_index": 0
+  },
+  "assets": {
+    "label": "AKTYWA",
+    "value": "268 804,56",
+    "row": [
+      "AKTYWA",
+      "268 804,56"
+    ],
+    "table_index": 0
+  },
+  "equity": {
+    "label": "Kapitał własny udziałowców podmiotu dominującego",
+    "value": "236 421,69",
+    "row": [
+      "Kapitał własny udziałowców podmiotu dominującego",
+      "236 421,69"
+    ],
+    "table_index": 0
+  },
+  "long_term_liabilities": {
+    "label": "Zobowiązania długoterminowe",
+    "value": "3 291,49",
+    "row": [
+      "Zobowiązania długoterminowe",
+      "3 291,49"
+    ],
+    "table_index": 0
+  },
+  "short_term_liabilities": {
+    "label": "Zobowiązania krótkoterminowe",
+    "value": "29 091,38",
+    "row": [
+      "Zobowiązania krótkoterminowe",
+      "29 091,38"
+    ],
+    "table_index": 0
+  },
+  "operating_cash_flow": {
+    "label": "Przepływy operacyjne",
+    "value": "62 525,92",
+    "row": [
+      "Przepływy operacyjne",
+      "62 525,92"
+    ],
+    "table_index": 0
+  },
+  "investing_cash_flow": {
+    "label": "Przepływy inwestycyjne",
+    "value": "-82 069,54",
+    "row": [
+      "Przepływy inwestycyjne",
+      "-82 069,54"
+    ],
+    "table_index": 0
+  },
+  "financing_cash_flow": {
+    "label": "Przepływy finansowe",
+    "value": "-1 538,85",
+    "row": [
+      "Przepływy finansowe",
+      "-1 538,85"
+    ],
+    "table_index": 0
+  },
+  "ebitda": {
+    "label": "EBITDA",
+    "value": "72 117,40",
+    "row": [
+      "EBITDA",
+      "72 117,40"
+    ],
+    "table_index": 0
+  },
+  "table_headers": [
+    {
+      "table_index": 0,
+      "caption": null,
+      "heading": "I-IV kw. 2025",
+      "headers": [
+        "Przychody ze sprzedaży",
+        "Zysk/strata ze sprzedaży",
+        "Pozostałe przychody operacyjne",
+        "Zysk/strata z działalności operacyjnej",
+        "Przychody finansowe",
+        "Zysk/strata brutto",
+        "zysk/strata netto udziałowców jednostki dominującej",
+        "Amortyzacja (noty)",
+        "AKTYWA",
+        "Aktywa trwałe",
+        "Aktywa obrotowe",
+        "Kapitał własny udziałowców podmiotu dominującego",
+        "Kapitał podstawowy",
+        "Zobowiązania długoterminowe",
+        "Zobowiązania krótkoterminowe",
+        "Przepływy operacyjne",
+        "Przepływy inwestycyjne",
+        "Nabycie rzeczowych aktywów trwałych oraz wartości niematerialnych",
+        "Przepływy finansowe",
+        "Przepływy pieniężne netto",
+        "EBITDA",
+        "Stopa zwrotu z kapitału własnego (ROE)",
+        "Stopa zwrotu z aktywów (ROA)",
+        "Wskaźnik płynności bieżącej",
+        "Wskaźnik płynności szybkiej",
+        "Wskaźnik obsługi zadłużenia"
+      ]
+    }
+  ],
+  "table_rows": [
+    {
+      "table_index": 0,
+      "caption": null,
+      "heading": "I-IV kw. 2025",
+      "rows": [
+        [
+          "Przychody ze sprzedaży",
+          "141 034,32"
+        ],
+        [
+          "Zysk/strata ze sprzedaży",
+          "24 256,12"
+        ],
+        [
+          "Pozostałe przychody operacyjne",
+          "1 190,98"
+        ],
+        [
+          "Zysk/strata z działalności operacyjnej",
+          "21 893,18"
+        ],
+        [
+          "Przychody finansowe",
+          "1 667,71"
+        ],
+        [
+          "Zysk/strata brutto",
+          "11 500,37"
+        ],
+        [
+          "zysk/strata netto udziałowców jednostki dominującej",
+          "6 942,67"
+        ],
+        [
+          "Amortyzacja (noty)",
+          "50 224,23"
+        ],
+        [
+          "AKTYWA",
+          "268 804,56"
+        ],
+        [
+          "Aktywa trwałe",
+          "176 030,90"
+        ],
+        [
+          "Aktywa obrotowe",
+          "92 773,67"
+        ],
+        [
+          "Kapitał własny udziałowców podmiotu dominującego",
+          "236 421,69"
+        ],
+        [
+          "Kapitał podstawowy",
+          "241,72"
+        ],
+        [
+          "Zobowiązania długoterminowe",
+          "3 291,49"
+        ],
+        [
+          "Zobowiązania krótkoterminowe",
+          "29 091,38"
+        ],
+        [
+          "Przepływy operacyjne",
+          "62 525,92"
+        ],
+        [
+          "Przepływy inwestycyjne",
+          "-82 069,54"
+        ],
+        [
+          "Nabycie rzeczowych aktywów trwałych oraz wartości niematerialnych",
+          "-37 993,69"
+        ],
+        [
+          "Przepływy finansowe",
+          "-1 538,85"
+        ],
+        [
+          "Przepływy pieniężne netto",
+          "-21 082,46"
+        ],
+        [
+          "EBITDA",
+          "72 117,40"
+        ],
+        [
+          "Stopa zwrotu z kapitału własnego (ROE)",
+          "0,03"
+        ],
+        [
+          "Stopa zwrotu z aktywów (ROA)",
+          "0,03"
+        ],
+        [
+          "Wskaźnik płynności bieżącej",
+          "3,19"
+        ],
+        [
+          "Wskaźnik płynności szybkiej",
+          "3,19"
+        ],
+        [
+          "Wskaźnik obsługi zadłużenia",
+          "144,81"
+        ]
+      ]
+    }
+  ],
+  "raw_text": "I-IV kw. 2025 Przychody ze sprzedaży 141 034,32 Zysk/strata ze sprzedaży 24 256,12 Pozostałe przychody operacyjne 1 190,98 Zysk/strata z działalności operacyjnej 21 893,18 Przychody finansowe 1 667,71 Zysk/strata brutto 11 500,37 zysk/strata netto udziałowców jednostki dominującej 6 942,67 Amortyzacja (noty) 50 224,23 AKTYWA 268 804,56 Aktywa trwałe 176 030,90 Aktywa obrotowe 92 773,67 Kapitał własny udziałowców podmiotu dominującego 236 421,69 Kapitał podstawowy 241,72 Zobowiązania długoterminowe 3 291,49 Zobowiązania krótkoterminowe 29 091,38 Przepływy operacyjne 62 525,92 Przepływy inwestycyjne -82 069,54 Nabycie rzeczowych aktywów trwałych oraz wartości niematerialnych -37 993,69 Przepływy finansowe -1 538,85 Przepływy pieniężne netto -21 082,46 EBITDA 72 117,40 Stopa zwrotu z kapitału własnego (ROE) 0,03 Stopa zwrotu z aktywów (ROA) 0,03 Wskaźnik płynności bieżącej 3,19 Wskaźnik płynności szybkiej 3,19 Wskaźnik obsługi zadłużenia 144,81 Dane finansowe w tys. PLN Dane jednostkowe Źródło danych: Notoria",
+  "parse_notes": []
+}
