@@ -242,11 +242,6 @@ def build_symbol_rows(
                 "sector": "",
             }
 
-        if gpw_name == "ERSTEPL" and entry["isin"] == "PLBZ00000044":
-            notes.append(
-                "GPW Benchmark sample labels PLBZ00000044 as ERSTEPL; local Stooq mapping uses SPL for this ISIN."
-            )
-
         rows.append(
             {
                 "symbol": mapping["symbol"],

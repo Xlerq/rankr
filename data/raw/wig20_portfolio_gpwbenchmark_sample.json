@@ -1,8 +1,8 @@
 {
   "source": "GPW Benchmark WIG20 portfolio",
   "page_url": "https://gpwbenchmark.pl/karta-indeksu?isin=PL9999999987",
-  "source_url": "https://gpwbenchmark.pl/ajaxindex.php?action=GPWIndexes&start=ajaxPortfolio&format=html&lang=PL&isin=PL9999999987&cmng_id=1010&time=1779457406821",
-  "fetched_at": "2026-05-22T13:43:25.976542+00:00",
+  "source_url": "https://gpwbenchmark.pl/ajaxindex.php?action=GPWIndexes&start=ajaxPortfolio&format=html&lang=PL&isin=PL9999999987&cmng_id=1010&time=1779457634378",
+  "fetched_at": "2026-05-22T13:47:13.565806+00:00",
   "http_status": 200,
   "index": "WIG20",
   "index_isin": "PL9999999987",
@@ -663,7 +663,5 @@
       "checked_at": "2026-05-22"
     }
   ],
-  "diagnostics": [
-    "GPW Benchmark sample labels PLBZ00000044 as ERSTEPL; local Stooq mapping uses SPL for this ISIN."
-  ]
+  "diagnostics": []
 }
