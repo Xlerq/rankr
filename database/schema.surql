@@ -200,3 +200,47 @@ DEFINE INDEX macro_observation_unique
   ON TABLE macro_observation
   FIELDS date, series, source
   UNIQUE;
+
+
+-- Scoring configuration for fundamental-first ranking.
+DEFINE TABLE score_config SCHEMAFULL;
+
+DEFINE FIELD name ON TABLE score_config TYPE string
+  ASSERT $value != "";
+
+DEFINE FIELD description ON TABLE score_config TYPE option<string>;
+
+DEFINE FIELD profitability_weight ON TABLE score_config TYPE number
+  ASSERT $value >= 0 AND $value <= 1;
+
+DEFINE FIELD financial_strength_weight ON TABLE score_config TYPE number
+  ASSERT $value >= 0 AND $value <= 1;
+
+DEFINE FIELD cashflow_quality_weight ON TABLE score_config TYPE number
+  ASSERT $value >= 0 AND $value <= 1;
+
+DEFINE FIELD efficiency_weight ON TABLE score_config TYPE number
+  ASSERT $value >= 0 AND $value <= 1;
+
+DEFINE FIELD trend_weight ON TABLE score_config TYPE number
+  ASSERT $value >= 0 AND $value <= 1;
+
+DEFINE FIELD macro_context_weight ON TABLE score_config TYPE number
+  ASSERT $value >= 0 AND $value <= 1;
+
+DEFINE FIELD is_default ON TABLE score_config TYPE bool
+  DEFAULT false;
+
+DEFINE FIELD is_active ON TABLE score_config TYPE bool
+  DEFAULT true;
+
+DEFINE FIELD created_at ON TABLE score_config TYPE datetime
+  DEFAULT time::now();
+
+DEFINE FIELD updated_at ON TABLE score_config TYPE datetime
+  DEFAULT time::now();
+
+DEFINE INDEX score_config_name_unique
+  ON TABLE score_config
+  FIELDS name
+  UNIQUE;

@@ -154,3 +154,15 @@ CREATE macro_observation:gold_pln_2024_01_02 SET
   unit = "pln_per_gram",
   source = "nbp",
   source_url = "https://api.nbp.pl/api/cenyzlota/2024-01-01/2024-01-31/?format=json";
+
+CREATE score_config:default_fundamental_v1 SET
+  name = "default_fundamental_v1",
+  description = "Default fundamental-first scoring configuration. Fundamentals dominate the score, with a small technical trend filter and macro context disabled for MVP.",
+  profitability_weight = 0.35,
+  financial_strength_weight = 0.25,
+  cashflow_quality_weight = 0.20,
+  efficiency_weight = 0.10,
+  trend_weight = 0.10,
+  macro_context_weight = 0.00,
+  is_default = true,
+  is_active = true;
