@@ -82,7 +82,7 @@ __pycache__/
 *.dvi
 
 # Generated thesis preview PDF
-thesis/main.pdf
+#thesis/main.pdf
 
 # Local databases and runtime state
 *.db
