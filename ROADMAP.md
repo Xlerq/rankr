@@ -1,208 +1,185 @@
-# Roadmap
+# rankr — roadmap
 
-Roadmapa dla `rankr` - projektu inżynierskiego aplikacji webowej do scoringu i rankingowania instrumentów GPW.
+## Cel
 
-Dokumentacja pracy dyplomowej jest konsolidowana w LaTeX:
+- Zbudować pracę inżynierską w postaci aplikacji webowej do wyjaśnialnego scoringu i rankingu spółek WIG20.
+- Łączyć analizę fundamentalną, sektorowy kontekst makroekonomiczny i prosty filtr techniczny.
+- Pokazywać wynik, jego składowe, dane wejściowe, źródła oraz datę dostępności informacji.
+- Zachować cały kod aplikacji, importu, scoringu i analizy w Rust.
+- Traktować wynik jako narzędzie badawcze, a nie rekomendację kupna lub sprzedaży.
 
-- źródło pracy: `thesis/main.tex`
-- docelowy plik wynikowy: `thesis/main.pdf`
+## Zakres pracy v1.0
 
-## MVP
+- Pełny skład WIG20 z historią członkostwa potrzebną do analizy.
+- Trzy profile scoringowe: spółki niefinansowe, banki i ubezpieczyciele.
+- Dane fundamentalne, dzienne OHLCV oraz dane makroekonomiczne dostępne w chwili wyliczenia score'u.
+- Ranking dla wybranej daty, scorecard spółki i historia wyniku.
+- Wykres ceny, historii score'u i użytego kontekstu makro.
+- Małe badanie point-in-time bez deklarowania zdolności do przewidywania rynku.
+- Lokalna, odtwarzalna wersja demonstracyjna bez kont, płatności i personalizacji.
 
-- Dane GPW/WIG20 end-of-day.
-- Deterministyczny scoring i ranking.
-- Backend Rust + Axum + Tokio.
-- Frontend Rust + Leptos + WebAssembly.
-- Baza SurrealDB.
-- Wykresy przez Plotters.
-- Analiza historyczna score'u i zestawienie final score z ceną do opisu wyników w pracy.
+## Poza zakresem pracy
 
-## Poza MVP
+- Dane intraday i real-time.
+- Wiadomości, analiza sentymentu i modele AI/ML.
+- Sygnały `kup`, `sprzedaj`, ceny docelowe i dobór portfela użytkownika.
+- Integracja z brokerem i wykonywanie zleceń.
+- Alerty, konta, subskrypcje i aplikacja mobilna.
+- Spółki spoza WIG20.
 
-- Dane real-time.
-- Logika bota inwestycyjnego.
-- Integracja z brokerem.
-- Uczenie maszynowe.
+## Stan początkowy
 
-## Fazy
+- [x] Struktura repozytorium i szkielet pracy w LaTeX.
+- [x] Próbki Stooq, GPW Benchmark, GPW/Notoria i NBP.
+- [x] Wstępne mapowanie instrumentów WIG20.
+- [x] Wstępny schemat i seed SurrealDB zweryfikowane przez rzeczywisty import.
+- [x] Backend Axum z `GET /api/health`.
+- [ ] Produkcyjny import danych, scoring, API, frontend, testy i analiza historyczna.
 
-### Faza 0 - Repozytorium i zakres
+## Scoring v1
 
-- Ustalić temat pracy.
-- Potwierdzić zakres MVP.
-- Uporządkować strukturę repozytorium.
-- Przygotować główny plik LaTeX pracy.
+Domyślna konfiguracja:
 
-Gotowe, gdy:
+```text
+final_score = 0.65 * fundamental_score
+            + 0.25 * macro_score
+            + 0.10 * technical_score
+```
 
-- Repozytorium ma prostą strukturę.
-- Istnieje `thesis/main.tex`.
-- README i roadmapa są spójne z zakresem MVP.
+- Każda składowa i wynik końcowy mają skalę `0–100`.
+- Wagi i wzory są wersjonowane w `score_config`.
+- `data_quality_score` jest pokazywany osobno i nie poprawia wyniku spółki.
+- Brak danych obniża jakość wyniku zgodnie z jedną udokumentowaną polityką.
+- UI pokazuje wartości wskaźników, ich kierunek, wkład do score'u, źródło i świeżość.
+- Etykiety wyniku nie używają słów `buy`, `sell` ani ich polskich odpowiedników.
 
-### Faza 1 - Warstwa badawcza danych
+Profile fundamentalne:
 
-- Sprawdzić Stooq jako źródło danych EOD OHLCV.
-- Sprawdzić GPW Benchmark jako źródło składu i wag WIG20.
-- Sprawdzić GPW / Notoria jako źródło danych fundamentalnych.
-- Sprawdzić NBP jako źródło danych FX, makro i złota.
-- Pobrać małe próbki danych dla każdego źródła.
-- Sprawdzić format OHLCV.
-- Zweryfikować symbole WIG20 i mapowanie symboli między źródłami.
-- Ustalić zasady trzymania danych w repozytorium.
-- Opisać ograniczenia źródeł danych.
+- **Spółka niefinansowa:** rentowność, wzrost, zadłużenie, płynność, jakość przepływów, efektywność i wycena.
+- **Bank:** rentowność, jakość aktywów, adekwatność kapitałowa, płynność, efektywność kosztowa i wycena.
+- **Ubezpieczyciel:** rentowność, wzrost składki i wyniku, wypłacalność, efektywność ubezpieczeniowa i wycena.
 
-Gotowe, gdy:
+Kontekst dodatkowy:
 
-- Repozytorium zawiera próbki Stooq, NBP, GPW / Notoria oraz GPW Benchmark albo czytelny fallback.
-- Istnieją skrypty pobierające próbki i skrypt walidujący.
-- Istnieje `data/raw/wig20_symbols.csv`.
-- Wiadomo, jak wyglądają formaty danych.
-- Znane są ograniczenia źródeł danych.
+- **Makro:** stopy procentowe, inflacja, aktywność gospodarcza i FX, przypisane do sektorów przez jawną konfigurację ekspozycji.
+- **Technika:** położenie względem SMA50/SMA200, długoterminowy trend i relatywna siła wobec WIG20.
 
-### Faza 2 - Model danych i baza
+## Etapy
 
-- Zaprojektować `instrument`.
-- Zaprojektować `index_membership` dla składu i wag WIG20 z GPW Benchmark.
-- Zaprojektować `price_daily` dla danych OHLCV ze Stooq.
-- Zaprojektować `fundamental_snapshot` dla danych GPW / Notoria.
-- Zaprojektować `macro_observation` dla danych NBP w formacie długim: data, seria, wartość.
-- Zaprojektować `score_config` jako konfigurację fundamental-first scoringu.
-- Zaprojektować `score_result` jako historię wyników scoringu dla instrumentu i daty.
-- Zaprojektować `data_source_log` dla logowania pobrań i importów danych.
-- Zaprojektować mapowanie symboli między Stooq, GPW Benchmark, GPW / Notoria i przyszłą bazą danych.
-- Przygotować schemat SurrealDB i przykładowy seed.
+### 1. Specyfikacja i metodyka
 
-Gotowe, gdy:
+- [ ] Potwierdzić z promotorem dokładne brzmienie tytułu pracy i poprawić metadane LaTeX.
+- [ ] Sformułować problem inżynierski, pytania badawcze i granice interpretacji score'u.
+- [ ] Zapisać komplet wzorów, kierunków wskaźników, progów normalizacji i politykę braków danych.
+- [ ] Zdefiniować trzy profile fundamentalne i mapowanie sektorów WIG20 do profili.
+- [ ] Zdefiniować ekspozycje sektorów na zmienne makro oraz konfigurację `fundamental/macro/technical`.
+- [ ] Opisać pochodzenie danych, zasady użycia w pracy i ograniczenia redystrybucji.
+- [ ] Umieścić specyfikację metodyki bezpośrednio w `thesis/main.tex`.
 
-- Model danych obsługuje instrumenty, skład indeksu, ceny, fundamenty, makro, konfiguracje scoringu, wyniki scoringu i logi importu.
-- `score_config` odzwierciedla fundamental-first scoring, a nie ranking oparty głównie o price action.
-- `score_result` pozwala zapisywać final score dla danej spółki i daty.
-- Backend ma jasny kontrakt danych dla frontendu.
+### 2. Model domeny i SurrealDB
 
-### Faza 3 - Backend
+- [ ] Rozszerzyć workspace o craty dla domeny, importu i scoringu współdzielone z backendem.
+- [ ] Rozdzielić raport finansowy od metryk sektorowych, aby obsłużyć trzy profile scoringowe.
+- [ ] Dodać `period_end`, `published_at`, `available_at`, wariant raportu, jednostkę, walutę i hash źródła.
+- [ ] Dodać historię składu indeksu oraz jawny czas obowiązywania członkostwa.
+- [ ] Dodać `score_run` z datą odcięcia, uniwersum, wersją konfiguracji i wersją kodu.
+- [ ] Zapisywać komponenty score'u, wkład wskaźników i użyte obserwacje danych.
+- [ ] Wprowadzić wersjonowane migracje zamiast jednego ręcznie importowanego schematu.
+- [ ] Pokryć ograniczenia OHLCV, unikalność danych i sumę wag testami integracyjnymi.
 
-- Utworzyć Rust workspace.
-- Dodać backend Axum.
-- Dodać endpoint `GET /api/health`.
-- Połączyć backend z SurrealDB.
-- Dodać endpointy instrumentów i cen.
+### 3. Import danych wyłącznie w Rust
 
-Gotowe, gdy:
+- [ ] Utworzyć jedno CLI `rankr_ingest` z poleceniami dla instrumentów, cen, fundamentów i makro.
+- [ ] Przenieść parser portfela WIG20 z GPW Benchmark z Python do Rust.
+- [ ] Przenieść pobieranie i walidację danych Stooq z Bash do Rust.
+- [ ] Uogólnić parser GPW/Notoria na wszystkie spółki WIG20 i przenieść go z Python do Rust.
+- [ ] Przenieść import NBP do Rust oraz uzupełnić minimalny zestaw danych makro z oficjalnego źródła.
+- [ ] Walidować HTTP, format, typy, jednostki, kompletność, duplikaty i chronologię danych.
+- [ ] Zapisywać surowy artefakt, hash, źródło, czas pobrania i wynik importu.
+- [ ] Dodać timeouty, ograniczone ponowienia i czytelne błędy bez częściowego nadpisywania danych.
+- [ ] Oprzeć testy parserów na lokalnych fixture'ach dla każdego profilu scoringowego.
+- [ ] Usunąć zależności i skrypty Python/Bash zastąpione przez przetestowane polecenia Rust.
 
-- Backend startuje lokalnie.
-- Dane są pobierane z bazy, nie z hardcode'u.
-- Krytyczne endpointy mają testy.
+### 4. Silnik scoringowy
 
-### Faza 4 - Import danych
+- [ ] Zaimplementować czyste funkcje Rust dla wskaźników, normalizacji i agregacji.
+- [ ] Zaimplementować osobne formuły dla spółek niefinansowych, banków i ubezpieczycieli.
+- [ ] Zaimplementować sektorowy `macro_score` i wspólny `technical_score`.
+- [ ] Obliczać `data_quality_score` oraz listę brakujących lub przestarzałych danych.
+- [ ] Zapewnić identyczny wynik dla tych samych danych, konfiguracji i daty odcięcia.
+- [ ] Zapisywać score wraz z pełnym śladem pochodzenia i wkładem każdego czynnika.
+- [ ] Przetestować skrajne wartości, braki danych, różne jednostki, sumę wag i granice `0–100`.
 
-- Dodać import CSV.
-- Dodać walidację danych OHLCV.
-- Dodać usuwanie duplikatów.
-- Dodać downloader Stooq.
-- Dodać downloader GPW Benchmark.
-- Dodać downloader GPW / Notoria.
-- Dodać downloader NBP.
-- Logować źródło i status importu.
+### 5. Backend API
 
-Gotowe, gdy:
+- [ ] Dodać konfigurację i połączenie Axum z SurrealDB.
+- [ ] Rozdzielić liveness `GET /api/health` od readiness `GET /api/ready`.
+- [ ] Dodać jednolity model błędów, stan aplikacji, tracing i bezpieczne zamknięcie serwera.
+- [ ] Dodać `GET /api/rankings?as_of=`.
+- [ ] Dodać `GET /api/instruments/{symbol}`.
+- [ ] Dodać `GET /api/instruments/{symbol}/prices`.
+- [ ] Dodać `GET /api/instruments/{symbol}/scores`.
+- [ ] Dodać `GET /api/macro?as_of=`.
+- [ ] Ustabilizować DTO współdzielone z frontendem i przetestować kontrakty API.
 
-- Da się zaimportować próbki dla jednego instrumentu.
-- Da się pobrać dane dla listy WIG20.
-- Dane trafiają do kolekcji zaprojektowanych w Fazie 2.
+### 6. Frontend Leptos
 
-### Faza 5 - Fundamental-first scoring
+- [ ] Zbudować dashboard z rankingiem WIG20 dla najnowszej lub wybranej daty.
+- [ ] Pokazać `final`, `fundamental`, `macro`, `technical` i `data_quality_score`.
+- [ ] Dodać sortowanie, podstawowe filtrowanie sektorów i oznaczenie profilu scoringowego.
+- [ ] Zbudować widok spółki z rozbiciem score'u, metrykami, źródłami i datami dostępności.
+- [ ] Dodać wykres ceny, historii score'u i kontekstu makro przy użyciu Plotters.
+- [ ] Obsłużyć loading, brak danych, dane nieaktualne i błędy API.
+- [ ] Przygotować prosty, responsywny wygląd odpowiedni do demonstracji pracy.
 
-- Opisać wzory scoringu w pracy LaTeX.
-- Zdefiniować komponenty scoringu oparte głównie o fundamenty:
-  - `profitability_score`,
-  - `financial_strength_score`,
-  - `cashflow_quality_score`,
-  - `efficiency_score`,
-  - `trend_score` jako lekki filtr techniczny,
-  - `macro_context_score` jako opcjonalny kontekst, domyślnie wyłączony w MVP.
-- Znormalizować komponenty do skali 0-100.
-- Użyć `score_config` z wagami fundamental-first, np. dominujące fundamenty i niski udział trendu.
-- Zapisać `final_score`, etykietę i jakość danych w `score_result`.
-- Udostępnić endpointy scoringu i rankingu.
+### 7. Analiza point-in-time
 
-Gotowe, gdy:
+- [ ] Generować historyczne score'y wyłącznie z danych dostępnych w danej chwili.
+- [ ] Uwzględniać historyczny skład WIG20 i daty publikacji raportów.
+- [ ] Policzyć przyszłe stopy zwrotu dla ustalonych horyzontów bez tworzenia strategii transakcyjnej.
+- [ ] Porównać ranking z prostym wariantem fundamental-only oraz zachowaniem indeksu.
+- [ ] Policzyć korelację rang Spearmana i różnice między grupami wysokiego i niskiego score'u.
+- [ ] Wykonać analizę wrażliwości wag i wpływu brakujących danych.
+- [ ] Generować tabele CSV/JSON oraz wykresy Plotters z odtwarzalnego polecenia Rust.
+- [ ] Opisać małą próbę, opóźnienia publikacji, zmiany składu i brak podstaw do prognozowania.
 
-- Każdy instrument z badanego uniwersum ma score.
-- Score jest oparty głównie o dane fundamentalne, a nie o price action.
-- Score jest wyjaśnialny przez komponenty.
-- Ranking jest sortowany po `final_score`.
-- Da się pokazać, z jakiego `score_config` i `fundamental_snapshot` powstał wynik.
+### 8. Testy i odtwarzalność
 
-### Faza 6 - Frontend
+- [ ] Dodać testy jednostkowe domeny i scoringu oraz testy fixture'ów importerów.
+- [ ] Dodać testy integracyjne SurrealDB i endpointów Axum.
+- [ ] Dodać smoke test głównego przepływu `fixture -> baza -> score -> API`.
+- [ ] Dodać CI dla `fmt`, Clippy, testów Rust i kompilacji LaTeX.
+- [ ] Przypiąć toolchain Rust i wersję SurrealDB używaną przez projekt.
+- [ ] Przygotować jedno polecenie uruchamiające bazę, import, scoring, backend i frontend demo.
+- [ ] Uaktualnić README oraz usunąć nieaktualne deklaracje z `AI_CONTEXT.md`.
 
-- Uruchomić Leptos.
-- Dodać dashboard.
-- Dodać tabelę rankingu.
-- Dodać widok instrumentu.
-- Dodać loading i error state.
+### 9. Praca i demonstracja
 
-Gotowe, gdy:
+- [ ] Uzupełniać rozdziały o źródłach, architekturze, modelu danych i metodyce wraz z implementacją.
+- [ ] Opisać implementację importerów, scoringu, API, frontendu i wykresów.
+- [ ] Opisać testy, analizę point-in-time, wyniki i ograniczenia.
+- [ ] Dodać literaturę naukową dotyczącą scoringu fundamentalnego i walidacji danych finansowych.
+- [ ] Dodać diagram architektury, model danych, przykładowe scorecardy i zrzuty ekranu.
+- [ ] Sprawdzić spójność terminologii, źródeł, wzorów, wyników i deklaracji GenAI.
+- [ ] Przygotować odtwarzalne demo i finalny PDF pracy.
 
-- UI pokazuje ranking WIG20.
-- Można wejść w szczegóły instrumentu.
-- Widok jest prosty, ale działający.
+## Rezultat v1.0
 
-### Faza 7 - Wykresy
+- Każda spółka WIG20 otrzymuje wynik z właściwego profilu sektorowego.
+- Każdy wynik można odtworzyć z wersji konfiguracji, kodu i danych dostępnych w danej chwili.
+- Ranking i widok spółki wyjaśniają wszystkie składowe bez ukrytej logiki.
+- Import, scoring, backend, frontend i analiza działają bez Python i R.
+- Najważniejsze parsery, wzory, zapytania bazy i endpointy mają testy.
+- Projekt uruchamia się lokalnie z jednej instrukcji i nadaje się do demonstracji.
+- Praca opisuje metodę, implementację, wyniki oraz ograniczenia bez twierdzeń o gwarantowanej skuteczności.
 
-- Dodać wykres ceny zamknięcia.
-- Dodać wykres SMA50/SMA200.
-- Dodać wykres historii score'u.
-- Obsłużyć puste dane.
+## Po pracy — prywatny produkt subskrypcyjny
 
-Gotowe, gdy:
-
-- Widok instrumentu pokazuje cenę i historię score'u.
-- Wykresy są generowane przez Plotters.
-
-### Faza 8 - Analiza historyczna score'u
-
-- Zapisywać `score_result` dla wybranych dat historycznych.
-- Zestawić historię `final_score` z ceną zamknięcia z `price_daily`.
-- Pokazać wykres ceny i historii score'u dla instrumentu.
-- Policzyć proste metryki walidacyjne, np. korelację score'u z przyszłą stopą zwrotu albo średni future return dla grup o wysokim i niskim score.
-- Opisać ograniczenia: fundamenty są okresowe, publikowane z opóźnieniem i nie muszą działać jako krótkoterminowy sygnał tradingowy.
-
-Gotowe, gdy:
-
-- Da się zobaczyć historię score'u dla instrumentu.
-- Da się porównać final score z późniejszym zachowaniem ceny.
-- Wyniki nadają się do opisania w pracy bez udawania pełnego systemu tradingowego.
-- Ograniczenia analizy historycznej są jasno opisane.
-
-### Faza 9 - Testy i demo
-
-- Dodać testy backendu.
-- Dodać testy parsera CSV.
-- Dodać testy scoringu.
-- Przygotować dane demo.
-- Przygotować screenshoty do pracy.
-
-Gotowe, gdy:
-
-- Projekt da się uruchomić z instrukcji.
-- Najważniejsze elementy są przetestowane.
-- Jest stabilna wersja do pokazania.
-
-### Faza 10 - Praca inżynierska
-
-- Uzupełniać `thesis/main.tex` równolegle z implementacją.
-- Opisać cel, zakres, architekturę, model danych, scoring, testy i wyniki.
-- Dodać bibliografię.
-- Wygenerować finalny PDF.
-
-Gotowe, gdy:
-
-- Istnieje pełny draft pracy.
-- `thesis/main.pdf` jest gotowy do oddania.
-- Praca jest zgodna z wymaganiami uczelni i promotora.
-
-## Uwagi
-
-- Priorytetem jest działające MVP do fundamentalnego rankingu spółek, nie rozbudowany system tradingowy.
-- Konfiguracja wag scoringu pozostaje elementem modelu, ale domyślny scoring jest fundamental-first i globalny; warianty sektorowe mogą być rozszerzeniem.
-- Przed commitowaniem większych danych trzeba sprawdzić zasady licencji i redystrybucji źródeł Stooq/GPW.
+1. Wydzielić prywatny produkt korzystający z publicznego rdzenia pracy.
+2. Przeprowadzić rozmowy najpierw z inwestorami indywidualnymi GPW, później z użytkownikami profesjonalnymi.
+3. Zastąpić źródła badawcze danymi z prawem do komercyjnego przetwarzania i prezentacji.
+4. Zautomatyzować cykliczny import, przeliczanie score'u, monitoring jakości i kopie zapasowe.
+5. Dodać konta, prywatne listy obserwacyjne i alerty o zmianie wyniku oraz jego przyczynach.
+6. Dodać płatne plany, limity, rozliczenia i obsługę rezygnacji z subskrypcji.
+7. Rozszerzać uniwersum poza WIG20 i dodawać bardziej szczegółowe modele sektorowe.
+8. Rozważyć personalizowane rekomendacje dopiero po ustaleniu wymagań prawnych i modelu odpowiedzialności.
