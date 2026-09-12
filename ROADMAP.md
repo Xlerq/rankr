@@ -6,63 +6,67 @@ Lokalna aplikacja do rankingu pełnego WIG20 według potencjału wzrostu w horyz
 
 Stos: Rust, Leptos/WASM, Axum/Tokio, SurrealDB, Plotters. Import, automatyzacja i analiza również w Rust.
 
-## Etap 0. Sprawdzenie danych
+Dane zbieramy od uruchomienia importera do lutego 2027, bez pobierania archiwów. Na start zapisujemy bieżące ceny, skład WIG20 i najnowsze dostępne raporty; potem kolejne aktualizacje.
 
-- [ ] Sprawdzić źródła cen, fundamentów, historycznego składu WIG20, makro i COT oraz warunki ich wykorzystania.
-- [ ] Pobrać próbki dla banku, ubezpieczyciela i dwóch spółek niefinansowych.
-- [ ] Sprawdzić dostępność dat publikacji i wybrać okres analizy historycznej.
+Po każdym etapie uzupełniamy odpowiadającą mu część `thesis/main.tex` i testujemy wykonany moduł.
 
-## Etap 1. Pierwsze demo
+## Etap 0. Źródła danych
 
-- [ ] Utworzyć workspace Rust i połączyć Axum, SurrealDB oraz Leptos.
-- [ ] Zaimportować próbki, policzyć prosty scoring dla czterech spółek i udostępnić ranking przez API.
-- [ ] Wyświetlić ranking, składowe wyniku i wykres ceny w przeglądarce.
+- [ ] Wybrać źródła bieżących cen, składu WIG20 i fundamentów dla banków, ubezpieczycieli oraz spółek niefinansowych.
+- [ ] Wybrać serie makro oraz rynki COT powiązane ze spółkami WIG20.
+- [ ] Sprawdzić dostępne pola, daty publikacji, częstotliwość aktualizacji i warunki wykorzystania danych.
 
-## Etap 2. Import i baza danych
+## Etap 1. Podstawa projektu i baza danych
 
-- [ ] Zaimplementować w Rust import cen, fundamentów, składu WIG20 i makro; zastąpić dotychczasowe skrypty Python/Bash.
-- [ ] Zapisywać źródła, daty publikacji, historyczne wersje danych i wyniki scoringu w SurrealDB.
-- [ ] Objąć importem pełny WIG20 oraz dawnych uczestników indeksu potrzebnych do badania; dodać walidację i ochronę przed duplikatami.
+- [ ] Utworzyć workspace Rust i skonfigurować połączenie z SurrealDB.
+- [ ] Przygotować schemat i migracje dla instrumentów, składu indeksu, cen, fundamentów, makro, COT oraz wyników scoringu.
+- [ ] Zapisywać źródło, datę publikacji i pobrania danych; zachowywać kolejne wersje obserwacji.
+
+## Etap 2. Automatyczny import i rozpoczęcie zbierania danych
+
+- [ ] Zaimplementować import wszystkich wybranych źródeł w Rust i zastąpić dotychczasowe skrypty Python/Bash.
+- [ ] Uruchomić harmonogram: ceny po sesji, fundamenty i makro po publikacji, COT co tydzień z obsługą opóźnień.
+- [ ] Dodać walidację, ochronę przed duplikatami, ponowienia i rejestrowanie błędów oraz przerw w zbieraniu danych.
+- [ ] Pozostawić importer działający podczas budowy pozostałych modułów; regularnie wykonywać kopię zebranych danych.
 
 ## Etap 3. Scoring fundamentalny i techniczny
 
-- [ ] Wybrać i zaimplementować wskaźniki fundamentów oraz wyceny dla banków, ubezpieczycieli i spółek niefinansowych.
-- [ ] Dodać wskaźniki trendu, normalizację do skali 0–100 i konfigurowalne wagi.
-- [ ] Zapisywać wkład każdego wskaźnika do wyniku oraz oznaczać brakujące i nieaktualne dane.
+- [ ] Zaimplementować wskaźniki fundamentów i wyceny dla banków, ubezpieczycieli i spółek niefinansowych.
+- [ ] Dodać wskaźniki trendu oparte na zgromadzonych cenach; oznaczać niewystarczającą długość serii.
+- [ ] Dodać normalizację do skali 0–100, konfigurowalne wagi, wkłady wskaźników i oznaczenia brakujących danych.
 
 ## Etap 4. Makro sektorowe
 
-- [ ] Wybrać serie makro: stopy procentowe, inflację, aktywność gospodarczą i potrzebne kursy walut.
-- [ ] Przypisać spółkom lub sektorom reguły wpływu tych danych na punktację.
-- [ ] Włączyć komponent makro do rankingu i pokazywać jego wkład w ocenę spółki.
+- [ ] Zdefiniować wpływ stóp procentowych, inflacji, aktywności gospodarczej i wybranych kursów walut na spółki lub sektory.
+- [ ] Zaimplementować reguły dodające lub odejmujące punkty zależnie od otoczenia makro.
+- [ ] Włączyć komponent makro do scoringu i zapisywać przyczyny jego punktacji.
 
-## Etap 5. Dane COT
+## Etap 5. Wpływ COT na scoring
 
-- [ ] Zaimplementować import bieżących i historycznych raportów CFTC dla 1–2 wybranych rynków.
-- [ ] Obliczać pozycję netto uczestników i jej zmianę tygodniową; ustalić reguły punktacji.
-- [ ] Powiązać rynki COT z odpowiednimi spółkami i dodać osobno widoczny wkład COT do wyniku.
+- [ ] Obliczać pozycję netto wybranych kategorii uczestników i jej zmianę między zebranymi raportami.
+- [ ] Przypisać rynki COT do odpowiednich spółek i ustalić reguły punktacji.
+- [ ] Włączyć komponent COT do scoringu i zapisywać jego wkład oraz datę użytego raportu.
 
-## Etap 6. Automatyczne aktualizacje
+## Etap 6. Backend i zapisywanie rankingów
 
-- [ ] Dodać harmonogram w Rust: ceny po sesji, fundamenty i makro po publikacji, COT co tydzień z obsługą przesunięć publikacji.
-- [ ] Przeliczać ranking po imporcie nowych danych i nadrabiać zaległości po ponownym uruchomieniu aplikacji.
-- [ ] Dodać ponowienia pobierania, status aktualizacji i zachowanie ostatniego poprawnego rankingu przy awarii.
+- [ ] Przeliczać i zapisywać ranking po aktualizacji danych, razem z wersją konfiguracji i składowymi wyniku.
+- [ ] Ustalić konfiguracje do walidacji: fundamenty z wyceną, warianty dodające trend, makro i COT oraz proste momentum; zapisywać ich wyniki przed okresem pomiaru późniejszych zwrotów.
+- [ ] Udostępnić przez Axum ranking, szczegóły spółki, zebrane serie danych i status aktualizacji.
 
-## Etap 7. Pełny interfejs i API
+## Etap 7. Frontend
 
-- [ ] Dodać ranking WIG20 z wyborem daty, sortowaniem i filtrowaniem sektorów.
-- [ ] Zbudować kartę spółki: składowe wyniku, wskaźniki, źródła i daty danych.
-- [ ] Dodać wykresy ceny, historii scoringu, makro i COT oraz obsługę błędów i braków danych.
+- [ ] Zbudować ranking WIG20 w Leptos z wyborem zapisanej daty, sortowaniem i filtrowaniem sektorów.
+- [ ] Dodać kartę spółki ze składowymi wyniku, wskaźnikami, źródłami i datami danych.
+- [ ] Dodać wykresy Plotters dla cen, scoringu, makro i COT oraz obsługę braków danych i błędów aktualizacji.
 
-## Etap 8. Analiza historyczna
+## Etap 8. Walidacja na zebranych danych
 
-- [ ] Ustalić wagi i modele przed końcowym testem: fundamenty z wyceną, następnie warianty dodające trend, makro i COT; punkt odniesienia: prosty ranking momentum.
-- [ ] Odtworzyć rankingi z ówczesnego składu WIG20 i danych dostępnych w dniu oceny; oddzielić okres doboru parametrów od późniejszego testu.
-- [ ] Porównać rankingi z późniejszymi zwrotami po 3, 6 i 12 miesiącach: korelacja Spearmana i różnica zwrotów najwyżej oraz najniżej ocenionych spółek.
-- [ ] Wygenerować tabele i wykresy w Rust oraz opisać wyniki i ograniczenia badania.
+- [ ] Porównać zapisane rankingi z późniejszymi zmianami cen, korzystając wyłącznie z danych zgromadzonych od uruchomienia importera do lutego 2027.
+- [ ] Dla ocen z pełnymi 3 miesiącami obserwacji policzyć korelację Spearmana i różnicę zwrotów najwyżej oraz najniżej ocenionych spółek; porównać ustalone modele.
+- [ ] Wygenerować tabele i wykresy w Rust oraz opisać pokrycie danych, długość obserwacji i wyniki. Ocenę po 6 i 12 miesiącach pozostawić na dalsze zbieranie danych.
 
-## Etap 9. Testy, dokumentacja i wydanie
+## Etap 9. Ukończenie pracy
 
-- [ ] Uzupełnić testy importerów, scoringu, bazy, API i automatyzacji; uruchamiać kontrole Rust/WASM w CI.
-- [ ] Przygotować jedno polecenie uruchamiające lokalne demo bez sieci i instrukcję aktualizacji danych rzeczywistych.
-- [ ] Uaktualnić README i AI_CONTEXT.md; ukończyć `thesis/main.tex`, wygenerować PDF i przygotować demonstrację projektu.
+- [ ] Sprawdzić cały przepływ: automatyczny import -> baza -> scoring -> API -> frontend.
+- [ ] Przygotować instrukcję lokalnego uruchomienia i zaktualizować README oraz AI_CONTEXT.md.
+- [ ] Ukończyć rozdziały pracy, wygenerować finalny PDF i przygotować prezentację aplikacji oraz wyników walidacji.
