@@ -95,22 +95,27 @@ Trend has a low weight. Profitability, financial strength, cashflow quality, and
 - Kubernetes,
 - machine learning.
 
-## Build Order
+## Current implementation and scope
 
-Preferred order:
+The Rust workspace currently contains the `rankr-import` package in `importer/`.
+It collects basic GPW/Notoria fundamentals and obtains the current WIG20 list from
+GPW Benchmark. CLI: `collect [CODE]`, `fetch CODE`, `parse FILE`.
 
-1. SurrealDB schema and seed.
-2. Data sample validation.
-3. Backend healthcheck.
-4. SurrealDB connection.
-5. Importers for Stooq, GPW Benchmark, GPW / Notoria, and NBP.
-6. Fundamental-first scoring.
-7. Ranking API.
-8. Leptos dashboard.
-9. Plotters chart.
-10. Instrument detail view.
-11. Score history versus price validation.
-12. Thesis write-up in `thesis/main.tex`.
+- One package with a reusable library and a thin CLI; keep HTTP, pure parsing,
+  serializable model types and JSON persistence in separate modules.
+- Persist raw JSON before parsing during collection; retain all financial fields.
+- Monetary values are Decimal in Rust and decimal strings in JSON, preserving
+  currency, unit scale and sign. Missing values are null, not zero.
+- Do not introduce parser-version metadata. It was explicitly excluded by the user.
+- No database connection or schema changes in the importer stage. `database/`
+  contains a legacy design, not the active importer contract.
+- The next storage integration is SurrealDB in the same application/data pipeline.
+- Prices will come from GPW, not Stooq. Detailed bank fundamentals come later.
+- Current source access/publication frequency is accepted; do not reopen this work.
+- Analytics and new import code are Rust, as specified in ROADMAP.md.
+
+Run `cargo fmt --all -- --check`, `cargo test --workspace --locked` and
+`cargo clippy --workspace --all-targets --locked -- -D warnings` for Rust changes.
 
 ## Style
 

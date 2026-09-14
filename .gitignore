@@ -97,6 +97,7 @@ data/raw/*
 data/cache/*
 data/full/*
 data/processed/*
+data/collected/
 analytics/sample_output/*
 
 !data/raw/.gitkeep

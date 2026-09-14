@@ -246,6 +246,12 @@ Klasyczny backtest portfela typu top N nie jest częścią obecnego MVP. Zamiast
 \cleardoublepage
 \chapter{Implementacja}
 
+Pierwszym zaimplementowanym modułem jest program konsolowy \texttt{rankr-import} napisany w języku Rust. Pobiera on bieżący skład WIG20 z GPW Benchmark oraz podstawowe dane finansowe spółek z tabel GPW/Notoria. Program udostępnia polecenia zbierania danych, pobierania pojedynczej odpowiedzi oraz przetwarzania zapisanego dokumentu bez połączenia z siecią.
+
+Kod rozdziela modele danych, komunikację HTTP, parser HTML i zapis plików JSON. Podczas zbierania danych odpowiedź źródłowa jest zapisywana przed parsowaniem. Dzięki temu błąd odczytu nie powoduje utraty dokumentu, a poprawiony parser może ponownie przetworzyć lokalną odpowiedź. Wartości finansowe zachowują walutę, jednostkę i znak źródłowy. W programie są reprezentowane przez typ dziesiętny, natomiast w JSON przez tekstowy zapis liczby dziesiętnej; brak wartości jest reprezentowany przez \texttt{null}. Parser nie wyznacza dat publikacji na podstawie okresu raportowego.
+
+Integracja tego modułu z SurrealDB pozostaje kolejnym etapem. Serializowalne struktury odpowiedzi źródłowej i danych finansowych są niezależne od warstwy plikowej, co pozwala wykorzystać je w przyszłym adapterze bazy danych.
+
 TODO: Opisać implementację backendu, frontendu, importu danych, integracji z bazą oraz uruchamiania części analitycznej.
 
 \cleardoublepage
