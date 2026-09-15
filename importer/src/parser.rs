@@ -259,7 +259,7 @@ fn consolidation(text: &str) -> Result<bool, ParseError> {
     }
 }
 
-fn parse_number(value: &str) -> Result<Option<Decimal>, ()> {
+pub(crate) fn parse_number(value: &str) -> Result<Option<Decimal>, ()> {
     let value = value.trim().replace('−', "-");
     if matches!(value.as_str(), "" | "-" | "–" | "—") {
         return Ok(None);

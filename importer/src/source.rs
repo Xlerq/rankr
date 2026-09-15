@@ -3,24 +3,25 @@
 //! Fetching returns the final response even for HTTP errors. The caller can save
 //! the response before checking its status or attempting to parse its contents.
 
-use std::{collections::HashSet, time::Duration};
+use std::collections::HashSet;
 
 use chrono::Utc;
-use reqwest::{Client, RequestBuilder, StatusCode, header};
+use reqwest::{Client, RequestBuilder, header};
 use scraper::{ElementRef, Html, Selector};
 use thiserror::Error;
 
-use crate::model::{Instrument, RawDocument, Source};
+use crate::{http, model::{Instrument, MarketPair, RawDocument, Source}};
 
 const INDEX_ISIN: &str = "PL9999999987";
 const INDEX_PAGE: &str = "https://gpwbenchmark.pl/karta-indeksu";
 const PORTFOLIO_ENDPOINT: &str = "https://gpwbenchmark.pl/ajaxindex.php";
 const FUNDAMENTALS_ENDPOINT: &str = "https://www.gpw.pl/ajaxindex.php";
-const MAX_ATTEMPTS: u32 = 3;
+const COMPANY_PAGE: &str = "https://www.gpw.pl/spolka";
+const TRADINGVIEW_ENDPOINT: &str = "https://scanner.tradingview.com/symbol";
 
 #[derive(Debug, Error)]
 pub enum SourceError {
-    #[error("GPW request failed: {0}")]
+    #[error("source request failed: {0}")]
     Request(#[from] reqwest::Error),
     #[error("WIG20 portfolio table with Instrument and Kod ISIN columns was not found")]
     MissingPortfolio,
@@ -36,25 +37,8 @@ pub struct GpwClient {
 
 impl GpwClient {
     pub fn new() -> Result<Self, SourceError> {
-        let mut headers = header::HeaderMap::new();
-        headers.insert(
-            header::ACCEPT,
-            header::HeaderValue::from_static("text/html"),
-        );
-        headers.insert(
-            header::ACCEPT_LANGUAGE,
-            header::HeaderValue::from_static("pl,en;q=0.8"),
-        );
-
         Ok(Self {
-            client: Client::builder()
-                .user_agent(concat!("rankr-import/", env!("CARGO_PKG_VERSION")))
-                .default_headers(headers)
-                .https_only(true)
-                .connect_timeout(Duration::from_secs(10))
-                .timeout(Duration::from_secs(20))
-                .retry(reqwest::retry::never())
-                .build()?,
+            client: http::client()?,
         })
     }
 
@@ -109,50 +93,40 @@ impl GpwClient {
         .await
     }
 
+    pub async fn fetch_price(&self, instrument: &Instrument) -> Result<RawDocument, SourceError> {
+        self.fetch(Source::GpwPrices, Some(instrument), || {
+            self.client.get(COMPANY_PAGE).query(&[("isin", instrument.isin.as_str())])
+        }).await
+    }
+
     async fn fetch(
         &self,
         source: Source,
         instrument: Option<&Instrument>,
         request: impl Fn() -> RequestBuilder,
     ) -> Result<RawDocument, SourceError> {
-        for attempt in 1..=MAX_ATTEMPTS {
-            let result = async {
-                let response = request().send().await?;
-                let status = response.status();
-                let url = response.url().to_string();
-                let body = response.text().await?;
-                Ok::<_, reqwest::Error>((status, url, body))
-            }
-            .await;
+        Ok(http::fetch(source, instrument, request).await?)
+    }
+}
 
-            match result {
-                Ok((status, _, _))
-                    if attempt < MAX_ATTEMPTS
-                        && (status == StatusCode::TOO_MANY_REQUESTS
-                            || status.is_server_error()) => {}
-                Ok((status, url, body)) => {
-                    return Ok(RawDocument {
-                        source,
-                        instrument: instrument.cloned(),
-                        fetched_at: Utc::now(),
-                        url,
-                        http_status: status.as_u16(),
-                        body,
-                    });
-                }
-                Err(error)
-                    if attempt < MAX_ATTEMPTS
-                        && (error.is_timeout()
-                            || error.is_connect()
-                            || error.is_request()
-                            || error.is_body()) => {}
-                Err(error) => return Err(error.into()),
-            }
+/// Current currency and gold quotes from TradingView's public IDC feed.
+pub struct TradingViewClient {
+    client: Client,
+}
 
-            tokio::time::sleep(Duration::from_secs(u64::from(attempt))).await;
-        }
+impl TradingViewClient {
+    pub fn new() -> Result<Self, SourceError> {
+        Ok(Self { client: http::client()? })
+    }
 
-        unreachable!("the final attempt always returns its response or error")
+    pub async fn fetch_price(&self, pair: MarketPair) -> Result<RawDocument, SourceError> {
+        let symbol = format!("FX_IDC:{}", pair.code());
+        Ok(http::fetch(Source::TradingViewIdc, None, || {
+            self.client.get(TRADINGVIEW_ENDPOINT).query(&[
+                ("symbol", symbol.as_str()),
+                ("fields", "name,close,open,high,low,time,currency"),
+            ])
+        }).await?)
     }
 }
 
@@ -253,6 +227,7 @@ mod tests {
         io::{BufRead, BufReader, Write},
         net::TcpListener,
         thread,
+        time::Duration,
     };
 
     use super::*;

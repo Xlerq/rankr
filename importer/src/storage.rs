@@ -10,7 +10,7 @@ use serde::{Serialize, de::DeserializeOwned};
 use tempfile::{Builder, NamedTempFile};
 use thiserror::Error;
 
-use crate::model::{FundamentalSnapshot, RawDocument};
+use crate::model::{FundamentalSnapshot, PriceSnapshot, RawDocument};
 
 #[derive(Debug, Error)]
 pub enum StorageError {
@@ -33,6 +33,12 @@ impl ArchivedFetch {
     /// A failed parse leaves raw.json available for offline recovery.
     pub fn save_snapshot(&self, snapshot: &FundamentalSnapshot) -> Result<PathBuf, StorageError> {
         let path = self.directory.join("fundamentals.json");
+        write_json(&path, snapshot)?;
+        Ok(path)
+    }
+
+    pub fn save_price(&self, snapshot: &PriceSnapshot) -> Result<PathBuf, StorageError> {
+        let path = self.directory.join("price.json");
         write_json(&path, snapshot)?;
         Ok(path)
     }
