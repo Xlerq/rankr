@@ -1,4 +1,7 @@
-use rankr_import::{model::Fundamentals, parser::{ParseError, parse_fundamentals}};
+use rankr_import::{
+    model::Fundamentals,
+    parser::{ParseError, parse_fundamentals},
+};
 use rust_decimal::Decimal;
 
 const ELEVEN_BIT: &str = include_str!("../../data/raw/11bit_gpw_notoria_sample.html");
@@ -121,6 +124,16 @@ fn reads_eur_and_explicit_unit_scales_from_metadata() {
 }
 
 #[test]
+fn preserves_a_bare_fiscal_year_for_pepco_without_inventing_dates() {
+    let html = KGHM
+        .replace("I-II kw. 2026", "2025")
+        .replace("tys. PLN", "tys. EUR");
+    let parsed = parse_fundamentals(&html).unwrap();
+    assert_eq!(parsed.report_period, "2025");
+    assert_eq!(parsed.currency, "EUR");
+}
+
+#[test]
 fn handles_cosmetic_layout_changes_and_unicode_numeric_whitespace() {
     let html = report(
         "<tr><td><strong>Przychody ze sprzedaży</strong></td>\
@@ -151,12 +164,22 @@ fn preserves_unknown_rows_without_confusing_accounting_categories() {
 #[test]
 fn rejects_malformed_or_unrepresentable_known_numbers() {
     for value in [
-        "12 34,00", "1,2,3", "NaN", "1.234,00", "10%", "12 PLN", "--1,00",
-        "0,12345678901234567890123456789", "999999999999999999999999999999999999",
+        "12 34,00",
+        "1,2,3",
+        "NaN",
+        "1.234,00",
+        "10%",
+        "12 PLN",
+        "--1,00",
+        "0,12345678901234567890123456789",
+        "999999999999999999999999999999999999",
     ] {
         let html = report(&format!("<tr><th>AKTYWA</th><td>{value}</td></tr>"));
         assert!(
-            matches!(parse_fundamentals(&html), Err(ParseError::InvalidNumber { .. })),
+            matches!(
+                parse_fundamentals(&html),
+                Err(ParseError::InvalidNumber { .. })
+            ),
             "accepted invalid number: {value}"
         );
     }
@@ -172,14 +195,23 @@ fn rejects_missing_or_ambiguous_metadata() {
         format!("{KGHM}<p>Dane finansowe w mln EUR</p>"),
         format!("{KGHM}<p>Dane jednostkowe</p>"),
     ] {
-        assert!(matches!(parse_fundamentals(&html), Err(ParseError::InvalidMetadata(_))));
+        assert!(matches!(
+            parse_fundamentals(&html),
+            Err(ParseError::InvalidMetadata(_))
+        ));
     }
 }
 
 #[test]
 fn rejects_error_pages_and_multiple_reports() {
-    assert_eq!(parse_fundamentals("<h1>Sprawdź przeglądarkę</h1>"), Err(ParseError::MissingTable));
-    assert_eq!(parse_fundamentals(&format!("{KGHM}{ELEVEN_BIT}")), Err(ParseError::MultipleTables));
+    assert_eq!(
+        parse_fundamentals("<h1>Sprawdź przeglądarkę</h1>"),
+        Err(ParseError::MissingTable)
+    );
+    assert_eq!(
+        parse_fundamentals(&format!("{KGHM}{ELEVEN_BIT}")),
+        Err(ParseError::MultipleTables)
+    );
 }
 
 #[test]
@@ -189,14 +221,20 @@ fn rejects_conflicting_duplicates_including_blank_then_present() {
             "<tr><th>AKTYWA</th><td>{first}</td></tr>\
              <tr><th>Aktywa razem</th><td>20,00</td></tr>"
         ));
-        assert!(matches!(parse_fundamentals(&html), Err(ParseError::ConflictingField(_))));
+        assert!(matches!(
+            parse_fundamentals(&html),
+            Err(ParseError::ConflictingField(_))
+        ));
     }
 }
 
 #[test]
 fn rejects_changed_multi_period_row_layout_instead_of_picking_a_column() {
     let html = report("<tr><th>AKTYWA</th><td>100,00</td><td>200,00</td></tr>");
-    assert!(matches!(parse_fundamentals(&html), Err(ParseError::InvalidRow(_))));
+    assert!(matches!(
+        parse_fundamentals(&html),
+        Err(ParseError::InvalidRow(_))
+    ));
 }
 
 #[test]
@@ -205,5 +243,8 @@ fn decimal_values_round_trip_through_json_without_float_conversion() {
     let parsed = parse_fundamentals(&html).unwrap();
     let json = serde_json::to_value(&parsed).unwrap();
     assert_eq!(json["assets"], "9007199254740993.01");
-    assert_eq!(serde_json::from_value::<Fundamentals>(json).unwrap(), parsed);
+    assert_eq!(
+        serde_json::from_value::<Fundamentals>(json).unwrap(),
+        parsed
+    );
 }

@@ -83,15 +83,16 @@ not provider ratios. Ratios retain the source scale and are not recomputed.
 importer/src/
   model.rs    # serializable data types, independent of HTTP/files/database
   source.rs   # HTTP client and current WIG20 composition
-  parser.rs   # pure HTML -> typed fundamentals
+  parser.rs   # pure HTML/raw document -> typed fundamentals/snapshot
   storage.rs  # raw and parsed JSON archive
   main.rs     # CLI and orchestration
 ```
 
 The library exposes these modules separately. A future SurrealDB adapter can store
 `RawDocument` and `FundamentalSnapshot` and link their records without changing the
-HTML parser or HTTP client. The existing files in `database/` are an older design;
-this importer does not apply them or connect to a database.
+HTML parser or HTTP client. `parser::parse_document(&raw)` is the shared entry point
+for turning a response into a validated snapshot. The existing files in `database/`
+are an older design; this importer does not apply them or connect to a database.
 
 Verification:
 

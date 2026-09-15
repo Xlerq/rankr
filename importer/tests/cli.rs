@@ -30,7 +30,11 @@ fn parse_command_is_offline_and_emits_only_json() {
         .output()
         .unwrap();
 
-    assert!(result.status.success(), "{}", String::from_utf8_lossy(&result.stderr));
+    assert!(
+        result.status.success(),
+        "{}",
+        String::from_utf8_lossy(&result.stderr)
+    );
     assert!(result.stderr.is_empty());
     let json: Value = serde_json::from_slice(&result.stdout).unwrap();
     assert_eq!(json["fundamentals"]["revenue"], "141034.32");

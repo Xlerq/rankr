@@ -4,10 +4,16 @@ use rust_decimal::Decimal;
 use scraper::{ElementRef, Html, Selector};
 use thiserror::Error;
 
-use crate::model::Fundamentals;
+use crate::model::{FundamentalSnapshot, Fundamentals, RawDocument, Source};
 
 #[derive(Debug, Error, PartialEq, Eq)]
 pub enum ParseError {
+    #[error("HTTP {0}; response does not contain a successful report")]
+    HttpStatus(u16),
+    #[error("expected a GPW/Notoria fundamentals response")]
+    InvalidSource,
+    #[error("raw document is missing the instrument")]
+    MissingInstrument,
     #[error("no recognized financial table found")]
     MissingTable,
     #[error("multiple financial tables found; cannot choose a report safely")]
@@ -20,6 +26,28 @@ pub enum ParseError {
     InvalidNumber { label: String, value: String },
     #[error("conflicting values for field {0:?}")]
     ConflictingField(String),
+}
+
+/// Turn an archived response into a snapshot without HTTP or storage access.
+/// Both the CLI and future database adapters use this same validation path.
+pub fn parse_document(raw: &RawDocument) -> Result<FundamentalSnapshot, ParseError> {
+    if !(200..300).contains(&raw.http_status) {
+        return Err(ParseError::HttpStatus(raw.http_status));
+    }
+    if raw.source != Source::GpwNotoria {
+        return Err(ParseError::InvalidSource);
+    }
+    let instrument = raw
+        .instrument
+        .clone()
+        .ok_or(ParseError::MissingInstrument)?;
+    Ok(FundamentalSnapshot {
+        instrument,
+        source: raw.source,
+        source_url: raw.url.clone(),
+        fetched_at: raw.fetched_at,
+        fundamentals: parse_fundamentals(&raw.body)?,
+    })
 }
 
 /// Parse one GPW/Notoria report without network or filesystem access.
@@ -65,7 +93,10 @@ pub fn parse_fundamentals(html: &str) -> Result<Fundamentals, ParseError> {
                 label: label.clone(),
                 value: value.clone(),
             })?;
-            if values.insert(field, parsed).is_some_and(|old| old != parsed) {
+            if values
+                .insert(field, parsed)
+                .is_some_and(|old| old != parsed)
+            {
                 return Err(ParseError::ConflictingField(label.clone()));
             }
         } else if extra_fields
@@ -167,11 +198,9 @@ fn report_period(document: &Html) -> Result<String, ParseError> {
         .select(&headings)
         .map(text)
         .filter(|heading| {
-            heading.to_lowercase().contains("kw.")
-                && heading.split(|c: char| !c.is_ascii_digit()).any(|part| {
-                    part.len() == 4
-                        && part.parse::<u16>().is_ok_and(|year| (1900..=2199).contains(&year))
-                })
+            is_year(heading)
+                || heading.to_lowercase().contains("kw.")
+                    && heading.split(|c: char| !c.is_ascii_digit()).any(is_year)
         })
         .collect();
     periods.sort();
@@ -180,6 +209,14 @@ fn report_period(document: &Html) -> Result<String, ParseError> {
         [period] => Ok(period.clone()),
         _ => Err(ParseError::InvalidMetadata("report period")),
     }
+}
+
+fn is_year(value: &str) -> bool {
+    value.len() == 4
+        && value.bytes().all(|c| c.is_ascii_digit())
+        && value
+            .parse::<u16>()
+            .is_ok_and(|year| (1900..=2199).contains(&year))
 }
 
 fn currency_and_unit(text: &str) -> Result<(String, u32), ParseError> {
@@ -238,7 +275,9 @@ fn parse_number(value: &str) -> Result<Option<Decimal>, ()> {
     }
     let groups: Vec<_> = integer.split_whitespace().collect();
     if groups.is_empty()
-        || groups.iter().any(|group| !group.bytes().all(|c| c.is_ascii_digit()))
+        || groups
+            .iter()
+            .any(|group| !group.bytes().all(|c| c.is_ascii_digit()))
         || (groups.len() > 1
             && (groups[0].len() > 3 || groups[1..].iter().any(|group| group.len() != 3)))
     {

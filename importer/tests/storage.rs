@@ -31,7 +31,11 @@ fn raw_survives_parser_failure_and_duplicate_timestamps() {
     assert_eq!(read_raw(&first.raw_path()).unwrap().body, document.body);
     assert_eq!(read_raw(&second.raw_path()).unwrap().body, document.body);
     assert!(first.raw_path().with_file_name("error.json").exists());
-    assert!(!first.raw_path().with_file_name("fundamentals.json").exists());
+    assert!(
+        !first
+            .raw_path()
+            .with_file_name("fundamentals.json")
+            .exists()
+    );
     assert!(first.save_error("overwrite attempt").is_err());
 }
-

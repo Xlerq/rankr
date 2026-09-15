@@ -249,7 +249,11 @@ fn valid_isin(value: &str) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use std::{io::Read, io::Write, net::TcpListener, thread};
+    use std::{
+        io::{BufRead, BufReader, Write},
+        net::TcpListener,
+        thread,
+    };
 
     use super::*;
 
@@ -325,8 +329,14 @@ mod tests {
                 stream
                     .set_read_timeout(Some(Duration::from_secs(5)))
                     .unwrap();
-                let mut buffer = [0; 4096];
-                stream.read(&mut buffer).unwrap();
+                let mut request = BufReader::new(&stream);
+                loop {
+                    let mut line = String::new();
+                    assert!(request.read_line(&mut line).unwrap() > 0);
+                    if line == "\r\n" {
+                        break;
+                    }
+                }
                 stream.write_all(response.as_bytes()).unwrap();
             }
         });

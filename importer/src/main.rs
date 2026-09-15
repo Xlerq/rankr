@@ -7,15 +7,19 @@ use std::{
 use anyhow::{Context, Result, bail, ensure};
 use clap::{Parser, Subcommand};
 use rankr_import::{
-    model::{FundamentalSnapshot, Instrument, RawDocument, Source},
-    parser::parse_fundamentals,
+    model::{Instrument, RawDocument},
+    parser::parse_document,
     source::{GpwClient, parse_portfolio},
     storage::{archive_raw, read_raw},
 };
 use serde::Serialize;
 
 #[derive(Parser)]
-#[command(name = "rankr-import", version, about = "Collect basic GPW fundamentals as JSON")]
+#[command(
+    name = "rankr-import",
+    version,
+    about = "Collect basic GPW fundamentals as JSON"
+)]
 struct Cli {
     #[command(subcommand)]
     command: Command,
@@ -58,7 +62,7 @@ async fn run(cli: Cli) -> Result<()> {
     match cli.command {
         Command::Parse { file } => {
             let raw = read_raw(&file).with_context(|| format!("reading {}", file.display()))?;
-            print_json(&snapshot(&raw)?)
+            print_json(&parse_document(&raw)?)
         }
         Command::Fetch { code } => {
             let client = GpwClient::new()?;
@@ -75,7 +79,10 @@ async fn run(cli: Cli) -> Result<()> {
 
 async fn collect(code: Option<&str>, output: PathBuf) -> Result<()> {
     let client = GpwClient::new()?;
-    let raw_portfolio = client.fetch_portfolio().await.context("fetching WIG20 composition")?;
+    let raw_portfolio = client
+        .fetch_portfolio()
+        .await
+        .context("fetching WIG20 composition")?;
     let archived = archive_raw(&output, &raw_portfolio).context("archiving WIG20 composition")?;
     let instruments = match portfolio(&raw_portfolio) {
         Ok(instruments) => select(instruments, code)?,
@@ -93,28 +100,50 @@ async fn collect(code: Option<&str>, output: PathBuf) -> Result<()> {
             eprintln!("{}: {error:#}", instrument.code);
         }
     }
-    eprintln!("Collected {}/{total} companies; output: {}", total - failures, output.display());
-    ensure!(failures == 0, "{failures} companies failed; successful observations were preserved");
+    eprintln!(
+        "Collected {}/{total} companies; output: {}",
+        total - failures,
+        output.display()
+    );
+    ensure!(
+        failures == 0,
+        "{failures} companies failed; successful observations were preserved"
+    );
     Ok(())
 }
 
-async fn collect_one(client: &GpwClient, instrument: &Instrument, output: &std::path::Path) -> Result<()> {
+async fn collect_one(
+    client: &GpwClient,
+    instrument: &Instrument,
+    output: &std::path::Path,
+) -> Result<()> {
     let raw = client.fetch_fundamentals(instrument).await?;
     let archived = archive_raw(output, &raw).context("archiving raw response")?;
-    let parsed = match snapshot(&raw) {
+    let parsed = match parse_document(&raw) {
         Ok(parsed) => parsed,
         Err(error) => {
             archived.save_error(&format!("{error:#}"))?;
-            return Err(error.context(format!("saved response: {}", archived.raw_path().display())));
+            return Err(anyhow::Error::new(error)
+                .context(format!("saved response: {}", archived.raw_path().display())));
         }
     };
     let path = archived.save_snapshot(&parsed)?;
-    eprintln!("{}: {} -> {}", instrument.code, parsed.fundamentals.report_period, path.display());
+    eprintln!(
+        "{}: {} -> {}",
+        instrument.code,
+        parsed.fundamentals.report_period,
+        path.display()
+    );
     Ok(())
 }
 
 fn check_http(raw: &RawDocument) -> Result<()> {
-    ensure!((200..300).contains(&raw.http_status), "HTTP {} from {}", raw.http_status, raw.url);
+    ensure!(
+        (200..300).contains(&raw.http_status),
+        "HTTP {} from {}",
+        raw.http_status,
+        raw.url
+    );
     Ok(())
 }
 
@@ -124,25 +153,21 @@ fn portfolio(raw: &RawDocument) -> Result<Vec<Instrument>> {
 }
 
 fn select(instruments: Vec<Instrument>, code: Option<&str>) -> Result<Vec<Instrument>> {
-    let Some(code) = code else { return Ok(instruments) };
-    if let Some(instrument) = instruments.iter().find(|item| item.code.eq_ignore_ascii_case(code)) {
+    let Some(code) = code else {
+        return Ok(instruments);
+    };
+    if let Some(instrument) = instruments
+        .iter()
+        .find(|item| item.code.eq_ignore_ascii_case(code))
+    {
         return Ok(vec![instrument.clone()]);
     }
-    let available = instruments.iter().map(|item| item.code.as_str()).collect::<Vec<_>>().join(", ");
+    let available = instruments
+        .iter()
+        .map(|item| item.code.as_str())
+        .collect::<Vec<_>>()
+        .join(", ");
     bail!("unknown GPW code {code:?}; current WIG20: {available}")
-}
-
-fn snapshot(raw: &RawDocument) -> Result<FundamentalSnapshot> {
-    check_http(raw)?;
-    ensure!(matches!(raw.source, Source::GpwNotoria), "expected a GPW/Notoria fundamentals response");
-    let instrument = raw.instrument.clone().context("raw JSON is missing the instrument")?;
-    Ok(FundamentalSnapshot {
-        instrument,
-        source: raw.source.clone(),
-        source_url: raw.url.clone(),
-        fetched_at: raw.fetched_at,
-        fundamentals: parse_fundamentals(&raw.body)?,
-    })
 }
 
 fn print_json(value: &impl Serialize) -> Result<()> {

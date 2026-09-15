@@ -24,6 +24,7 @@ Po każdym etapie uzupełniamy odpowiadającą mu część `thesis/main.tex` i t
 
 ## Etap 2. Automatyczny import i rozpoczęcie zbierania danych
 
+- [x] Przygotować importer i parser podstawowych fundamentów GPW/Notoria w Rust, z bieżącą listą WIG20 i zapisem surowych oraz odczytanych danych do JSON (`importer/`).
 - [ ] Zaimplementować import wszystkich wybranych źródeł w Rust i zastąpić dotychczasowe skrypty Python/Bash.
 - [ ] Uruchomić harmonogram: ceny po sesji, fundamenty i makro po publikacji, COT co tydzień z obsługą opóźnień.
 - [ ] Dodać walidację, ochronę przed duplikatami, ponowienia i rejestrowanie błędów oraz przerw w zbieraniu danych.

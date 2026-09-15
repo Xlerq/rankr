@@ -72,7 +72,8 @@ fn write_json(path: &Path, value: &impl Serialize) -> Result<(), StorageError> {
     serde_json::to_writer_pretty(&mut temporary, value)?;
     temporary.write_all(b"\n")?;
     temporary.as_file().sync_all()?;
-    temporary.persist_noclobber(path).map_err(|error| error.error)?;
+    temporary
+        .persist_noclobber(path)
+        .map_err(|error| error.error)?;
     Ok(())
 }
-
