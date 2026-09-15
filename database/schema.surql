@@ -1,7 +1,7 @@
 OPTION IMPORT;
 
 -- rankr SurrealDB schema
--- Phase 2: data model for a fundamental-first ranking application.
+-- Phase 2: data model for a relative growth-potential ranking application.
 
 DEFINE TABLE instrument SCHEMAFULL;
 
@@ -200,23 +200,14 @@ DEFINE FIELD scope ON TABLE score_config TYPE string
 
 DEFINE FIELD sector ON TABLE score_config TYPE option<string>;
 
-DEFINE FIELD profitability_weight ON TABLE score_config TYPE number
-  ASSERT $value >= 0 AND $value <= 1;
+DEFINE FIELD fundamental_weight ON TABLE score_config TYPE number
+  ASSERT $value >= 0;
 
-DEFINE FIELD financial_strength_weight ON TABLE score_config TYPE number
-  ASSERT $value >= 0 AND $value <= 1;
+DEFINE FIELD technical_weight ON TABLE score_config TYPE number
+  ASSERT $value >= 0;
 
-DEFINE FIELD cashflow_quality_weight ON TABLE score_config TYPE number
-  ASSERT $value >= 0 AND $value <= 1;
-
-DEFINE FIELD efficiency_weight ON TABLE score_config TYPE number
-  ASSERT $value >= 0 AND $value <= 1;
-
-DEFINE FIELD trend_weight ON TABLE score_config TYPE number
-  ASSERT $value >= 0 AND $value <= 1;
-
-DEFINE FIELD macro_context_weight ON TABLE score_config TYPE number
-  ASSERT $value >= 0 AND $value <= 1;
+DEFINE FIELD sentiment_weight ON TABLE score_config TYPE number
+  ASSERT $value >= 0;
 
 DEFINE FIELD is_default ON TABLE score_config TYPE bool
   DEFAULT false;
@@ -246,29 +237,13 @@ DEFINE FIELD score_date ON TABLE score_result TYPE datetime;
 
 DEFINE FIELD fundamental_snapshot ON TABLE score_result TYPE record<fundamental_snapshot>;
 
-DEFINE FIELD profitability_score ON TABLE score_result TYPE number
-  ASSERT $value >= 0 AND $value <= 100;
+DEFINE FIELD fundamental_score ON TABLE score_result TYPE number;
 
-DEFINE FIELD financial_strength_score ON TABLE score_result TYPE number
-  ASSERT $value >= 0 AND $value <= 100;
+DEFINE FIELD technical_score ON TABLE score_result TYPE number;
 
-DEFINE FIELD cashflow_quality_score ON TABLE score_result TYPE number
-  ASSERT $value >= 0 AND $value <= 100;
+DEFINE FIELD sentiment_score ON TABLE score_result TYPE number;
 
-DEFINE FIELD efficiency_score ON TABLE score_result TYPE number
-  ASSERT $value >= 0 AND $value <= 100;
-
-DEFINE FIELD trend_score ON TABLE score_result TYPE number
-  ASSERT $value >= 0 AND $value <= 100;
-
-DEFINE FIELD macro_context_score ON TABLE score_result TYPE number
-  ASSERT $value >= 0 AND $value <= 100;
-
-DEFINE FIELD final_score ON TABLE score_result TYPE number
-  ASSERT $value >= 0 AND $value <= 100;
-
-DEFINE FIELD label ON TABLE score_result TYPE string
-  ASSERT $value INSIDE ["excellent", "good", "neutral", "weak", "poor"];
+DEFINE FIELD final_score ON TABLE score_result TYPE number;
 
 DEFINE FIELD data_quality_score ON TABLE score_result TYPE number
   ASSERT $value >= 0 AND $value <= 100;

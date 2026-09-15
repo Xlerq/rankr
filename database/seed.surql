@@ -159,37 +159,30 @@ CREATE macro_observation:gold_pln_2024_01_02_nbp SET
   source = "nbp",
   source_url = "https://api.nbp.pl/api/cenyzlota/2024-01-01/2024-01-31/?format=json";
 
-CREATE score_config:default_fundamental_v1 SET
-  name = "default_fundamental_v1",
-  description = "Default fundamental-first scoring configuration. Fundamentals dominate the score, trend is only a small filter, and macro context is disabled for MVP.",
+CREATE score_config:default_growth_v1 SET
+  name = "default_growth_v1",
+  description = "Relative growth-potential configuration shared by the entire WIG20, including banks. Fundamental has the largest weight; seed weights are illustrative and not calibrated.",
   scope = "global",
   sector = NONE,
-  profitability_weight = 0.35,
-  financial_strength_weight = 0.25,
-  cashflow_quality_weight = 0.20,
-  efficiency_weight = 0.10,
-  trend_weight = 0.10,
-  macro_context_weight = 0.00,
+  fundamental_weight = 3,
+  technical_weight = 1,
+  sentiment_weight = 1,
   is_default = true,
   is_active = true,
   created_at = d"2026-05-22T00:00:00Z",
   updated_at = d"2026-05-22T00:00:00Z";
 
-CREATE score_result:bit11_2026_05_22_default_fundamental_v1 SET
+CREATE score_result:bit11_2026_05_22_default_growth_v1 SET
   instrument = instrument:bit11,
-  config = score_config:default_fundamental_v1,
+  config = score_config:default_growth_v1,
   score_date = d"2026-05-22T00:00:00Z",
   fundamental_snapshot = fundamental_snapshot:bit11_2025_iv_gpw_notoria,
-  profitability_score = 62.00,
-  financial_strength_score = 90.00,
-  cashflow_quality_score = 85.00,
-  efficiency_score = 55.00,
-  trend_score = 50.00,
-  macro_context_score = 50.00,
-  final_score = 71.70,
-  label = "good",
+  fundamental_score = 40,
+  technical_score = 10,
+  sentiment_score = -5,
+  final_score = 125,
   data_quality_score = 90.00,
-  explanation = "Seed example for fundamental-first scoring based on GPW / Notoria fundamentals and default scoring config.";
+  explanation = "Record-shape placeholder with illustrative component scores; not a calibrated ranking or a percentage-return forecast. No sentiment data source is defined.";
 
 CREATE data_source_log:stooq_kgh_sample_2024_01 SET
   source = "stooq",

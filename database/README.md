@@ -2,7 +2,7 @@
 
 Phase 2 defines the SurrealDB data model for `rankr` before backend, importer, API, UI, or scoring implementation.
 
-The model supports a fundamental-first ranking of Polish listed companies. Price data still exists, but it is supporting context for charts and a small trend filter, not the main scoring driver.
+The scoring contract ranks WIG20 companies by relative growth potential over 3–12 months. A higher final score means a greater chance of a better return than other companies in the same basket; it is neither a standalone assessment of company quality nor a percentage-return forecast.
 
 ## Collections
 
@@ -11,8 +11,8 @@ The model supports a fundamental-first ranking of Polish listed companies. Price
 - `price_daily` — Stooq daily OHLCV observations.
 - `fundamental_snapshot` — GPW / Notoria financial snapshots.
 - `macro_observation` — NBP FX and gold observations.
-- `score_config` — fundamental-first scoring weights and scope.
-- `score_result` — historical score outputs for an instrument and date.
+- `score_config` — weights for the fundamental, technical, and sentiment families, plus configuration metadata.
+- `score_result` — the three component scores and their weighted sum for an instrument, date, and configuration.
 - `data_source_log` — source fetch/import audit log.
 
 There is no `backtest_result` collection in MVP. The current validation approach is to store `score_result` history and later compare `final_score` with the instrument price series. A portfolio top-N backtest can be added as a future extension.
@@ -30,34 +30,40 @@ Future OHLCV importers should reject malformed candles:
 - `low <= close`
 - `low <= high`
 
-The active `score_config` weights should sum to `1.0`. The Phase 2 validator checks the default seed configuration.
+The v1 scoring contract has exactly three families:
+
+- `fundamental` — the most important family: financial condition, valuation, and revenue/profit dynamics.
+- `technical` — price trend/momentum.
+- `sentiment` — sentiment, with its field present now and no data source specified.
+
+`score_config` stores `fundamental_weight`, `technical_weight`, and `sentiment_weight` as nonnegative numbers, without an upper bound or a required total. v1 uses one set of weights for the entire WIG20, including banks.
+
+`score_result` stores `fundamental_score`, `technical_score`, `sentiment_score`, and `final_score` as unrestricted numbers, including negative values. The final score is the sum of each component score multiplied by its corresponding weight, with no final-score normalization or mapping to a percentage return. Only `data_quality_score` retains its 0–100 range. The unique key remains `(instrument, score_date, config)`; instrument, configuration, date, fundamental snapshot, and explanation are retained.
+
+The seed configuration is `default_growth_v1`, with `is_default = true` and illustrative weights `3 / 1 / 1`; the fundamental weight is strictly larger than either other weight. The placeholder for `instrument:bit11` uses component scores `40 / 10 / -5`, giving a final score of `125`. It demonstrates the record shape, not a calibrated ranking. The validator checks the scoring field contract and this arithmetic; scoring algorithms and component formulas remain unimplemented.
 
 ## Planned API contract
 
-These endpoints are not implemented yet. This is the planned response shape for the backend and frontend contract.
+These endpoints are not implemented yet. This is the planned response shape for the backend and frontend contract. Scoring values below are the same illustrative placeholders as in the seed.
 
 `GET /api/ranking`
 
 ```json
 {
   "score_date": "2026-05-22",
-  "config": "default_fundamental_v1",
+  "config": "default_growth_v1",
   "items": [
     {
       "symbol": "11B",
       "name": "11 bit studios SA",
       "isin": "PL11BTS00015",
       "sector": "Gaming",
-      "final_score": 71.7,
-      "label": "good",
+      "final_score": 125,
       "data_quality_score": 90.0,
       "component_scores": {
-        "profitability_score": 62.0,
-        "financial_strength_score": 90.0,
-        "cashflow_quality_score": 85.0,
-        "efficiency_score": 55.0,
-        "trend_score": 50.0,
-        "macro_context_score": 50.0
+        "fundamental_score": 40,
+        "technical_score": 10,
+        "sentiment_score": -5
       },
       "fundamental_snapshot": {
         "report_period": "I-IV kw. 2025",
@@ -118,19 +124,15 @@ These endpoints are not implemented yet. This is the planned response shape for 
   "scores": [
     {
       "score_date": "2026-05-22",
-      "config": "default_fundamental_v1",
+      "config": "default_growth_v1",
       "fundamental_snapshot": "fundamental_snapshot:bit11_2025_iv_gpw_notoria",
-      "final_score": 71.7,
-      "label": "good",
+      "final_score": 125,
       "data_quality_score": 90.0,
-      "explanation": "Seed example for fundamental-first scoring.",
+      "explanation": "Record-shape placeholder with illustrative component scores; not a calibrated ranking or a percentage-return forecast. No sentiment data source is defined.",
       "component_scores": {
-        "profitability_score": 62.0,
-        "financial_strength_score": 90.0,
-        "cashflow_quality_score": 85.0,
-        "efficiency_score": 55.0,
-        "trend_score": 50.0,
-        "macro_context_score": 50.0
+        "fundamental_score": 40,
+        "technical_score": 10,
+        "sentiment_score": -5
       }
     }
   ]
@@ -164,7 +166,7 @@ Example queries:
 SELECT * FROM instrument;
 SELECT * FROM fundamental_snapshot;
 SELECT * FROM score_config;
-SELECT instrument, config, final_score, label FROM score_result;
+SELECT instrument, config, fundamental_score, technical_score, sentiment_score, final_score FROM score_result;
 SELECT source, operation, status, target_symbol, rows_count FROM data_source_log ORDER BY source;
 ```
 

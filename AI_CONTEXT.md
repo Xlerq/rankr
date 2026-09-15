@@ -72,12 +72,11 @@ Keep the repository minimal. Do not add extra documentation files unless they cl
 
 The scoring must be deterministic and explainable.
 
-The v1 score families are:
+The v1 score families are exactly:
 
-- fundamentals: financial condition,
-- valuation: cheapness,
-- growth/dynamics: revenue and profit growth, not the ROE level alone,
-- trend: price trend/momentum.
+- `fundamental`: the most important family, covering financial condition, valuation, and revenue/profit dynamics,
+- `technical`: price trend/momentum,
+- `sentiment`: sentiment, with a schema field now and no data source specified.
 
 Each company has component scores (metrics/signals), each with an assigned, fixed weight. The final score is the sum (component score × weight), measures relative growth potential, and determines table sorting. Do not normalize the final score or map the sum to an expected percentage return. Explain the result through its component scores and their weights.
 
@@ -85,7 +84,7 @@ v1 uses one set of weights for the entire WIG20, including banks. Some bank fiel
 
 Seasonality (for example, average return in a given month) is only a later option if price history is available; it is not part of MVP. Sector macro and COT are also outside v1 and may only be optional extensions after MVP.
 
-Legacy note: `database/schema.surql` and `database/seed.surql` still describe the old `0-100` / `fundamental-first` model. They are not the authoritative product contract, and future agents must not use them to override the goal above. Leave both files unchanged in this documentation-only task; aligning them with the product goal belongs to later work. This task does not implement scoring or define metric formulas, numeric weights, thresholds, component normalization, or missing-data rules.
+Database contract: `score_config` and `score_result` in `database/schema.surql` define the product contract for the three families above. Each weight is a nonnegative number with no upper bound or required total. Component scores and `final_score` are unrestricted numbers, including negative values; `final_score` is the sum of the three component scores multiplied by their corresponding weights. Only `data_quality_score` retains its 0–100 range. `database/seed.surql` provides the illustrative `default_growth_v1` configuration with the largest weight on `fundamental` and a record-shape placeholder, not a calibrated ranking. This contract does not implement scoring or define component formulas.
 
 ## Out of Scope for MVP
 
@@ -113,8 +112,9 @@ GPW Benchmark. CLI: `collect [CODE]`, `fetch CODE`, `parse FILE`.
 - Monetary values are Decimal in Rust and decimal strings in JSON, preserving
   currency, unit scale and sign. Missing values are null, not zero.
 - Do not introduce parser-version metadata. It was explicitly excluded by the user.
-- No database connection or schema changes in the importer stage. `database/`
-  contains a legacy design, not the active importer contract.
+- The importer has no database connection. The scoring tables define the product
+  contract; other collections retain their earlier design and are not the active
+  importer contract.
 - The next storage integration is SurrealDB in the same application/data pipeline.
 - Prices will come from GPW, not Stooq. Detailed bank fundamentals come later.
 - Current source access/publication frequency is accepted; do not reopen this work.

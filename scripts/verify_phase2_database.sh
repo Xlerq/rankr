@@ -42,9 +42,15 @@ reject_grep() {
 
 seed_value() {
   local field="$1"
-  grep -E "^[[:space:]]+${field} = " "$SEED" |
-    head -n 1 |
-    sed -E 's/.*= ([0-9.]+),?/\1/'
+  local value
+  value="$(
+    grep -E "^[[:space:]]+${field} = " "$SEED" |
+      head -n 1 |
+      sed -E 's/^[[:space:]]+[[:alnum:]_]+ = (-?[0-9]+([.][0-9]+)?)[,;]$/\1/'
+  )" || die "seed missing numeric field: ${field}"
+  [[ "$value" =~ ^-?[0-9]+([.][0-9]+)?$ ]] ||
+    die "seed field ${field} must contain a numeric literal"
+  printf '%s\n' "$value"
 }
 
 table_block() {
@@ -129,48 +135,71 @@ require_grep 'ASSERT \$value INSIDE \["USDPLN", "EURPLN", "GOLD_PLN"\];' "$SCHEM
 require_index 'DEFINE INDEX macro_observation_unique[[:space:]]+ON TABLE macro_observation[[:space:]]+FIELDS date, series, source[[:space:]]+UNIQUE;' \
   "missing unique index on macro_observation date+series+source"
 
-for field in name description scope sector profitability_weight financial_strength_weight cashflow_quality_weight efficiency_weight trend_weight macro_context_weight is_default is_active created_at updated_at; do
+for field in name description scope sector fundamental_weight technical_weight sentiment_weight is_default is_active created_at updated_at; do
   require_table_field score_config "$field"
 done
+for field in fundamental_weight technical_weight sentiment_weight; do
+  table_block score_config | tr '\n' ' ' | grep -Eq \
+    "DEFINE FIELD ${field} ON TABLE score_config TYPE number[[:space:]]+ASSERT "'\$value >= 0;' ||
+    die "score_config.${field} must be a nonnegative number without an upper bound"
+done
+for file in "$SCHEMA" "$SEED"; do
+  reject_grep '\b(profitability|financial_strength|cashflow|efficiency|macro_context)_|\btrend_(weight|score)\b|default_fundamental_v1' "$file" \
+    "${file#"$ROOT_DIR"/} must not contain legacy scoring fields or configuration names"
+  reject_grep '\b(label|excellent|good|neutral|weak|poor)\b' "$file" \
+    "${file#"$ROOT_DIR"/} must not contain score labels or their assertions"
+done
 reject_grep 'momentum_weight|price_risk_weight|trading_liquidity_weight|relative_strength_weight' "$SCHEMA" \
-  "score_config must not contain price-action weight fields"
+  "score_config must not contain additional scoring families"
 
 for expected in \
-  'name = "default_fundamental_v1"' \
+  'CREATE score_config:default_growth_v1 SET' \
+  'name = "default_growth_v1"' \
   'scope = "global"' \
   'sector = NONE' \
-  'profitability_weight = 0.35' \
-  'financial_strength_weight = 0.25' \
-  'cashflow_quality_weight = 0.20' \
-  'efficiency_weight = 0.10' \
-  'trend_weight = 0.10' \
-  'macro_context_weight = 0.00' \
   'is_default = true' \
   'is_active = true'; do
   grep -Fq "$expected" "$SEED" || die "default score_config seed missing: $expected"
 done
 
-weight_sum="$(
-  awk -v a="$(seed_value profitability_weight)" \
-      -v b="$(seed_value financial_strength_weight)" \
-      -v c="$(seed_value cashflow_quality_weight)" \
-      -v d="$(seed_value efficiency_weight)" \
-      -v e="$(seed_value trend_weight)" \
-      -v f="$(seed_value macro_context_weight)" \
-      'BEGIN { printf "%.2f", a + b + c + d + e + f }'
-)"
-[[ "$weight_sum" == "1.00" ]] ||
-  die "default score_config weights must sum to 1.00, got ${weight_sum}"
+fundamental_weight="$(seed_value fundamental_weight)"
+technical_weight="$(seed_value technical_weight)"
+sentiment_weight="$(seed_value sentiment_weight)"
+awk -v fundamental="$fundamental_weight" \
+    -v technical="$technical_weight" \
+    -v sentiment="$sentiment_weight" \
+    'BEGIN { exit !(fundamental >= 0 && technical >= 0 && sentiment >= 0 && fundamental > technical && fundamental > sentiment) }' ||
+  die "default score_config weights must be nonnegative, with fundamental_weight strictly largest"
 
-for field in instrument config score_date fundamental_snapshot profitability_score financial_strength_score cashflow_quality_score efficiency_score trend_score macro_context_score final_score label data_quality_score explanation; do
+for field in instrument config score_date fundamental_snapshot fundamental_score technical_score sentiment_score final_score data_quality_score explanation; do
   require_table_field score_result "$field"
 done
-table_block score_result | grep -Eq 'ASSERT \$value INSIDE \["excellent", "good", "neutral", "weak", "poor"\];' ||
-  die "score_result.label must restrict values to excellent, good, neutral, weak, poor"
+for field in fundamental_score technical_score sentiment_score final_score; do
+  require_grep "^DEFINE FIELD ${field} ON TABLE score_result TYPE number;$" "$SCHEMA" \
+    "score_result.${field} must be an unrestricted number, allowing negative values"
+done
+table_block score_result | tr '\n' ' ' | grep -Eq \
+  'DEFINE FIELD data_quality_score ON TABLE score_result TYPE number[[:space:]]+ASSERT \$value >= 0 AND \$value <= 100;' ||
+  die "score_result.data_quality_score must retain its 0-100 range"
 table_block score_result | grep -Eq '^DEFINE FIELD (scope|sector) ON TABLE score_result ' &&
   die "score_result must not contain scope or sector fields"
 require_index 'DEFINE INDEX score_result_unique[[:space:]]+ON TABLE score_result[[:space:]]+FIELDS instrument, score_date, config[[:space:]]+UNIQUE;' \
   "missing unique index on score_result instrument+score_date+config"
+
+require_grep '^CREATE score_result:bit11_2026_05_22_default_growth_v1 SET' "$SEED" \
+  "seed must include the bit11 placeholder score_result"
+require_grep 'config = score_config:default_growth_v1,' "$SEED" \
+  "placeholder score_result must reference default_growth_v1"
+fundamental_score="$(seed_value fundamental_score)"
+technical_score="$(seed_value technical_score)"
+sentiment_score="$(seed_value sentiment_score)"
+final_score="$(seed_value final_score)"
+awk -v fundamental="$fundamental_score" -v fundamental_weight="$fundamental_weight" \
+    -v technical="$technical_score" -v technical_weight="$technical_weight" \
+    -v sentiment="$sentiment_score" -v sentiment_weight="$sentiment_weight" \
+    -v final="$final_score" \
+    'BEGIN { exit !(final == fundamental * fundamental_weight + technical * technical_weight + sentiment * sentiment_weight) }' ||
+  die "placeholder final_score must equal the weighted sum of its three component scores"
 
 for field in source operation status instrument target_symbol started_at finished_at rows_count date_from date_to raw_file_path error_message notes; do
   require_table_field data_source_log "$field"
