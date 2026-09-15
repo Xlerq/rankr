@@ -9,14 +9,33 @@
           ▒▒▒▒▒   ▒▒▒▒▒ ▒▒▒▒▒   ▒▒▒▒▒ ▒▒▒▒▒    ▒▒▒▒▒ ▒▒▒▒▒   ▒▒▒▒ ▒▒▒▒▒   ▒▒▒▒▒ 
 ```
 
-Engineering thesis project for multi-factor scoring and ranking Polish stock market instruments from GPW.
+Engineering thesis project: a web application written entirely in Rust (frontend,
+backend, and scoring engine) for ranking GPW companies by relative growth potential
+over 3–12 months.
+
+A higher final score means a greater chance of achieving a better return than
+other companies in the same basket. The score measures relative growth potential,
+not standalone company quality or a predicted percentage return. The application
+does not provide investment advice.
 
 ## MVP
 
-- GPW/WIG20 market and reference data
-- deterministic multi-factor scoring and ranking
+- the full WIG20 basket, using end-of-day prices, financial and reference data;
+  other GPW stocks are a later extension, so 20 companies are not a permanent limit
+- a company table as the main view, showing component scores (metrics/signals),
+  their assigned weights, and the final score
+- deterministic scoring from four families: fundamentals (financial condition),
+  valuation (cheapness), growth/dynamics (revenue and profit growth, not the ROE
+  level alone), and price trend/momentum
+- the final score is the sum (component score × weight), measures growth potential,
+  and determines table sorting; no final-score normalization or conversion to an
+  expected percentage return
+- one set of fixed weights for the entire WIG20, including banks
 - basic charts and score history validation notes
-- Rust-first web application
+
+Seasonality (for example, average return in a given month) is only a later option
+if price history is available. Sector macro and COT are optional extensions after
+MVP.
 
 ## Fundamentals importer
 

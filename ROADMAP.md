@@ -2,9 +2,17 @@
 
 ## Cel
 
-Lokalna aplikacja do rankingu pełnego WIG20 według potencjału wzrostu w horyzoncie 3–12 miesięcy. Scoring: fundamenty i wycena + trend + makro sektorowe + COT dla wybranych spółek.
+Lokalna aplikacja webowa do rankingu spółek GPW według względnego potencjału wzrostu w horyzoncie 3–12 miesięcy. Wyższy wynik końcowy oznacza większą szansę na lepszy zwrot niż inne spółki z tego samego koszyka. Wynik nie jest oceną tego, jak dobra jest spółka, ani prognozą zwrotu w procentach. Aplikacja nie stanowi porady inwestycyjnej.
 
-Stos: Rust, Leptos/WASM, Axum/Tokio, SurrealDB, Plotters. Import, automatyzacja i analiza również w Rust.
+Koszyk MVP obejmuje pełne WIG20. Później możliwe będzie rozszerzenie na inne akcje GPW; 20 spółek nie jest stałym, ostatecznym wszechświatem. Projektowanie tego rozszerzenia pozostaje poza obecnym zakresem.
+
+Widokiem głównym jest tabela spółek. Dla każdej spółki liczone są wyniki składowe (metryki/sygnały), każdy z ustaloną wagą. Wynik końcowy to suma (wynik składowy × waga), będąca miarą potencjału wzrostu i podstawą sortowania. Suma nie podlega normalizacji końcowej ani mapowaniu na oczekiwany procent zwrotu.
+
+Rodziny wyników v1: fundamenty (kondycja finansowa), wycena (taniość), dynamika wyników (wzrost przychodów i zysku, nie sam poziom ROE) oraz trend/momentum ceny. v1 używa jednego zestawu wag dla całego WIG20, w tym banków. Sezonowość, np. średni zwrot w danym miesiącu, jest wyłącznie późniejszą opcją, jeśli będzie dostępna historia cen.
+
+Frontend, backend i silnik scoringu w pełni w Rust. Stos: Rust, Leptos/WASM, Axum/Tokio, SurrealDB, Plotters. Import, automatyzacja i analiza również w Rust.
+
+Poza zakresem MVP: bot inwestycyjny, integracja z brokerem, dane realtime i uczenie maszynowe.
 
 Dane zbieramy od uruchomienia importera do lutego 2027, bez pobierania archiwów. Na start zapisujemy bieżące ceny, skład WIG20 i najnowsze dostępne raporty; potem kolejne aktualizacje.
 
@@ -13,36 +21,40 @@ Po każdym etapie uzupełniamy odpowiadającą mu część `thesis/main.tex` i t
 ## Etap 0. Źródła danych
 
 - [ ] Wybrać źródła bieżących cen, składu WIG20 i fundamentów dla banków, ubezpieczycieli oraz spółek niefinansowych.
-- [ ] Wybrać serie makro oraz rynki COT powiązane ze spółkami WIG20.
+- [ ] Opcjonalnie po MVP: wybrać serie makro oraz rynki COT powiązane ze spółkami WIG20.
 - [ ] Sprawdzić dostępne pola, daty publikacji, częstotliwość aktualizacji i warunki wykorzystania danych.
 
 ## Etap 1. Podstawa projektu i baza danych
 
 - [ ] Utworzyć workspace Rust i skonfigurować połączenie z SurrealDB.
-- [ ] Przygotować schemat i migracje dla instrumentów, składu indeksu, cen, fundamentów, makro, COT oraz wyników scoringu.
+- [ ] Przygotować schemat i migracje dla instrumentów, składu indeksu, cen, fundamentów oraz wyników scoringu potencjału wzrostu; makro i COT są opcjonalnym rozszerzeniem po MVP.
 - [ ] Zapisywać źródło, datę publikacji i pobrania danych; zachowywać kolejne wersje obserwacji.
 
 ## Etap 2. Automatyczny import i rozpoczęcie zbierania danych
 
 - [x] Przygotować importer i parser podstawowych fundamentów GPW/Notoria w Rust, z bieżącą listą WIG20 i zapisem surowych oraz odczytanych danych do JSON (`importer/`).
-- [ ] Zaimplementować import wszystkich wybranych źródeł w Rust i zastąpić dotychczasowe skrypty Python/Bash.
-- [ ] Uruchomić harmonogram: ceny po sesji, fundamenty i makro po publikacji, COT co tydzień z obsługą opóźnień.
+- [ ] Zaimplementować import wszystkich źródeł wybranych dla MVP w Rust i zastąpić dotychczasowe skrypty Python/Bash.
+- [ ] Uruchomić harmonogram: ceny po sesji, fundamenty po publikacji; opcjonalnie po MVP makro po publikacji i COT co tydzień z obsługą opóźnień.
 - [ ] Dodać walidację, ochronę przed duplikatami, ponowienia i rejestrowanie błędów oraz przerw w zbieraniu danych.
 - [ ] Pozostawić importer działający podczas budowy pozostałych modułów; regularnie wykonywać kopię zebranych danych.
 
-## Etap 3. Scoring fundamentalny i techniczny
+## Etap 3. Scoring potencjału wzrostu
 
-- [ ] Zaimplementować wskaźniki fundamentów i wyceny dla banków, ubezpieczycieli i spółek niefinansowych.
+- [ ] Zaimplementować wyniki składowe z rodzin fundamentów, wyceny i dynamiki wyników dla pełnego WIG20; dynamika obejmuje wzrost przychodów i zysku, nie sam poziom ROE.
 - [ ] Dodać wskaźniki trendu oparte na zgromadzonych cenach; oznaczać niewystarczającą długość serii.
-- [ ] Dodać normalizację do skali 0–100, konfigurowalne wagi, wkłady wskaźników i oznaczenia brakujących danych.
+- [ ] Obliczać potencjał wzrostu jako sumę (wynik składowy × ustalona waga), bez normalizacji końcowej i mapowania na procent zwrotu. Stosować jeden zestaw wag dla całego WIG20, w tym banków, oraz prezentować składowe i ich wagi.
 
-## Etap 4. Makro sektorowe
+## Etap 4. Makro sektorowe — opcjonalnie po MVP
+
+Etap nie jest wymagany do ukończenia MVP ani przejścia do etapów 6–9.
 
 - [ ] Zdefiniować wpływ stóp procentowych, inflacji, aktywności gospodarczej i wybranych kursów walut na spółki lub sektory.
 - [ ] Zaimplementować reguły dodające lub odejmujące punkty zależnie od otoczenia makro.
 - [ ] Włączyć komponent makro do scoringu i zapisywać przyczyny jego punktacji.
 
-## Etap 5. Wpływ COT na scoring
+## Etap 5. Wpływ COT na scoring — opcjonalnie po MVP
+
+Etap nie jest wymagany do ukończenia MVP ani przejścia do etapów 6–9.
 
 - [ ] Obliczać pozycję netto wybranych kategorii uczestników i jej zmianę między zebranymi raportami.
 - [ ] Przypisać rynki COT do odpowiednich spółek i ustalić reguły punktacji.
@@ -50,15 +62,15 @@ Po każdym etapie uzupełniamy odpowiadającą mu część `thesis/main.tex` i t
 
 ## Etap 6. Backend i zapisywanie rankingów
 
-- [ ] Przeliczać i zapisywać ranking po aktualizacji danych, razem z wersją konfiguracji i składowymi wyniku.
-- [ ] Ustalić konfiguracje do walidacji: fundamenty z wyceną, warianty dodające trend, makro i COT oraz proste momentum; zapisywać ich wyniki przed okresem pomiaru późniejszych zwrotów.
+- [ ] Przeliczać i zapisywać ranking względnego potencjału wzrostu po aktualizacji danych jako sumę ważoną składowych, razem z wersją konfiguracji, składowymi wyniku i ich wagami; stosować jeden zestaw wag dla całego WIG20, w tym banków.
+- [ ] Zapisywać wyniki modelu v1 (fundamenty, wycena, dynamika i trend) oraz prostego momentum jako punktu odniesienia przed okresem pomiaru późniejszych zwrotów. Warianty z makro i COT pozostają opcjonalne po MVP.
 - [ ] Udostępnić przez Axum ranking, szczegóły spółki, zebrane serie danych i status aktualizacji.
 
 ## Etap 7. Frontend
 
-- [ ] Zbudować ranking WIG20 w Leptos z wyborem zapisanej daty, sortowaniem i filtrowaniem sektorów.
+- [ ] Zbudować w Leptos główny widok tabeli pełnego WIG20, domyślnie sortowanej według sumy ważonej składowych potencjału wzrostu, z wyborem zapisanej daty i filtrowaniem sektorów.
 - [ ] Dodać kartę spółki ze składowymi wyniku, wskaźnikami, źródłami i datami danych.
-- [ ] Dodać wykresy Plotters dla cen, scoringu, makro i COT oraz obsługę braków danych i błędów aktualizacji.
+- [ ] Dodać wykresy Plotters dla cen i scoringu oraz obsługę braków danych i błędów aktualizacji; wykresy makro i COT są opcjonalne po MVP.
 
 ## Etap 8. Walidacja na zebranych danych
 

@@ -6,7 +6,11 @@ Strict working context for AI agents in this repository.
 
 `rankr` is an engineering thesis project.
 
-Goal: build a Rust-first web application for scoring and ranking Polish stock market instruments from GPW, starting with WIG20 end-of-day data.
+Goal: build a web application written entirely in Rust (frontend, backend, and scoring engine) for ranking GPW companies by relative growth potential over 3–12 months.
+
+A higher final score means a greater chance of achieving a better return than other companies in the same basket. The score measures relative growth potential, not standalone company quality or a predicted percentage return.
+
+The MVP basket is the full WIG20, using end-of-day prices and financial data. Other GPW stocks are a later extension. Treat WIG20 as the starting basket, not a permanent limit of 20 companies; do not design that extension in this task.
 
 This is not:
 
@@ -29,12 +33,12 @@ Do not recreate scattered thesis documentation in `docs/`. Put thesis content in
 
 Build around this flow:
 
-1. Import WIG20 reference data, OHLCV prices, fundamentals, and macro samples.
-2. Store instruments, prices, fundamentals, macro observations, score configs, score results, and source logs in SurrealDB.
-3. Calculate deterministic fundamental-first scoring.
+1. Import reference data, OHLCV prices, and financial data for the full WIG20.
+2. Store instruments, prices, financial data, score configs, score results, and source logs in SurrealDB.
+3. Calculate deterministic growth-potential scoring as the sum (component score × weight).
 4. Store score results over time.
 5. Expose ranking through the backend API.
-6. Show ranking and instrument details in Leptos.
+6. Show a company table as the main view in Leptos, sorted by the final score, with component scores, their weights, and company details.
 7. Render charts with Plotters.
 8. Compare score history with price history for validation notes.
 
@@ -42,6 +46,7 @@ Build around this flow:
 
 - Frontend: Rust, Leptos, WebAssembly
 - Backend: Rust, Axum, Tokio
+- Scoring engine: Rust
 - Database: SurrealDB
 - Charts: Plotters
 - Analytics: R / Rscript
@@ -67,19 +72,20 @@ Keep the repository minimal. Do not add extra documentation files unless they cl
 
 The scoring must be deterministic and explainable.
 
-The current direction is `fundamental-first scoring`. Fundamentals dominate the final score, while price action is only a supporting signal.
+The v1 score families are:
 
-Expected components:
+- fundamentals: financial condition,
+- valuation: cheapness,
+- growth/dynamics: revenue and profit growth, not the ROE level alone,
+- trend: price trend/momentum.
 
-- `profitability_score`,
-- `financial_strength_score`,
-- `cashflow_quality_score`,
-- `efficiency_score`,
-- `trend_score` as a light technical filter,
-- `macro_context_score` as optional context, disabled by default in MVP.
+Each company has component scores (metrics/signals), each with an assigned, fixed weight. The final score is the sum (component score × weight), measures relative growth potential, and determines table sorting. Do not normalize the final score or map the sum to an expected percentage return. Explain the result through its component scores and their weights.
 
-The final score should be explainable through component scores and normalized to a `0-100` scale.
-Trend has a low weight. Profitability, financial strength, cashflow quality, and efficiency are the dominant parts of the MVP scoring model.
+v1 uses one set of weights for the entire WIG20, including banks. Some bank fields may be empty. Do not introduce a separate banking model in v1.
+
+Seasonality (for example, average return in a given month) is only a later option if price history is available; it is not part of MVP. Sector macro and COT are also outside v1 and may only be optional extensions after MVP.
+
+Legacy note: `database/schema.surql` and `database/seed.surql` still describe the old `0-100` / `fundamental-first` model. They are not the authoritative product contract, and future agents must not use them to override the goal above. Leave both files unchanged in this documentation-only task; aligning them with the product goal belongs to later work. This task does not implement scoring or define metric formulas, numeric weights, thresholds, component normalization, or missing-data rules.
 
 ## Out of Scope for MVP
 
