@@ -6,9 +6,9 @@ Lokalna aplikacja webowa do rankingu spółek GPW według względnego potencjał
 
 Koszyk MVP obejmuje pełne WIG20. Później możliwe będzie rozszerzenie na inne akcje GPW; 20 spółek nie jest stałym, ostatecznym wszechświatem. Projektowanie tego rozszerzenia pozostaje poza obecnym zakresem.
 
-Widokiem głównym jest tabela spółek. Dla każdej spółki liczone są wyniki składowe (metryki/sygnały), każdy z ustaloną wagą. Wynik końcowy to suma (wynik składowy × waga), będąca miarą potencjału wzrostu i podstawą sortowania. Suma nie podlega normalizacji końcowej ani mapowaniu na oczekiwany procent zwrotu.
+Widokiem głównym jest tabela spółek. Dla każdej spółki liczone są wyniki trzech rodzin, każdy z ustaloną wagą. Wynik końcowy to suma ważona wyników tych trzech rodzin, będąca miarą potencjału wzrostu i podstawą sortowania. Suma nie podlega normalizacji końcowej ani mapowaniu na oczekiwany procent zwrotu.
 
-Rodziny wyników v1: fundamenty (kondycja finansowa), wycena (taniość), dynamika wyników (wzrost przychodów i zysku, nie sam poziom ROE) oraz trend/momentum ceny. v1 używa jednego zestawu wag dla całego WIG20, w tym banków. Sezonowość, np. średni zwrot w danym miesiącu, jest wyłącznie późniejszą opcją, jeśli będzie dostępna historia cen.
+Trzy rodziny wyników v1: `fundamental` — najważniejsza, obejmująca kondycję finansową, wycenę i dynamikę wyników (wzrost przychodów i zysku, nie sam poziom ROE); `technical` — trend/momentum ceny; `sentiment` — sentyment, bez ustalonego źródła danych. v1 używa jednego zestawu wag dla całego WIG20, w tym banków. Sezonowość, np. średni zwrot w danym miesiącu, jest wyłącznie późniejszą opcją, jeśli będzie dostępna historia cen.
 
 Frontend, backend i silnik scoringu w pełni w Rust. Stos: Rust, Leptos/WASM, Axum/Tokio, SurrealDB, Plotters. Import, automatyzacja i analiza również w Rust.
 
@@ -40,9 +40,10 @@ Po każdym etapie uzupełniamy odpowiadającą mu część `thesis/main.tex` i t
 
 ## Etap 3. Scoring potencjału wzrostu
 
-- [ ] Zaimplementować wyniki składowe z rodzin fundamentów, wyceny i dynamiki wyników dla pełnego WIG20; dynamika obejmuje wzrost przychodów i zysku, nie sam poziom ROE.
-- [ ] Dodać wskaźniki trendu oparte na zgromadzonych cenach; oznaczać niewystarczającą długość serii.
-- [ ] Obliczać potencjał wzrostu jako sumę (wynik składowy × ustalona waga), bez normalizacji końcowej i mapowania na procent zwrotu. Stosować jeden zestaw wag dla całego WIG20, w tym banków, oraz prezentować składowe i ich wagi.
+- [ ] Zaimplementować wynik najważniejszej rodziny `fundamental` dla pełnego WIG20, obejmującej kondycję finansową, wycenę i dynamikę wyników; dynamika obejmuje wzrost przychodów i zysku, nie sam poziom ROE.
+- [ ] Dodać wynik rodziny `technical` oparty na trendzie/momentum zgromadzonych cen; oznaczać niewystarczającą długość serii.
+- [ ] Uwzględnić wynik `sentiment` jako trzecią rodzinę; źródło danych pozostaje nieustalone.
+- [ ] Obliczać potencjał wzrostu jako sumę ważoną wyników `fundamental`, `technical` i `sentiment`, bez normalizacji końcowej i mapowania na procent zwrotu. Stosować jeden zestaw wag dla całego WIG20, w tym banków, oraz prezentować wyniki rodzin i ich wagi.
 
 ## Etap 4. Makro sektorowe — opcjonalnie po MVP
 
@@ -63,7 +64,7 @@ Etap nie jest wymagany do ukończenia MVP ani przejścia do etapów 6–9.
 ## Etap 6. Backend i zapisywanie rankingów
 
 - [ ] Przeliczać i zapisywać ranking względnego potencjału wzrostu po aktualizacji danych jako sumę ważoną składowych, razem z wersją konfiguracji, składowymi wyniku i ich wagami; stosować jeden zestaw wag dla całego WIG20, w tym banków.
-- [ ] Zapisywać wyniki modelu v1 (fundamenty, wycena, dynamika i trend) oraz prostego momentum jako punktu odniesienia przed okresem pomiaru późniejszych zwrotów. Warianty z makro i COT pozostają opcjonalne po MVP.
+- [ ] Zapisywać wyniki modelu v1 (`fundamental`, `technical`, `sentiment`) oraz prostego momentum jako punktu odniesienia przed okresem pomiaru późniejszych zwrotów. Warianty z makro i COT pozostają opcjonalne po MVP.
 - [ ] Udostępnić przez Axum ranking, szczegóły spółki, zebrane serie danych i status aktualizacji.
 
 ## Etap 7. Frontend

@@ -22,14 +22,15 @@ does not provide investment advice.
 
 - the full WIG20 basket, using end-of-day prices, financial and reference data;
   other GPW stocks are a later extension, so 20 companies are not a permanent limit
-- a company table as the main view, showing component scores (metrics/signals),
+- a company table as the main view, showing the three family scores,
   their assigned weights, and the final score
-- deterministic scoring from four families: fundamentals (financial condition),
-  valuation (cheapness), growth/dynamics (revenue and profit growth, not the ROE
-  level alone), and price trend/momentum
-- the final score is the sum (component score × weight), measures growth potential,
-  and determines table sorting; no final-score normalization or conversion to an
-  expected percentage return
+- deterministic scoring from exactly three families: `fundamental` (the most
+  important family, covering financial condition, valuation, and revenue/profit
+  dynamics), `technical` (price trend/momentum), and `sentiment` (sentiment, with
+  its data source unspecified)
+- the final score is the weighted sum of the three family scores, measures growth
+  potential, and determines table sorting; no final-score normalization or
+  conversion to an expected percentage return
 - one set of fixed weights for the entire WIG20, including banks
 - basic charts and score history validation notes
 

@@ -181,7 +181,7 @@ TODO: Opisać motywację oraz problem badawczo-inżynierski.
 
 Celem pracy jest przygotowanie aplikacji webowej \textit{rankr} do rankingu spółek Giełdy Papierów Wartościowych w Warszawie według względnego potencjału wzrostu w horyzoncie 3--12 miesięcy. Wyższy wynik końcowy oznacza większą szansę na lepszy zwrot niż inne spółki z tego samego koszyka. Wynik nie jest oceną tego, jak dobra jest spółka, ani prognozą zwrotu w procentach. Koszyk MVP obejmuje pełne WIG20, a późniejszym kierunkiem rozwoju są inne akcje GPW; zakres aplikacji nie jest na stałe ograniczony do 20 spółek.
 
-Widokiem głównym jest tabela spółek. Dla każdej spółki wyznaczane są wyniki składowe z rodzin fundamentów (kondycja finansowa), wyceny (taniość), dynamiki wyników (wzrost przychodów i zysku, nie sam poziom ROE) oraz trendu/momentum ceny. Każda składowa ma ustaloną wagę, a suma iloczynów wyników składowych i ich wag jest miarą potencjału wzrostu oraz podstawą sortowania tabeli. Wynik końcowy nie podlega normalizacji ani przeliczeniu na oczekiwany procent zwrotu. v1 używa jednego zestawu wag dla całego WIG20, w tym banków.
+Widokiem głównym jest tabela spółek. Dla każdej spółki wyznaczane są wyniki trzech rodzin: \texttt{fundamental} (najważniejsza rodzina, obejmująca kondycję finansową, wycenę i dynamikę wyników), \texttt{technical} (trend/momentum ceny) oraz \texttt{sentiment} (sentyment). Każda rodzina ma ustaloną wagę, a suma ważona wyników tych trzech rodzin jest miarą potencjału wzrostu oraz podstawą sortowania tabeli. Wynik końcowy nie podlega normalizacji ani przeliczeniu na oczekiwany procent zwrotu. v1 używa jednego zestawu wag dla całego WIG20, w tym banków.
 
 Frontend, backend i silnik scoringu są planowane w pełni w języku Rust, z wykorzystaniem Leptos/WASM, Axum/Tokio, SurrealDB i Plotters. MVP obejmuje dzienne dane OHLCV, dane finansowe, deterministyczny scoring, podstawowe wykresy oraz analizę historii wyników zestawioną z późniejszymi zmianami cen. Aplikacja nie stanowi porady inwestycyjnej.
 
@@ -232,18 +232,17 @@ Kolekcja \texttt{score\_config} przechowuje trzy nieujemne wagi typu \texttt{num
 \cleardoublepage
 \chapter{Metodyka scoringu}
 
-Scoring ma deterministycznie wyznaczać względny potencjał wzrostu spółek z tego samego koszyka w horyzoncie 3--12 miesięcy. Wyższy wynik końcowy oznacza większą szansę na lepszy zwrot niż inne spółki z tego koszyka. Kondycja finansowa jest jedną z rodzin składowych, obok wyceny, dynamiki wyników i trendu ceny; sama nie stanowi miary potencjału wzrostu.
+Scoring ma deterministycznie wyznaczać względny potencjał wzrostu spółek z tego samego koszyka w horyzoncie 3--12 miesięcy. Wyższy wynik końcowy oznacza większą szansę na lepszy zwrot niż inne spółki z tego koszyka. Kondycja finansowa jest częścią rodziny \texttt{fundamental}; sama nie stanowi miary potencjału wzrostu.
 
-Rodziny wyników składowych w v1:
+Trzy rodziny wyników składowych w v1:
 
 \begin{itemize}
-    \item fundamenty: kondycja finansowa spółki,
-    \item wycena: taniość spółki,
-    \item dynamika wyników: wzrost przychodów i zysku, nie sam poziom ROE,
-    \item trend/momentum ceny.
+    \item \texttt{fundamental}: najważniejsza rodzina, obejmująca kondycję finansową, wycenę oraz dynamikę wyników (wzrost przychodów i zysku, nie sam poziom ROE),
+    \item \texttt{technical}: trend/momentum ceny,
+    \item \texttt{sentiment}: sentyment; źródło danych pozostaje nieustalone.
 \end{itemize}
 
-Każdy wynik składowy (metryka lub sygnał) ma ustaloną wagę. Wynik końcowy jest sumą iloczynów wyników składowych i ich wag, stanowi miarę potencjału wzrostu i wyznacza kolejność spółek w tabeli. Suma nie podlega normalizacji końcowej ani mapowaniu na oczekiwany procent zwrotu. Wyjaśnialność wyniku zapewnia prezentacja składowych i ich wag. v1 stosuje jeden zestaw wag dla całego WIG20, w tym banków, bez osobnego modelu bankowego.
+Każda z trzech rodzin ma ustaloną wagę. Wynik końcowy jest sumą ważoną wyników \texttt{fundamental}, \texttt{technical} i \texttt{sentiment}, stanowi miarę potencjału wzrostu i wyznacza kolejność spółek w tabeli. Suma nie podlega normalizacji końcowej ani mapowaniu na oczekiwany procent zwrotu. Wyjaśnialność wyniku zapewnia prezentacja wyników rodzin i ich wag. v1 stosuje jeden zestaw wag dla całego WIG20, w tym banków, bez osobnego modelu bankowego.
 
 Sezonowość, np. średni zwrot w danym miesiącu, pozostaje opcją na później, jeśli będzie dostępna historia cen; nie jest częścią MVP. Makro sektorowe i COT również nie należą do v1. Pełna kalibracja wag i walidacja metodyki pozostają późniejszym etapem pracy.
 
@@ -321,7 +320,7 @@ Narodowy Bank Polski.
 \textbf{Słowa kluczowe:} GPW, WIG20, scoring, ranking, Rust, aplikacja webowa
 \\
 
-Praca opisuje aplikację webową \textit{rankr}, w pełni w Rust, rankingującą pełne WIG20 według względnego potencjału wzrostu w horyzoncie 3--12 miesięcy. Wyższy wynik oznacza większą szansę na lepszy zwrot niż inne spółki z tego samego koszyka. Główny widok to tabela sortowana według sumy ważonej składowych fundamentów, wyceny, dynamiki wyników i trendu ceny. Suma nie podlega normalizacji końcowej ani nie jest prognozą procentowego zwrotu. Późniejsze rozszerzenie obejmie inne akcje GPW.
+Praca opisuje aplikację webową \textit{rankr}, w pełni w Rust, rankingującą pełne WIG20 według względnego potencjału wzrostu w horyzoncie 3--12 miesięcy. Wyższy wynik oznacza większą szansę na lepszy zwrot niż inne spółki z tego samego koszyka. Główny widok to tabela sortowana według sumy ważonej trzech rodzin: \texttt{fundamental} (najważniejszej), \texttt{technical} i \texttt{sentiment}. Suma nie podlega normalizacji końcowej ani nie jest prognozą procentowego zwrotu. Późniejsze rozszerzenie obejmie inne akcje GPW.
 
 \vfill
 $$\noindent\rule{\textwidth}{2pt}$$
@@ -339,7 +338,7 @@ $$\noindent\rule{\textwidth}{2pt}$$
 \textbf{Key words:} Warsaw Stock Exchange, WIG20, scoring, ranking, Rust, web application
 \\
 
-This thesis describes \textit{rankr}, a web application written entirely in Rust that ranks the full WIG20 by relative growth potential over 3--12 months. A higher score means a greater chance of a better return than other companies in the same basket. The main view is a table sorted by a weighted sum of fundamentals, valuation, growth/dynamics, and price trend component scores. The sum is not subject to final-score normalization and does not predict a percentage return. Other GPW stocks are a later extension.
+This thesis describes \textit{rankr}, a web application written entirely in Rust that ranks the full WIG20 by relative growth potential over 3--12 months. A higher score means a greater chance of a better return than other companies in the same basket. The main view is a table sorted by a weighted sum of three family scores: \texttt{fundamental} (the most important), \texttt{technical}, and \texttt{sentiment}. The sum is not subject to final-score normalization and does not predict a percentage return. Other GPW stocks are a later extension.
 
 \vfill
 
