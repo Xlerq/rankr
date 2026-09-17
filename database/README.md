@@ -21,7 +21,7 @@ In future historical analysis, `fundamental_snapshot` should probably gain `publ
 
 ## Validation notes
 
-Future OHLCV importers should reject malformed candles:
+The Stooq daily-history importer rejects malformed candles:
 
 - `high >= open`
 - `high >= close`
@@ -30,10 +30,15 @@ Future OHLCV importers should reject malformed candles:
 - `low <= close`
 - `low <= high`
 
+`rankr-import history` archives Stooq EOD candles as `history.json` for later
+database integration. Current GPW/TradingView quotes from `prices` are separate
+`price.json` snapshots, not `price_daily` observations. The EOD source remains
+`stooq`.
+
 The v1 scoring contract has exactly three families:
 
 - `fundamental` — the most important family: financial condition, valuation, and revenue/profit dynamics.
-- `technical` — price trend/momentum.
+- `technical` — price trend/momentum and monthly seasonality from multi-year EOD history; the signal formulas remain unimplemented.
 - `sentiment` — sentiment, with its field present now and no data source specified.
 
 `score_config` stores `fundamental_weight`, `technical_weight`, and `sentiment_weight` as nonnegative numbers, without an upper bound or a required total. v1 uses one set of weights for the entire WIG20, including banks.

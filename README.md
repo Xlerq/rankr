@@ -26,17 +26,18 @@ does not provide investment advice.
   their assigned weights, and the final score
 - deterministic scoring from exactly three families: `fundamental` (the most
   important family, covering financial condition, valuation, and revenue/profit
-  dynamics), `technical` (price trend/momentum), and `sentiment` (sentiment, with
-  its data source unspecified)
+  dynamics), `technical` (price trend/momentum and monthly seasonality from
+  multi-year daily history), and `sentiment` (sentiment, with its data source
+  unspecified)
 - the final score is the weighted sum of the three family scores, measures growth
   potential, and determines table sorting; no final-score normalization or
   conversion to an expected percentage return
 - one set of fixed weights for the entire WIG20, including banks
 - basic charts and score history validation notes
 
-Seasonality (for example, average return in a given month) is only a later option
-if price history is available. Sector macro and COT are optional extensions after
-MVP.
+Seasonality belongs to `technical`, without a fourth family weight. Its formula
+and the scoring engine remain to be implemented. Sector macro and COT are optional
+extensions after MVP.
 
 ## Fundamentals importer
 
@@ -104,6 +105,8 @@ importer/src/
   model.rs    # serializable data types, independent of HTTP/files/database
   source.rs   # HTTP client and current WIG20 composition
   parser.rs   # pure HTML/raw document -> typed fundamentals/snapshot
+  prices.rs   # pure current-quote parsing
+  history.rs  # GPW/Stooq symbol mapping and pure daily OHLCV CSV parsing
   storage.rs  # raw and parsed JSON archive
   main.rs     # CLI and orchestration
 ```
@@ -122,9 +125,63 @@ cargo test --workspace --locked
 cargo clippy --workspace --all-targets --locked -- -D warnings
 ```
 
-Tests use fixtures and a local HTTP server, without contacting GPW. Old Python/Bash
-scripts and `data/raw/` samples remain as earlier research material. Prices from
-GPW, detailed banking fundamentals, macro data and scoring are later steps.
+Tests use small fixtures and local HTTP servers, without contacting GPW, Stooq or
+TradingView. Old Python/Bash scripts and `data/raw/` samples remain as earlier
+research material. Detailed banking fundamentals, macro data and scoring are
+later steps.
+
+## Daily price history
+
+`history` downloads the entire available Stooq daily OHLCV series. It supplies
+price data for `technical`: trend/momentum and seasonal price behaviour in the
+same months over roughly 12 or more years. A newer listing may have a shorter
+history; the command reports the candle count and actual date range. Identifying
+insufficient history for a signal belongs to the later scoring stage.
+
+Set `STOOQ_API_KEY` in the environment or in a local `.env` file (the environment
+takes precedence):
+
+```bash
+export STOOQ_API_KEY='your-api-key'
+rankr-import history
+rankr-import history KGHM
+rankr-import history PKOBP --output /path/to/archive
+```
+
+Without a code, the command obtains the current WIG20 basket from GPW Benchmark
+and adds the WIG20 index. With a code, it imports one company. Use GPW codes such
+as `KGHM`, not Stooq tickers such as `kgh`. The bundled
+`data/raw/wig20_symbols.csv` maps the GPW code and ISIN to a Stooq symbol. A new or
+changed constituent without a matching mapping produces an error; update the
+mapping and rebuild/reinstall the importer rather than guessing its ticker.
+
+The request uses the daily interval without date limits. Each response creates
+an immutable observation under `data/collected/`:
+
+```text
+data/collected/<timestamp>-<suffix>/
+  raw.json      # original CSV body, source, instrument, fetch time, HTTP status, URL
+  history.json  # source=stooq, instrument, symbol, metadata and daily candles
+```
+
+The API key is omitted from the archived URL. The raw response is saved before
+parsing; HTTP or CSV failures leave `raw.json` and `error.json`. Other companies
+continue to be collected, with a nonzero exit status if any failed. Full histories
+stay in the ignored `data/collected/` directory and must not be committed.
+
+Each candle has a date and Decimal OHLCV values, serialized as decimal strings,
+including fractional volume. The parser checks nonnegative values, OHLC bounds
+and unique dates, then sorts candles by date. It preserves Stooq's scale and
+price adjustments, without filling missing sessions or recalculating dividends.
+An archived response can be parsed offline:
+
+```bash
+rankr-import parse /path/to/observation/raw.json > /tmp/history.json
+```
+
+`rankr-import prices [CODE]` remains available for current GPW quotes and
+TradingView FX/gold quotes. These produce `price.json` snapshots; they are not
+daily history and are not stored as `price_daily` candles by this importer.
 
 ## Planned Stack
 
@@ -142,7 +199,8 @@ GPW, detailed banking fundamentals, macro data and scoring are later steps.
 - brokerage integration
 - machine learning
 
-The fundamentals importer is implemented; the application backend and frontend are planned.
+The fundamentals, current-quote and daily-history imports are implemented; the
+application backend and frontend are planned.
 
 ## Thesis
 

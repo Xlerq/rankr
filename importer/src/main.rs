@@ -7,10 +7,11 @@ use std::{
 use anyhow::{Context, Result, bail, ensure};
 use clap::{Parser, Subcommand};
 use rankr_import::{
+    history::{StooqSymbolMap, parse_history_document},
     model::{Instrument, MarketPair, RawDocument, Source},
     parser::parse_document,
     prices::parse_price_document,
-    source::{GpwClient, TradingViewClient, parse_portfolio},
+    source::{GpwClient, SourceError, StooqClient, TradingViewClient, parse_portfolio},
     storage::{archive_raw, read_raw},
 };
 use serde::Serialize;
@@ -19,7 +20,7 @@ use serde::Serialize;
 #[command(
     name = "rankr-import",
     version,
-    about = "Collect GPW fundamentals and market prices as JSON"
+    about = "Collect GPW fundamentals, current quotes and Stooq daily history as JSON"
 )]
 struct Cli {
     #[command(subcommand)]
@@ -44,14 +45,22 @@ enum Command {
         #[arg(short, long, default_value = "data/collected")]
         output: PathBuf,
     },
+    /// Archive Stooq daily history; omit CODE for the current WIG20 plus its index.
+    History {
+        /// GPW company code, e.g. KGHM or PKOBP, mapped using bundled identifiers.
+        code: Option<String>,
+        /// Directory for immutable observations. Requires STOOQ_API_KEY in env/.env.
+        #[arg(short, long, default_value = "data/collected")]
+        output: PathBuf,
+    },
     /// Write one company's raw response as JSON to stdout.
     Fetch {
         /// GPW company code from the current WIG20.
         code: String,
     },
-    /// Parse a raw JSON file offline and write fundamentals or a price as JSON.
+    /// Parse a raw JSON file offline as fundamentals, a quote or daily history.
     Parse {
-        /// raw.json produced by collect, prices or fetch.
+        /// raw.json produced by collect, prices, history or fetch.
         file: PathBuf,
     },
 }
@@ -72,7 +81,10 @@ async fn run(cli: Cli) -> Result<()> {
         Command::Parse { file } => {
             let raw = read_raw(&file).with_context(|| format!("reading {}", file.display()))?;
             match raw.source {
-                Source::GpwPrices | Source::TradingViewIdc => print_json(&parse_price_document(&raw)?),
+                Source::Stooq => print_json(&parse_history_document(&raw)?),
+                Source::GpwPrices | Source::TradingViewIdc => {
+                    print_json(&parse_price_document(&raw)?)
+                }
                 _ => print_json(&parse_document(&raw)?),
             }
         }
@@ -87,7 +99,94 @@ async fn run(cli: Cli) -> Result<()> {
         }
         Command::Collect { code, output } => collect(code.as_deref(), output).await,
         Command::Prices { code, output } => collect_prices(code.as_deref(), output).await,
+        Command::History { code, output } => collect_history(code.as_deref(), output).await,
     }
+}
+
+fn stooq_api_key() -> Result<String> {
+    match std::env::var("STOOQ_API_KEY") {
+        Ok(value) => return Ok(value),
+        Err(std::env::VarError::NotUnicode(_)) => bail!("STOOQ_API_KEY must be valid UTF-8"),
+        Err(std::env::VarError::NotPresent) => {}
+    }
+    // Read .env without mutating the process environment after Tokio starts.
+    let entries = match dotenvy::dotenv_iter() {
+        Ok(entries) => entries,
+        Err(dotenvy::Error::Io(error)) if error.kind() == io::ErrorKind::NotFound => {
+            return Err(SourceError::MissingStooqApiKey.into());
+        }
+        Err(_) => bail!("could not read .env for STOOQ_API_KEY"),
+    };
+    for entry in entries {
+        // dotenv parse errors can include the original line and its secret.
+        let (name, value) = entry.map_err(|_| anyhow::anyhow!("invalid .env syntax"))?;
+        if name == "STOOQ_API_KEY" {
+            return Ok(value);
+        }
+    }
+    Err(SourceError::MissingStooqApiKey.into())
+}
+
+async fn collect_history(code: Option<&str>, output: PathBuf) -> Result<()> {
+    let client = StooqClient::new(stooq_api_key()?)?;
+    let symbols = StooqSymbolMap::bundled()?;
+    let instruments = match code {
+        Some(code) => vec![symbols.instrument(code)?],
+        None => {
+            let gpw = GpwClient::new()?;
+            let mut instruments = collect_instruments(&gpw, None, &output).await?;
+            instruments.push(Instrument::wig20_index());
+            instruments
+        }
+    };
+
+    let total = instruments.len();
+    let mut failures = 0;
+    for instrument in instruments {
+        let result = async {
+            let symbol = symbols.symbol_for(&instrument)?;
+            let raw = client.fetch_history(&instrument, symbol).await?;
+            archive_history(&raw, &output)
+        }
+        .await;
+        if let Err(error) = result {
+            failures += 1;
+            eprintln!("{}: {error:#}", instrument.code);
+        }
+    }
+    eprintln!(
+        "Collected {}/{total} daily histories; output: {}",
+        total - failures,
+        output.display()
+    );
+    ensure!(
+        failures == 0,
+        "{failures} histories failed; successful observations were preserved"
+    );
+    Ok(())
+}
+
+fn archive_history(raw: &RawDocument, output: &std::path::Path) -> Result<()> {
+    let archived = archive_raw(output, raw).context("archiving Stooq CSV response")?;
+    let history = match parse_history_document(raw) {
+        Ok(history) => history,
+        Err(error) => {
+            archived.save_error(&error.to_string())?;
+            return Err(anyhow::Error::new(error)
+                .context(format!("saved response: {}", archived.raw_path().display())));
+        }
+    };
+    let path = archived.save_history(&history)?;
+    // The parser rejects an empty series; report actual coverage, including IPOs.
+    eprintln!(
+        "{}: {} daily candles, {}..{} -> {}",
+        history.instrument.code,
+        history.candles.len(),
+        history.candles.first().expect("nonempty history").date,
+        history.candles.last().expect("nonempty history").date,
+        path.display()
+    );
+    Ok(())
 }
 
 async fn collect(code: Option<&str>, output: PathBuf) -> Result<()> {
@@ -150,7 +249,9 @@ async fn collect_prices(code: Option<&str>, output: PathBuf) -> Result<()> {
             Err(error) => return Err(error),
         };
         for instrument in instruments {
-            let result = client.fetch_price(&instrument).await
+            let result = client
+                .fetch_price(&instrument)
+                .await
                 .map_err(anyhow::Error::from)
                 .and_then(|raw| archive_price(&raw, &output));
             match result {
@@ -167,7 +268,9 @@ async fn collect_prices(code: Option<&str>, output: PathBuf) -> Result<()> {
         let client = TradingViewClient::new()?;
         let pairs = pair.map_or_else(|| MarketPair::ALL.to_vec(), |pair| vec![pair]);
         for pair in pairs {
-            let result = client.fetch_price(pair).await
+            let result = client
+                .fetch_price(pair)
+                .await
                 .map_err(anyhow::Error::from)
                 .and_then(|raw| archive_price(&raw, &output));
             match result {
@@ -203,8 +306,13 @@ fn archive_price(raw: &RawDocument, output: &std::path::Path) -> Result<()> {
         }
     };
     let path = archived.save_price(&snapshot)?;
-    eprintln!("{}: {} {} -> {}", snapshot.instrument.code, snapshot.price,
-        snapshot.instrument.currency, path.display());
+    eprintln!(
+        "{}: {} {} -> {}",
+        snapshot.instrument.code,
+        snapshot.price,
+        snapshot.instrument.currency,
+        path.display()
+    );
     Ok(())
 }
 
@@ -271,4 +379,37 @@ fn print_json(value: &impl Serialize) -> Result<()> {
     serde_json::to_writer_pretty(&mut stdout, value)?;
     writeln!(stdout)?;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn history_archives_raw_http_and_parse_failures_without_a_partial_history() {
+        for (status, body) in [
+            (403, "access denied"),
+            (
+                200,
+                "Date,Open,High,Low,Close,Volume\n2024-01-02,10,1,2,5,100\n",
+            ),
+        ] {
+            let directory = tempfile::tempdir().unwrap();
+            let raw = RawDocument {
+                source: Source::Stooq,
+                instrument: Some(Instrument::wig20_index()),
+                fetched_at: chrono::Utc::now(),
+                url: "https://stooq.com/q/d/l/?s=wig20&i=d".into(),
+                http_status: status,
+                body: body.into(),
+            };
+            assert!(archive_history(&raw, directory.path()).is_err());
+            let entries: Vec<_> = std::fs::read_dir(directory.path()).unwrap().collect();
+            assert_eq!(entries.len(), 1);
+            let archived = entries[0].as_ref().unwrap().path();
+            assert_eq!(read_raw(&archived.join("raw.json")).unwrap(), raw);
+            assert!(archived.join("error.json").exists());
+            assert!(!archived.join("history.json").exists());
+        }
+    }
 }

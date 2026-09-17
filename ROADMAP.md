@@ -8,13 +8,13 @@ Koszyk MVP obejmuje pełne WIG20. Później możliwe będzie rozszerzenie na inn
 
 Widokiem głównym jest tabela spółek. Dla każdej spółki liczone są wyniki trzech rodzin, każdy z ustaloną wagą. Wynik końcowy to suma ważona wyników tych trzech rodzin, będąca miarą potencjału wzrostu i podstawą sortowania. Suma nie podlega normalizacji końcowej ani mapowaniu na oczekiwany procent zwrotu.
 
-Trzy rodziny wyników v1: `fundamental` — najważniejsza, obejmująca kondycję finansową, wycenę i dynamikę wyników (wzrost przychodów i zysku, nie sam poziom ROE); `technical` — trend/momentum ceny; `sentiment` — sentyment, bez ustalonego źródła danych. v1 używa jednego zestawu wag dla całego WIG20, w tym banków. Sezonowość, np. średni zwrot w danym miesiącu, jest wyłącznie późniejszą opcją, jeśli będzie dostępna historia cen.
+Trzy rodziny wyników v1: `fundamental` — najważniejsza, obejmująca kondycję finansową, wycenę i dynamikę wyników (wzrost przychodów i zysku, nie sam poziom ROE); `technical` — trend/momentum ceny i sezonowość miesięczna z wieloletniej historii dziennej; `sentiment` — sentyment, bez ustalonego źródła danych. v1 używa jednego zestawu wag dla całego WIG20, w tym banków. Sezonowość jest sygnałem wewnątrz `technical`, bez czwartej wagi; jej wzór pozostaje do opracowania w etapie scoringu.
 
 Frontend, backend i silnik scoringu w pełni w Rust. Stos: Rust, Leptos/WASM, Axum/Tokio, SurrealDB, Plotters. Import, automatyzacja i analiza również w Rust.
 
 Poza zakresem MVP: bot inwestycyjny, integracja z brokerem, dane realtime i uczenie maszynowe.
 
-Dane zbieramy od uruchomienia importera do lutego 2027, bez pobierania archiwów. Na start zapisujemy bieżące ceny, skład WIG20 i najnowsze dostępne raporty; potem kolejne aktualizacje.
+Dane zbieramy od uruchomienia importera do lutego 2027. Dla cen pobieramy także całą dostępną historię dzienną OHLCV ze Stooq, potrzebną do trendu/momentum i sezonowości; zakaz pobierania archiwów nie dotyczy cen. Bieżące kursy spółek pochodzą z GPW, a FX/złoto z TradingView. Fundamenty zbieramy wyłącznie jako bieżące dane GPW/Notoria: najnowsze dostępne raporty, potem kolejne aktualizacje, bez odtwarzania archiwum sprawozdań. Zapisujemy również bieżący skład WIG20.
 
 Po każdym etapie uzupełniamy odpowiadającą mu część `thesis/main.tex` i testujemy wykonany moduł.
 
@@ -33,6 +33,7 @@ Po każdym etapie uzupełniamy odpowiadającą mu część `thesis/main.tex` i t
 ## Etap 2. Automatyczny import i rozpoczęcie zbierania danych
 
 - [x] Przygotować importer i parser podstawowych fundamentów GPW/Notoria w Rust, z bieżącą listą WIG20 i zapisem surowych oraz odczytanych danych do JSON (`importer/`).
+- [x] Dodać `rankr-import history [CODE]`: pełna dostępna historia dzienna EOD ze Stooq dla bieżącego WIG20 i indeksu WIG20 albo jednej spółki po kodzie GPW; mapowanie kodu/ISIN, klucz API, archiwizacja surowej odpowiedzi przed parsowaniem, walidacja OHLCV i testy lokalne. Bieżący kurs z `prices` pozostaje osobną obserwacją.
 - [ ] Zaimplementować import wszystkich źródeł wybranych dla MVP w Rust i zastąpić dotychczasowe skrypty Python/Bash.
 - [ ] Uruchomić harmonogram: ceny po sesji, fundamenty po publikacji; opcjonalnie po MVP makro po publikacji i COT co tydzień z obsługą opóźnień.
 - [ ] Dodać walidację, ochronę przed duplikatami, ponowienia i rejestrowanie błędów oraz przerw w zbieraniu danych.
@@ -41,7 +42,7 @@ Po każdym etapie uzupełniamy odpowiadającą mu część `thesis/main.tex` i t
 ## Etap 3. Scoring potencjału wzrostu
 
 - [ ] Zaimplementować wynik najważniejszej rodziny `fundamental` dla pełnego WIG20, obejmującej kondycję finansową, wycenę i dynamikę wyników; dynamika obejmuje wzrost przychodów i zysku, nie sam poziom ROE.
-- [ ] Dodać wynik rodziny `technical` oparty na trendzie/momentum zgromadzonych cen; oznaczać niewystarczającą długość serii.
+- [ ] Dodać wynik rodziny `technical` oparty na trendzie/momentum oraz sezonowości cen w analogicznych miesiącach z wieloletniej historii EOD ze Stooq (docelowo około 12 lat lub więcej); oznaczać niewystarczającą długość serii dla danego sygnału. Sezonowość nie dodaje czwartej wagi.
 - [ ] Uwzględnić wynik `sentiment` jako trzecią rodzinę; źródło danych pozostaje nieustalone.
 - [ ] Obliczać potencjał wzrostu jako sumę ważoną wyników `fundamental`, `technical` i `sentiment`, bez normalizacji końcowej i mapowania na procent zwrotu. Stosować jeden zestaw wag dla całego WIG20, w tym banków, oraz prezentować wyniki rodzin i ich wagi.
 
@@ -75,7 +76,7 @@ Etap nie jest wymagany do ukończenia MVP ani przejścia do etapów 6–9.
 
 ## Etap 8. Walidacja na zebranych danych
 
-- [ ] Porównać zapisane rankingi z późniejszymi zmianami cen, korzystając wyłącznie z danych zgromadzonych od uruchomienia importera do lutego 2027.
+- [ ] Porównać zapisane rankingi z późniejszymi zmianami cen do lutego 2027. Dane fundamentalne ograniczyć do obserwacji zgromadzonych od uruchomienia importera; dla cen korzystać także z pobranego archiwum EOD, używając do sygnałów wyłącznie historii dostępnej na dzień danego rankingu.
 - [ ] Dla ocen z pełnymi 3 miesiącami obserwacji policzyć korelację Spearmana i różnicę zwrotów najwyżej oraz najniżej ocenionych spółek; porównać ustalone modele.
 - [ ] Wygenerować tabele i wykresy w Rust oraz opisać pokrycie danych, długość obserwacji i wyniki. Ocenę po 6 i 12 miesiącach pozostawić na dalsze zbieranie danych.
 

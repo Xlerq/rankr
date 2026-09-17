@@ -1,6 +1,6 @@
 use std::collections::BTreeMap;
 
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, NaiveDate, Utc};
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 
@@ -11,6 +11,16 @@ pub struct Instrument {
     pub name: String,
 }
 
+impl Instrument {
+    pub fn wig20_index() -> Self {
+        Self {
+            isin: "PL9999999987".into(),
+            code: "WIG20".into(),
+            name: "WIG20".into(),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Source {
@@ -18,6 +28,7 @@ pub enum Source {
     GpwBenchmark,
     GpwPrices,
     TradingViewIdc,
+    Stooq,
 }
 
 /// An original response, including responses that could not be parsed.
@@ -116,6 +127,29 @@ pub struct PriceSnapshot {
     pub low: Option<Decimal>,
     /// Cumulative session volume in shares; unavailable for the FX/metal feed.
     pub volume: Option<u64>,
+}
+
+/// One daily OHLCV observation, distinct from a latest-quote snapshot.
+/// Decimal values retain Stooq's scale and adjustments, including fractional volume.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DailyCandle {
+    pub date: NaiveDate,
+    pub open: Decimal,
+    pub high: Decimal,
+    pub low: Decimal,
+    pub close: Decimal,
+    pub volume: Decimal,
+}
+
+/// Available daily history from one response; no missing sessions are synthesized.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DailyPriceHistory {
+    pub instrument: Instrument,
+    pub stooq_symbol: String,
+    pub source: Source,
+    pub source_url: String,
+    pub fetched_at: DateTime<Utc>,
+    pub candles: Vec<DailyCandle>,
 }
 
 /// Financial amounts retain the source's sign, currency and unit scale.

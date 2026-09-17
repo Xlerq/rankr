@@ -10,7 +10,7 @@ use serde::{Serialize, de::DeserializeOwned};
 use tempfile::{Builder, NamedTempFile};
 use thiserror::Error;
 
-use crate::model::{FundamentalSnapshot, PriceSnapshot, RawDocument};
+use crate::model::{DailyPriceHistory, FundamentalSnapshot, PriceSnapshot, RawDocument};
 
 #[derive(Debug, Error)]
 pub enum StorageError {
@@ -40,6 +40,12 @@ impl ArchivedFetch {
     pub fn save_price(&self, snapshot: &PriceSnapshot) -> Result<PathBuf, StorageError> {
         let path = self.directory.join("price.json");
         write_json(&path, snapshot)?;
+        Ok(path)
+    }
+
+    pub fn save_history(&self, history: &DailyPriceHistory) -> Result<PathBuf, StorageError> {
+        let path = self.directory.join("history.json");
+        write_json(&path, history)?;
         Ok(path)
     }
 
