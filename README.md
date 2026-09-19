@@ -43,7 +43,7 @@ extensions after MVP.
 
 The `rankr-import` Rust CLI fetches basic fundamentals for the current WIG20 from
 GPW / Notoria. GPW Benchmark supplies the current company list; use its company
-codes (`KGHM`, `PKOBP`, `PZU`), not Stooq tickers. Codes are case-insensitive.
+codes (`KGHM`, `PKOBP`, `PZU`), not provider tickers. Codes are case-insensitive.
 
 Install once from the repository root:
 
@@ -106,7 +106,8 @@ importer/src/
   source.rs   # HTTP client and current WIG20 composition
   parser.rs   # pure HTML/raw document -> typed fundamentals/snapshot
   prices.rs   # pure current-quote parsing
-  history.rs  # GPW/Stooq symbol mapping and pure daily OHLCV CSV parsing
+  history.rs  # GPW/Yahoo symbol mapping and legacy archive parsing
+  yahoo.rs    # pure Yahoo daily OHLCV JSON parsing and validation
   storage.rs  # raw and parsed JSON archive
   main.rs     # CLI and orchestration
 ```
@@ -125,63 +126,85 @@ cargo test --workspace --locked
 cargo clippy --workspace --all-targets --locked -- -D warnings
 ```
 
-Tests use small fixtures and local HTTP servers, without contacting GPW, Stooq or
+Tests use small fixtures and local HTTP servers, without contacting GPW, Yahoo or
 TradingView. Old Python/Bash scripts and `data/raw/` samples remain as earlier
 research material. Detailed banking fundamentals, macro data and scoring are
 later steps.
 
-## Daily price history
+## Daily company prices and history
 
-`history` downloads the entire available Stooq daily OHLCV series. It supplies
-price data for `technical`: trend/momentum and seasonal price behaviour in the
-same months over roughly 12 or more years. A newer listing may have a shorter
-history; the command reports the candle count and actual date range. Identifying
-insufficient history for a signal belongs to the later scoring stage.
-
-Set `STOOQ_API_KEY` in the environment or in a local `.env` file (the environment
-takes precedence):
+Company daily prices come from Yahoo Finance's chart endpoint. No account, API key
+or `.env` file is needed. Use GPW company codes, such as `KGHM` and `PKOBP`:
 
 ```bash
-export STOOQ_API_KEY='your-api-key'
-rankr-import history
-rankr-import history KGHM
-rankr-import history PKOBP --output /path/to/archive
+rankr-import history KGHM   # entire available daily history
+rankr-import history        # current WIG20 companies
+rankr-import prices KGHM    # latest complete, finished daily candle
+rankr-import prices         # current WIG20 daily candles plus FX/gold quotes
 ```
 
-Without a code, the command obtains the current WIG20 basket from GPW Benchmark
-and adds the WIG20 index. With a code, it imports one company. Use GPW codes such
-as `KGHM`, not Stooq tickers such as `kgh`. The bundled
-`data/raw/wig20_symbols.csv` maps the GPW code and ISIN to a Stooq symbol. A new or
-changed constituent without a matching mapping produces an error; update the
-mapping and rebuild/reinstall the importer rather than guessing its ticker.
+After changing the source, run the checkout with
+`cargo run --locked -p rankr-import -- history KGHM`, or reinstall using
+`cargo install --path importer --locked --force`.
 
-The request uses the daily interval without date limits. Each response creates
-an immutable observation under `data/collected/`:
+`history` requests `interval=1d`, `period1=0`, and the current timestamp as `period2`.
+It avoids `range=max`, which can aggregate long histories. `prices` requests the
+last month of daily candles and archives the latest complete, finished candle.
+Both company commands write the same `history.json` structure; company `prices`
+no longer writes an intraday `price.json` snapshot.
+
+Without CODE, GPW Benchmark supplies the current company list. The bundled
+`data/raw/wig20_symbols.csv` maps GPW code and ISIN to an explicit `yahoo_symbol`
+(e.g. `KGH.WA`, `PKO.WA`, `EBP.WA`, `MDV.WA`). Unknown or changed mappings fail
+rather than guessing tickers. Update the map and rebuild/reinstall when needed.
+The WIG20 index itself is excluded: Yahoo did not provide usable historical
+coverage for it. `history WIG20` is unsupported; the company basket still comes
+from the live WIG20 portfolio.
+
+Each response creates an immutable observation:
 
 ```text
 data/collected/<timestamp>-<suffix>/
-  raw.json      # original CSV body, source, instrument, fetch time, HTTP status, URL
-  history.json  # source=stooq, instrument, symbol, metadata and daily candles
+  raw.json      # original Yahoo JSON body, company, fetch time, HTTP status, URL
+  history.json  # source=yahoo_finance, symbol, currency, candles, skipped_candles
 ```
 
-The API key is omitted from the archived URL. The raw response is saved before
-parsing; HTTP or CSV failures leave `raw.json` and `error.json`. Other companies
-continue to be collected, with a nonzero exit status if any failed. Full histories
-stay in the ignored `data/collected/` directory and must not be committed.
+Each candle contains `date`, `open`, `high`, `low`, `close`, `adjusted_close`, and
+`volume`. Numbers are Decimal values serialized as decimal strings, preserving
+Yahoo's precision, including its visible floating-point artifacts. `close` and
+Yahoo's split/dividend-adjusted `adjusted_close` are stored separately; no dividend
+or split adjustments are recomputed. The importer does not calculate seasonality
+or change its formula. Available history may be shorter than the planned signal
+lookback, especially for recent listings.
 
-Each candle has a date and Decimal OHLCV values, serialized as decimal strings,
-including fractional volume. The parser checks nonnegative values, OHLC bounds
-and unique dates, then sorts candles by date. It preserves Stooq's scale and
-price adjustments, without filling missing sessions or recalculating dividends.
-An archived response can be parsed offline:
+Dates use `Europe/Warsaw`, including DST. Today's candle is withheld until Yahoo's
+regular session end plus a 15-minute publication margin; unknown session timing
+also withholds today's candle. Older sessions are eligible. Null values (including
+adjusted close), invalid values and inconsistent OHLC ranges are omitted and listed
+in `skipped_candles` with their dates and reasons, with a warning on stderr. No
+missing sessions are filled, no high/low values are swapped, and a live quote is
+never substituted for a missing daily close. Check the reported final date: the
+latest complete candle can be older than the latest session if Yahoo has gaps.
+
+HTTP/API errors, malformed JSON, mismatched metadata/array lengths, duplicate dates,
+or a response without usable finished candles leave `raw.json` and `error.json`.
+Other companies continue, and the command exits unsuccessfully if any company
+failed. A usable series with omitted rows is saved with its explicit quality report.
+Yahoo's chart endpoint is unofficial and may change or throttle requests. The
+collector spaces company requests by 500 ms and uses the shared bounded retries.
+
+Full histories remain in ignored `data/collected/` and must not be committed. An
+archived response can be parsed offline (all usable candles from the raw response,
+including the recent month downloaded by `prices`):
 
 ```bash
 rankr-import parse /path/to/observation/raw.json > /tmp/history.json
 ```
 
-`rankr-import prices [CODE]` remains available for current GPW quotes and
-TradingView FX/gold quotes. These produce `price.json` snapshots; they are not
-daily history and are not stored as `price_daily` candles by this importer.
+Offline parsing also supports old Stooq CSV and GPW quote archives. There are no
+active Stooq downloads or GPW company-price requests. The earlier Stooq samples
+and database seed retain their original source labels. FX/gold commands such as
+`prices USDPLN` use TradingView and write their existing `price.json` snapshots.
 
 ## Planned Stack
 

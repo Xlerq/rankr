@@ -8,7 +8,7 @@ The scoring contract ranks WIG20 companies by relative growth potential over 3�
 
 - `instrument` — stocks and indices, including source-specific symbols.
 - `index_membership` — WIG20 membership and GPW Benchmark index weights.
-- `price_daily` — Stooq daily OHLCV observations.
+- `price_daily` — Yahoo daily OHLCV and adjusted close; legacy Stooq samples retain their source.
 - `fundamental_snapshot` — GPW / Notoria financial snapshots.
 - `macro_observation` — NBP FX and gold observations.
 - `score_config` — weights for the fundamental, technical, and sentiment families, plus configuration metadata.
@@ -21,7 +21,7 @@ In future historical analysis, `fundamental_snapshot` should probably gain `publ
 
 ## Validation notes
 
-The Stooq daily-history importer rejects malformed candles:
+The daily-history importer rejects malformed candles:
 
 - `high >= open`
 - `high >= close`
@@ -30,10 +30,15 @@ The Stooq daily-history importer rejects malformed candles:
 - `low <= close`
 - `low <= high`
 
-`rankr-import history` archives Stooq EOD candles as `history.json` for later
-database integration. Current GPW/TradingView quotes from `prices` are separate
-`price.json` snapshots, not `price_daily` observations. The EOD source remains
-`stooq`.
+`rankr-import history` archives Yahoo daily company candles as `history.json` for
+later database integration. Company `prices` archives the latest complete,
+finished candle in the same format. `source` is `yahoo_finance`, and
+`adjusted_close` remains separate from `close`; no adjustments or seasonality
+are calculated here. `skipped_candles` in the importer archive records missing,
+invalid or unfinished observations. TradingView FX/gold quotes remain separate
+`price.json` snapshots. Historical Stooq seeds are retained as `stooq`, not
+relabeled as Yahoo; their optional `adjusted_close` is absent. The importer still
+has no database connection.
 
 The v1 scoring contract has exactly three families:
 
@@ -95,7 +100,7 @@ These endpoints are not implemented yet. This is the planned response shape for 
   "exchange": "GPW",
   "currency": "PLN",
   "sector": "Mining",
-  "stooq_symbol": "kgh",
+  "yahoo_symbol": "KGH.WA",
   "gpw_code": "KGHM",
   "gpwbenchmark_name": "KGHM",
   "is_active": true
@@ -103,6 +108,9 @@ These endpoints are not implemented yet. This is the planned response shape for 
 ```
 
 `GET /api/prices/{symbol}`
+
+Legacy Stooq sample below; new Yahoo rows use `source: "yahoo_finance"` and
+include a separate `adjusted_close` field.
 
 ```json
 {

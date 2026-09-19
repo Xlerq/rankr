@@ -103,7 +103,7 @@ for table in "${required_tables[@]}"; do
   require_grep "^DEFINE TABLE ${table} SCHEMAFULL;" "$SCHEMA" "missing SCHEMAFULL table: ${table}"
 done
 
-for field in symbol name isin type exchange currency sector stooq_symbol gpw_code gpwbenchmark_name is_active created_at updated_at; do
+for field in symbol name isin type exchange currency sector stooq_symbol yahoo_symbol gpw_code gpwbenchmark_name is_active created_at updated_at; do
   require_table_field instrument "$field"
 done
 require_index 'DEFINE INDEX instrument_symbol_unique ON TABLE instrument FIELDS symbol UNIQUE;' \
@@ -115,7 +115,7 @@ done
 require_index 'DEFINE INDEX index_membership_unique[[:space:]]+ON TABLE index_membership[[:space:]]+FIELDS index, instrument, as_of[[:space:]]+UNIQUE;' \
   "missing unique index on index_membership index+instrument+as_of"
 
-for field in instrument date open high low close volume source; do
+for field in instrument date open high low close adjusted_close volume source; do
   require_table_field price_daily "$field"
 done
 require_index 'DEFINE INDEX price_daily_unique[[:space:]]+ON TABLE price_daily[[:space:]]+FIELDS instrument, date, source[[:space:]]+UNIQUE;' \
@@ -204,7 +204,7 @@ awk -v fundamental="$fundamental_score" -v fundamental_weight="$fundamental_weig
 for field in source operation status instrument target_symbol started_at finished_at rows_count date_from date_to raw_file_path error_message notes; do
   require_table_field data_source_log "$field"
 done
-require_grep 'ASSERT \$value INSIDE \["stooq", "gpwbenchmark", "gpw_notoria", "nbp", "manual"\];' "$SCHEMA" \
+require_grep 'ASSERT \$value INSIDE \["yahoo_finance", "stooq", "gpwbenchmark", "gpw_notoria", "nbp", "manual"\];' "$SCHEMA" \
   "data_source_log.source must restrict allowed sources"
 require_grep 'ASSERT \$value INSIDE \["success", "failed", "partial"\];' "$SCHEMA" \
   "data_source_log.status must restrict allowed statuses"

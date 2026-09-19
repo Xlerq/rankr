@@ -40,6 +40,7 @@ CSV_FIELDS = [
     "index_weight",
     "source",
     "checked_at",
+    "yahoo_symbol",
 ]
 
 SYMBOL_MAP = {
@@ -233,8 +234,9 @@ def build_symbol_rows(
         gpw_name = entry["instrument"]
         mapping = SYMBOL_MAP.get(gpw_name)
 
+        yahoo_symbol = mapping["symbol"] + ".WA" if mapping is not None else ""
         if mapping is None:
-            notes.append(f"No local Stooq mapping for GPW Benchmark instrument: {gpw_name}")
+            notes.append(f"No local source mapping for GPW Benchmark instrument: {gpw_name}")
             mapping = {
                 "symbol": gpw_name,
                 "name": gpw_name,
@@ -255,6 +257,7 @@ def build_symbol_rows(
                 "index_weight": entry["index_weight"],
                 "source": "GPWBenchmark_WIG20_portfolio",
                 "checked_at": checked_at,
+                "yahoo_symbol": yahoo_symbol,
             }
         )
 

@@ -58,7 +58,7 @@ validate_wig20_symbols_csv() {
   local rows
 
   header="$(head -n 1 "$file")"
-  [[ "$header" == "symbol,name,isin,stooq_symbol,gpw_code,gpwbenchmark_name,sector,currency,index_weight,source,checked_at" ]] ||
+  [[ "$header" == "symbol,name,isin,stooq_symbol,gpw_code,gpwbenchmark_name,sector,currency,index_weight,source,checked_at,yahoo_symbol" ]] ||
     die "invalid wig20_symbols.csv header: $header"
 
   rows="$(( $(wc -l < "$file") - 1 ))"

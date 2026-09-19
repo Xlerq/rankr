@@ -28,6 +28,8 @@ pub enum Source {
     GpwBenchmark,
     GpwPrices,
     TradingViewIdc,
+    YahooFinance,
+    /// Retained for offline parsing of earlier archives.
     Stooq,
 }
 
@@ -130,7 +132,7 @@ pub struct PriceSnapshot {
 }
 
 /// One daily OHLCV observation, distinct from a latest-quote snapshot.
-/// Decimal values retain Stooq's scale and adjustments, including fractional volume.
+/// Decimal values retain the provider's precision without a floating-point conversion.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct DailyCandle {
     pub date: NaiveDate,
@@ -138,18 +140,41 @@ pub struct DailyCandle {
     pub high: Decimal,
     pub low: Decimal,
     pub close: Decimal,
+    /// Yahoo's split/dividend-adjusted close; legacy Stooq CSV has no separate field.
+    #[serde(default)]
+    pub adjusted_close: Option<Decimal>,
     pub volume: Decimal,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SkippedCandleReason {
+    MissingValues,
+    InvalidValues,
+    InvalidRange,
+    UnfinishedSession,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SkippedCandle {
+    pub date: NaiveDate,
+    pub reason: SkippedCandleReason,
 }
 
 /// Available daily history from one response; no missing sessions are synthesized.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct DailyPriceHistory {
     pub instrument: Instrument,
-    pub stooq_symbol: String,
+    #[serde(alias = "stooq_symbol")]
+    pub symbol: String,
+    pub currency: String,
     pub source: Source,
     pub source_url: String,
     pub fetched_at: DateTime<Utc>,
     pub candles: Vec<DailyCandle>,
+    /// Invalid/missing candles are reported, never filled or silently repaired.
+    #[serde(default)]
+    pub skipped_candles: Vec<SkippedCandle>,
 }
 
 /// Financial amounts retain the source's sign, currency and unit scale.

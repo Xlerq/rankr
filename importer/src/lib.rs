@@ -8,3 +8,4 @@ pub mod parser;
 pub mod prices;
 pub mod source;
 pub mod storage;
+mod yahoo;

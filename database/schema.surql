@@ -27,6 +27,8 @@ DEFINE FIELD sector ON TABLE instrument TYPE option<string>;
 
 DEFINE FIELD stooq_symbol ON TABLE instrument TYPE option<string>;
 
+DEFINE FIELD yahoo_symbol ON TABLE instrument TYPE option<string>;
+
 DEFINE FIELD gpw_code ON TABLE instrument TYPE option<string>;
 
 DEFINE FIELD gpwbenchmark_name ON TABLE instrument TYPE option<string>;
@@ -82,11 +84,14 @@ DEFINE FIELD low ON TABLE price_daily TYPE number
 DEFINE FIELD close ON TABLE price_daily TYPE number
   ASSERT $value >= 0;
 
+DEFINE FIELD adjusted_close ON TABLE price_daily TYPE option<number>
+  ASSERT $value = NONE OR $value > 0;
+
 DEFINE FIELD volume ON TABLE price_daily TYPE number
   ASSERT $value >= 0;
 
 DEFINE FIELD source ON TABLE price_daily TYPE string
-  ASSERT $value INSIDE ["stooq", "manual"];
+  ASSERT $value INSIDE ["yahoo_finance", "stooq", "manual"];
 
 DEFINE INDEX price_daily_unique
   ON TABLE price_daily
@@ -259,7 +264,7 @@ DEFINE INDEX score_result_unique
 DEFINE TABLE data_source_log SCHEMAFULL;
 
 DEFINE FIELD source ON TABLE data_source_log TYPE string
-  ASSERT $value INSIDE ["stooq", "gpwbenchmark", "gpw_notoria", "nbp", "manual"];
+  ASSERT $value INSIDE ["yahoo_finance", "stooq", "gpwbenchmark", "gpw_notoria", "nbp", "manual"];
 
 DEFINE FIELD operation ON TABLE data_source_log TYPE string
   ASSERT $value != "";

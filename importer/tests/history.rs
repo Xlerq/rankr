@@ -1,6 +1,6 @@
 use chrono::{NaiveDate, TimeZone, Utc};
 use rankr_import::{
-    history::{HistoryError, StooqSymbolMap, parse_daily_csv, parse_history_document},
+    history::{HistoryError, YahooSymbolMap, parse_daily_csv, parse_history_document},
     model::{Instrument, RawDocument, Source},
     storage::{archive_raw, read_raw},
 };
@@ -11,7 +11,7 @@ fn raw() -> RawDocument {
     RawDocument {
         source: Source::Stooq,
         instrument: Some(
-            StooqSymbolMap::bundled()
+            YahooSymbolMap::bundled()
                 .unwrap()
                 .instrument("KGHM")
                 .unwrap(),
@@ -28,7 +28,7 @@ fn preserves_csv_precision_fractional_volume_and_close_scale() {
     let history = parse_history_document(&raw()).unwrap();
     assert_eq!(history.source, Source::Stooq);
     assert_eq!(history.instrument.code, "KGHM");
-    assert_eq!(history.stooq_symbol, "kgh");
+    assert_eq!(history.symbol, "kgh");
     assert_eq!(history.candles.len(), 3);
     assert_eq!(
         history.candles[0].date,
@@ -116,20 +116,46 @@ fn rejects_empty_responses_duplicate_dates_and_non_daily_documents() {
 }
 
 #[test]
+fn diagnoses_stooq_access_errors_returned_with_http_200() {
+    let mut document = raw();
+    document.body = "\u{feff}Access denied\r\n".into();
+    assert!(matches!(
+        parse_history_document(&document),
+        Err(HistoryError::AccessDenied)
+    ));
+
+    for body in [
+        "<!DOCTYPE html><html><body><noscript>This site requires JavaScript to verify your browser. Please enable JavaScript and reload.</noscript></body></html>",
+        "<!DOCTYPE html><html><body><noscript>Ta strona wymaga JavaScriptu do weryfikacji przeglądarki. Włącz JavaScript i odśwież stronę.</noscript></body></html>",
+        "<html><script>fetch(\"/__verify\", {method: \"POST\"})</script></html>",
+    ] {
+        document.body = body.into();
+        assert!(matches!(
+            parse_history_document(&document),
+            Err(HistoryError::BrowserVerificationRequired)
+        ));
+    }
+
+    // An unrelated HTML response must not be diagnosed as browser verification.
+    document.body = "<html>Service unavailable</html>".into();
+    assert!(matches!(
+        parse_history_document(&document),
+        Err(HistoryError::InvalidHeader)
+    ));
+}
+
+#[test]
 fn resolves_gpw_codes_and_checks_isin_instead_of_guessing_symbols() {
-    let symbols = StooqSymbolMap::bundled().unwrap();
+    let symbols = YahooSymbolMap::bundled().unwrap();
     let kghm = symbols.instrument("kGhM").unwrap();
-    assert_eq!(symbols.symbol_for(&kghm).unwrap(), "kgh");
+    assert_eq!(symbols.symbol_for(&kghm).unwrap(), "KGH.WA");
     assert_eq!(
         symbols
             .symbol_for(&symbols.instrument("PKOBP").unwrap())
             .unwrap(),
-        "pko"
+        "PKO.WA"
     );
-    assert_eq!(
-        symbols.symbol_for(&Instrument::wig20_index()).unwrap(),
-        "wig20"
-    );
+    assert!(symbols.symbol_for(&Instrument::wig20_index()).is_err());
     assert!(symbols.instrument("kgh").is_err());
     let mut wrong_isin = kghm;
     wrong_isin.isin = "PL0000000000".into();
@@ -150,11 +176,11 @@ fn resolves_gpw_codes_and_checks_isin_instead_of_guessing_symbols() {
 
 #[test]
 fn rejects_ambiguous_or_empty_symbol_maps() {
-    let header = "gpw_code,isin,name,stooq_symbol\n";
-    let row = "KGHM,PLKGHM000017,KGHM,kgh\n";
-    assert!(StooqSymbolMap::from_csv(header).is_err());
-    assert!(StooqSymbolMap::from_csv(&format!("{header}{row}{row}")).is_err());
-    assert!(StooqSymbolMap::from_csv(&format!("{header}KGHM,PLKGHM000017,KGHM,\n")).is_err());
+    let header = "gpw_code,isin,name,yahoo_symbol\n";
+    let row = "KGHM,PLKGHM000017,KGHM,KGH.WA\n";
+    assert!(YahooSymbolMap::from_csv(header).is_err());
+    assert!(YahooSymbolMap::from_csv(&format!("{header}{row}{row}")).is_err());
+    assert!(YahooSymbolMap::from_csv(&format!("{header}KGHM,PLKGHM000017,KGHM,\n")).is_err());
 }
 
 #[test]

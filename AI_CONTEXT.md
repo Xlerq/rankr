@@ -33,7 +33,7 @@ Do not recreate scattered thesis documentation in `docs/`. Put thesis content in
 
 Build around this flow:
 
-1. Import reference data, full available Stooq daily OHLCV history, and financial data for the full WIG20.
+1. Import reference data, full available Yahoo daily company OHLCV history, and financial data for the full WIG20.
 2. Store instruments, prices, financial data, score configs, score results, and source logs in SurrealDB.
 3. Calculate deterministic growth-potential scoring as the sum (component score × weight).
 4. Store score results over time.
@@ -103,7 +103,7 @@ Database contract: `score_config` and `score_result` in `database/schema.surql` 
 ## Current implementation and scope
 
 The Rust workspace currently contains the `rankr-import` package in `importer/`.
-It collects basic GPW/Notoria fundamentals, current quotes and Stooq daily history,
+It collects basic GPW/Notoria fundamentals, Yahoo daily company prices/history and TradingView FX/gold quotes,
 and obtains the current WIG20 list from GPW Benchmark. CLI: `collect [CODE]`,
 `prices [CODE]`, `history [CODE]`, `fetch CODE`, `parse FILE`.
 
@@ -117,17 +117,23 @@ and obtains the current WIG20 list from GPW Benchmark. CLI: `collect [CODE]`,
   contract; other collections retain their earlier design and are not the active
   importer contract.
 - The next storage integration is SurrealDB in the same application/data pipeline.
-- Price source contract: EOD daily history comes from Stooq; current company
-  quotes come from GPW; FX/gold quotes come from TradingView as implemented.
-  A latest-quote snapshot is not a daily candle and cannot replace EOD history.
-- `history` requires `STOOQ_API_KEY` from env or `.env`. Without CODE, collect
-  the live WIG20 basket plus its index; with CODE, use a GPW company code.
-  Map GPW code and ISIN using the bundled `data/raw/wig20_symbols.csv`; fail on
-  missing mappings instead of guessing Stooq tickers. Request all available
-  daily history and preserve raw CSV responses before parsing to `history.json`.
-  Keep full histories in ignored `data/collected/`, with API keys out of archived
-  URLs. Preserve Decimal OHLCV values and Stooq adjustments; do not recalculate
-  dividends. `price_daily.source` remains `stooq` for EOD data.
+- Price source contract: company daily prices and full daily history come from
+  Yahoo Finance without API keys. `prices CODE` selects the latest complete,
+  finished daily candle; `history CODE` requests all available daily history.
+  Both save `history.json` with source `yahoo_finance`. FX/gold quotes come from
+  TradingView and remain `price.json` snapshots.
+- Without CODE, collect the live WIG20 companies. Do not add the index itself:
+  Yahoo has insufficient WIG20 index history. Map GPW code and ISIN to the bundled
+  `yahoo_symbol` in `data/raw/wig20_symbols.csv`; never guess missing identifiers.
+- Preserve raw responses before parsing and keep full histories in ignored
+  `data/collected/`. Use explicit daily request bounds, not `range=max`.
+  Preserve Decimal OHLCV and a separate provider `adjusted_close`; do not
+  recompute dividends/splits or implement seasonality during data-source work.
+- Use Warsaw session dates. Exclude today's candle before the regular session end
+  plus 15 minutes. Record missing/invalid candles in `skipped_candles`, without
+  filling gaps or substituting live quotes. Reject structural/identity errors.
+- Retain offline parsing of legacy Stooq and GPW archives and their source labels.
+  No Stooq or GPW company-price downloads remain in the active importer.
 - Price archives are required for technical signals. Fundamentals remain current
   GPW/Notoria observations collected over time; do not invent report history.
   Detailed bank fundamentals come later.

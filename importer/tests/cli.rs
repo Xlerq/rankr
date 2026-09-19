@@ -68,7 +68,7 @@ fn history_parse_is_offline_and_preserves_daily_decimals() {
     let mut document = raw();
     document.source = Source::Stooq;
     document.instrument = Some(
-        rankr_import::history::StooqSymbolMap::bundled()
+        rankr_import::history::YahooSymbolMap::bundled()
             .unwrap()
             .instrument("KGHM")
             .unwrap(),
@@ -94,48 +94,56 @@ fn history_parse_is_offline_and_preserves_daily_decimals() {
 }
 
 #[test]
-fn history_requires_a_key_before_attempting_any_network_request() {
+fn daily_commands_do_not_read_dotenv_or_require_an_api_key() {
     let directory = tempfile::tempdir().unwrap();
-    fs::write(directory.path().join(".env"), "# no API key\n").unwrap();
-    let result = Command::new(env!("CARGO_BIN_EXE_rankr-import"))
-        .arg("history")
-        .current_dir(directory.path())
-        .env_remove("STOOQ_API_KEY")
-        .env("HTTPS_PROXY", "http://127.0.0.1:1")
-        .output()
-        .unwrap();
-    assert!(!result.status.success());
-    assert!(result.stdout.is_empty());
-    assert!(String::from_utf8_lossy(&result.stderr).contains("missing STOOQ_API_KEY"));
-    assert!(!directory.path().join("data").exists());
+    fs::write(directory.path().join(".env"), "invalid dotenv syntax = '\n").unwrap();
+    for command in ["prices", "history"] {
+        let result = Command::new(env!("CARGO_BIN_EXE_rankr-import"))
+            .args([command, "NOTACOMPANY"])
+            .current_dir(directory.path())
+            .env_remove("STOOQ_API_KEY")
+            .env("HTTPS_PROXY", "http://127.0.0.1:1")
+            .output()
+            .unwrap();
+        let error = String::from_utf8_lossy(&result.stderr);
+        assert!(!result.status.success());
+        assert!(error.contains("unknown GPW code"), "{error}");
+        assert!(!error.contains("API_KEY"));
+        assert!(!error.contains("dotenv"));
+        assert!(!directory.path().join("data").exists());
+    }
 }
 
 #[test]
-fn history_reads_dotenv_but_environment_takes_precedence() {
+fn yahoo_parse_is_offline_and_preserves_adjusted_close_separately() {
     let directory = tempfile::tempdir().unwrap();
-    fs::write(
-        directory.path().join(".env"),
-        "STOOQ_API_KEY='fixture-secret'\n",
-    )
-    .unwrap();
-    // An unknown code stops before HTTP, after credentials have been loaded.
+    let input = directory.path().join("raw.json");
+    let mut document = raw();
+    document.source = Source::YahooFinance;
+    document.instrument = Some(
+        rankr_import::history::YahooSymbolMap::bundled()
+            .unwrap()
+            .instrument("KGHM")
+            .unwrap(),
+    );
+    document.url = "https://query1.finance.yahoo.com/v8/finance/chart/KGH.WA?interval=1d&period1=0&period2=1789776000".into();
+    document.body = include_str!("fixtures/yahoo_daily.json").into();
+    fs::write(&input, serde_json::to_vec(&document).unwrap()).unwrap();
     let result = Command::new(env!("CARGO_BIN_EXE_rankr-import"))
-        .args(["history", "kgh"])
-        .current_dir(directory.path())
-        .env_remove("STOOQ_API_KEY")
+        .args(["parse", input.to_str().unwrap()])
+        .env("HTTPS_PROXY", "http://127.0.0.1:1")
         .output()
         .unwrap();
-    assert!(!result.status.success());
-    let error = String::from_utf8_lossy(&result.stderr);
-    assert!(error.contains("unknown GPW code"), "{error}");
-    assert!(!error.contains("fixture-secret"));
-
-    let result = Command::new(env!("CARGO_BIN_EXE_rankr-import"))
-        .args(["history", "KGHM"])
-        .current_dir(directory.path())
-        .env("STOOQ_API_KEY", "")
-        .output()
-        .unwrap();
-    assert!(!result.status.success());
-    assert!(String::from_utf8_lossy(&result.stderr).contains("missing STOOQ_API_KEY"));
+    assert!(
+        result.status.success(),
+        "{}",
+        String::from_utf8_lossy(&result.stderr)
+    );
+    assert!(result.stderr.is_empty());
+    let json: Value = serde_json::from_slice(&result.stdout).unwrap();
+    assert_eq!(json["source"], "yahoo_finance");
+    assert_eq!(json["symbol"], "KGH.WA");
+    assert_eq!(json["candles"][0]["close"], "118.95100");
+    assert_eq!(json["candles"][0]["adjusted_close"], "112.234567890123");
+    assert!(json.get("stooq_symbol").is_none());
 }

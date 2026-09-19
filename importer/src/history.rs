@@ -1,4 +1,4 @@
-//! Pure Stooq symbol mapping and daily CSV parsing. No HTTP or filesystem access.
+//! GPW/Yahoo identifiers and daily history parsing, including legacy Stooq archives.
 
 use std::collections::HashSet;
 
@@ -13,13 +13,19 @@ use crate::model::{DailyCandle, DailyPriceHistory, Instrument, RawDocument, Sour
 pub enum HistoryError {
     #[error("HTTP {0}; response does not contain successful daily history")]
     HttpStatus(u16),
-    #[error("expected a Stooq daily history response")]
+    #[error("expected a Yahoo daily history response or a legacy Stooq archive")]
     InvalidSource,
-    #[error("raw daily history is missing the instrument or daily Stooq symbol")]
+    #[error("raw daily history is missing its instrument or daily source symbol")]
     MissingInstrument,
-    #[error("unexpected Stooq CSV header; check STOOQ_API_KEY and the symbol")]
+    #[error("legacy Stooq archive contains Access denied instead of daily CSV")]
+    AccessDenied,
+    #[error(
+        "legacy Stooq archive contains a JavaScript browser verification page instead of daily CSV"
+    )]
+    BrowserVerificationRequired,
+    #[error("unexpected Stooq CSV header; inspect the raw response body")]
     InvalidHeader,
-    #[error("Stooq returned no daily candles; check STOOQ_API_KEY and the symbol")]
+    #[error("legacy Stooq archive contains no daily candles")]
     EmptyHistory,
     #[error("invalid CSV: {0}")]
     Csv(#[from] csv::Error),
@@ -29,14 +35,18 @@ pub enum HistoryError {
     InvalidRange(usize),
     #[error("duplicate daily candle for {0}")]
     DuplicateDate(NaiveDate),
-    #[error("empty or ambiguous GPW/Stooq symbol mapping")]
+    #[error("invalid Yahoo history: {0}")]
+    Yahoo(String),
+    #[error("invalid Yahoo JSON: {0}")]
+    Json(#[from] serde_json::Error),
+    #[error("empty or ambiguous GPW/Yahoo symbol mapping")]
     InvalidSymbolMap,
     #[error(
-        "unknown GPW code {0:?}; use a gpw_code from data/raw/wig20_symbols.csv, not a Stooq ticker"
+        "unknown GPW code {0:?}; use a gpw_code from data/raw/wig20_symbols.csv, not a Yahoo ticker"
     )]
     UnknownCode(String),
     #[error(
-        "no matching Stooq mapping for GPW code {code} and ISIN {isin}; update data/raw/wig20_symbols.csv and rebuild"
+        "no matching Yahoo mapping for GPW code {code} and ISIN {isin}; update data/raw/wig20_symbols.csv and rebuild"
     )]
     MissingMapping { code: String, isin: String },
 }
@@ -46,15 +56,15 @@ struct SymbolMapping {
     gpw_code: String,
     isin: String,
     name: String,
-    stooq_symbol: String,
+    yahoo_symbol: String,
 }
 
 /// Bundled identifiers survive `cargo install`; constituent selection remains live.
-pub struct StooqSymbolMap {
+pub struct YahooSymbolMap {
     entries: Vec<SymbolMapping>,
 }
 
-impl StooqSymbolMap {
+impl YahooSymbolMap {
     pub fn bundled() -> Result<Self, HistoryError> {
         Self::from_csv(include_str!("../../data/raw/wig20_symbols.csv"))
     }
@@ -73,10 +83,15 @@ impl StooqSymbolMap {
                 entry.gpw_code.is_empty()
                     || entry.isin.is_empty()
                     || entry.name.is_empty()
-                    || entry.stooq_symbol.is_empty()
+                    || !entry.yahoo_symbol.ends_with(".WA")
+                    || entry.yahoo_symbol.len() <= 3
+                    || !entry
+                        .yahoo_symbol
+                        .bytes()
+                        .all(|byte| byte.is_ascii_alphanumeric() || byte == b'.')
                     || !codes.insert(entry.gpw_code.to_ascii_uppercase())
                     || !isins.insert(&entry.isin)
-                    || !symbols.insert(entry.stooq_symbol.to_ascii_lowercase())
+                    || !symbols.insert(entry.yahoo_symbol.to_ascii_lowercase())
             })
         {
             return Err(HistoryError::InvalidSymbolMap);
@@ -98,17 +113,13 @@ impl StooqSymbolMap {
     }
 
     pub fn symbol_for(&self, instrument: &Instrument) -> Result<&str, HistoryError> {
-        let index = Instrument::wig20_index();
-        if instrument.code == index.code && instrument.isin == index.isin {
-            return Ok("wig20");
-        }
         self.entries
             .iter()
             .find(|entry| {
                 entry.gpw_code.eq_ignore_ascii_case(&instrument.code)
                     && entry.isin == instrument.isin
             })
-            .map(|entry| entry.stooq_symbol.as_str())
+            .map(|entry| entry.yahoo_symbol.as_str())
             .ok_or_else(|| HistoryError::MissingMapping {
                 code: instrument.code.clone(),
                 isin: instrument.isin.clone(),
@@ -117,6 +128,9 @@ impl StooqSymbolMap {
 }
 
 pub fn parse_history_document(raw: &RawDocument) -> Result<DailyPriceHistory, HistoryError> {
+    if raw.source == Source::YahooFinance {
+        return crate::yahoo::parse_history(raw);
+    }
     if !(200..300).contains(&raw.http_status) {
         return Err(HistoryError::HttpStatus(raw.http_status));
     }
@@ -147,16 +161,32 @@ pub fn parse_history_document(raw: &RawDocument) -> Result<DailyPriceHistory, Hi
 
     Ok(DailyPriceHistory {
         instrument,
-        stooq_symbol: symbol.clone(),
+        symbol: symbol.clone(),
+        currency: "PLN".into(),
         source: raw.source,
         source_url: raw.url.clone(),
         fetched_at: raw.fetched_at,
         candles: parse_daily_csv(&raw.body)?,
+        skipped_candles: Vec::new(),
     })
 }
 
 /// Preserve source decimals and adjustments. Sort dates without filling gaps.
 pub fn parse_daily_csv(body: &str) -> Result<Vec<DailyCandle>, HistoryError> {
+    // Stooq can return an access error or browser challenge with HTTP 200.
+    // Diagnose it before CSV parsing, without echoing response data or secrets.
+    let response = body.trim().trim_start_matches('\u{feff}').trim_start();
+    if response.eq_ignore_ascii_case("Access denied") {
+        return Err(HistoryError::AccessDenied);
+    }
+    if response.starts_with('<')
+        && (response.contains("/__verify")
+            || response.contains("JavaScript to verify your browser")
+            || response.contains("JavaScriptu do weryfikacji przeglądarki"))
+    {
+        return Err(HistoryError::BrowserVerificationRequired);
+    }
+
     let mut reader = csv::ReaderBuilder::new()
         .trim(csv::Trim::All)
         .from_reader(body.as_bytes());
@@ -193,6 +223,7 @@ pub fn parse_daily_csv(body: &str) -> Result<Vec<DailyCandle>, HistoryError> {
             high: number(2, "high")?,
             low: number(3, "low")?,
             close: number(4, "close")?,
+            adjusted_close: None,
             volume: number(5, "volume")?,
         };
         if candle.high < candle.low

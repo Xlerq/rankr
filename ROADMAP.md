@@ -14,7 +14,7 @@ Frontend, backend i silnik scoringu w pełni w Rust. Stos: Rust, Leptos/WASM, Ax
 
 Poza zakresem MVP: bot inwestycyjny, integracja z brokerem, dane realtime i uczenie maszynowe.
 
-Dane zbieramy od uruchomienia importera do lutego 2027. Dla cen pobieramy także całą dostępną historię dzienną OHLCV ze Stooq, potrzebną do trendu/momentum i sezonowości; zakaz pobierania archiwów nie dotyczy cen. Bieżące kursy spółek pochodzą z GPW, a FX/złoto z TradingView. Fundamenty zbieramy wyłącznie jako bieżące dane GPW/Notoria: najnowsze dostępne raporty, potem kolejne aktualizacje, bez odtwarzania archiwum sprawozdań. Zapisujemy również bieżący skład WIG20.
+Dane zbieramy od uruchomienia importera do lutego 2027. Dla cen pobieramy także całą dostępną historię dzienną OHLCV z Yahoo Finance, potrzebną do trendu/momentum i sezonowości; zakaz pobierania archiwów nie dotyczy cen. Ostatnie kompletne dane dzienne spółek pochodzą z Yahoo Finance, a FX/złoto z TradingView. Fundamenty zbieramy wyłącznie jako bieżące dane GPW/Notoria: najnowsze dostępne raporty, potem kolejne aktualizacje, bez odtwarzania archiwum sprawozdań. Zapisujemy również bieżący skład WIG20.
 
 Po każdym etapie uzupełniamy odpowiadającą mu część `thesis/main.tex` i testujemy wykonany moduł.
 
@@ -33,7 +33,7 @@ Po każdym etapie uzupełniamy odpowiadającą mu część `thesis/main.tex` i t
 ## Etap 2. Automatyczny import i rozpoczęcie zbierania danych
 
 - [x] Przygotować importer i parser podstawowych fundamentów GPW/Notoria w Rust, z bieżącą listą WIG20 i zapisem surowych oraz odczytanych danych do JSON (`importer/`).
-- [x] Dodać `rankr-import history [CODE]`: pełna dostępna historia dzienna EOD ze Stooq dla bieżącego WIG20 i indeksu WIG20 albo jednej spółki po kodzie GPW; mapowanie kodu/ISIN, klucz API, archiwizacja surowej odpowiedzi przed parsowaniem, walidacja OHLCV i testy lokalne. Bieżący kurs z `prices` pozostaje osobną obserwacją.
+- [x] Dodać `rankr-import history [CODE]`: pełna dostępna historia dzienna spółek WIG20 z Yahoo Finance bez klucza API; `prices [CODE]` pobiera ostatnią kompletną, zakończoną świecę. Mapowanie kodu/ISIN, osobny `adjusted_close`, archiwizacja surowej odpowiedzi, raport pominiętych wadliwych świec i testy lokalne. Indeks WIG20 wymaga osobnego źródła historii i nie jest automatycznie pobierany.
 - [ ] Zaimplementować import wszystkich źródeł wybranych dla MVP w Rust i zastąpić dotychczasowe skrypty Python/Bash.
 - [ ] Uruchomić harmonogram: ceny po sesji, fundamenty po publikacji; opcjonalnie po MVP makro po publikacji i COT co tydzień z obsługą opóźnień.
 - [ ] Dodać walidację, ochronę przed duplikatami, ponowienia i rejestrowanie błędów oraz przerw w zbieraniu danych.
@@ -42,7 +42,7 @@ Po każdym etapie uzupełniamy odpowiadającą mu część `thesis/main.tex` i t
 ## Etap 3. Scoring potencjału wzrostu
 
 - [ ] Zaimplementować wynik najważniejszej rodziny `fundamental` dla pełnego WIG20, obejmującej kondycję finansową, wycenę i dynamikę wyników; dynamika obejmuje wzrost przychodów i zysku, nie sam poziom ROE.
-- [ ] Dodać wynik rodziny `technical` oparty na trendzie/momentum oraz sezonowości cen w analogicznych miesiącach z wieloletniej historii EOD ze Stooq (docelowo około 12 lat lub więcej); oznaczać niewystarczającą długość serii dla danego sygnału. Sezonowość nie dodaje czwartej wagi.
+- [ ] Dodać wynik rodziny `technical` oparty na trendzie/momentum oraz sezonowości cen w analogicznych miesiącach z wieloletniej historii EOD z Yahoo Finance (docelowo około 12 lat lub więcej); oznaczać niewystarczającą długość serii dla danego sygnału. Sezonowość nie dodaje czwartej wagi.
 - [ ] Uwzględnić wynik `sentiment` jako trzecią rodzinę; źródło danych pozostaje nieustalone.
 - [ ] Obliczać potencjał wzrostu jako sumę ważoną wyników `fundamental`, `technical` i `sentiment`, bez normalizacji końcowej i mapowania na procent zwrotu. Stosować jeden zestaw wag dla całego WIG20, w tym banków, oraz prezentować wyniki rodzin i ich wagi.
 

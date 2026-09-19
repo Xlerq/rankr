@@ -19,14 +19,11 @@ const INDEX_ISIN: &str = "PL9999999987";
 const INDEX_PAGE: &str = "https://gpwbenchmark.pl/karta-indeksu";
 const PORTFOLIO_ENDPOINT: &str = "https://gpwbenchmark.pl/ajaxindex.php";
 const FUNDAMENTALS_ENDPOINT: &str = "https://www.gpw.pl/ajaxindex.php";
-const COMPANY_PAGE: &str = "https://www.gpw.pl/spolka";
 const TRADINGVIEW_ENDPOINT: &str = "https://scanner.tradingview.com/symbol";
-const STOOQ_HISTORY_ENDPOINT: &str = "https://stooq.com/q/d/l/";
+const YAHOO_CHART_ENDPOINT: &str = "https://query1.finance.yahoo.com/v8/finance/chart/";
 
 #[derive(Debug, Error)]
 pub enum SourceError {
-    #[error("missing STOOQ_API_KEY; export it or set it in .env before running history")]
-    MissingStooqApiKey,
     #[error("source request failed: {0}")]
     Request(#[from] reqwest::Error),
     #[error("WIG20 portfolio table with Instrument and Kod ISIN columns was not found")]
@@ -99,15 +96,6 @@ impl GpwClient {
         .await
     }
 
-    pub async fn fetch_price(&self, instrument: &Instrument) -> Result<RawDocument, SourceError> {
-        self.fetch(Source::GpwPrices, Some(instrument), || {
-            self.client
-                .get(COMPANY_PAGE)
-                .query(&[("isin", instrument.isin.as_str())])
-        })
-        .await
-    }
-
     async fn fetch(
         &self,
         source: Source,
@@ -142,52 +130,58 @@ impl TradingViewClient {
     }
 }
 
-/// Daily historical candles, separate from GPW and TradingView current quotes.
-pub struct StooqClient {
+/// Yahoo daily company history. Both modes use the same keyless chart endpoint.
+pub struct YahooClient {
     client: Client,
     endpoint: String,
-    api_key: String,
 }
 
-impl StooqClient {
-    pub fn new(api_key: String) -> Result<Self, SourceError> {
-        if api_key.trim().is_empty() {
-            return Err(SourceError::MissingStooqApiKey);
-        }
+impl YahooClient {
+    pub fn new() -> Result<Self, SourceError> {
         Ok(Self {
             client: http::client()?,
-            endpoint: STOOQ_HISTORY_ENDPOINT.into(),
-            api_key,
+            endpoint: YAHOO_CHART_ENDPOINT.into(),
         })
     }
 
     pub async fn fetch_history(
         &self,
         instrument: &Instrument,
-        stooq_symbol: &str,
+        symbol: &str,
     ) -> Result<RawDocument, SourceError> {
-        // Omitting d1/d2 requests the entire available daily series.
-        let mut raw = http::fetch(Source::Stooq, Some(instrument), || {
-            self.client.get(&self.endpoint).query(&[
-                ("s", stooq_symbol),
-                ("i", "d"),
-                ("apikey", self.api_key.as_str()),
-            ])
-        })
-        .await
-        .map_err(reqwest::Error::without_url)?;
+        self.fetch_daily(instrument, symbol, false).await
+    }
 
-        // Stooq authenticates in the query string. Never archive the key or
-        // retain it in a transport error's URL.
-        let mut url = reqwest::Url::parse(&raw.url).expect("valid HTTP response URL");
-        let query: Vec<_> = url
-            .query_pairs()
-            .filter(|(key, _)| !key.eq_ignore_ascii_case("apikey"))
-            .map(|(key, value)| (key.into_owned(), value.into_owned()))
-            .collect();
-        url.query_pairs_mut().clear().extend_pairs(query);
-        raw.url = url.into();
-        Ok(raw)
+    pub async fn fetch_recent_history(
+        &self,
+        instrument: &Instrument,
+        symbol: &str,
+    ) -> Result<RawDocument, SourceError> {
+        self.fetch_daily(instrument, symbol, true).await
+    }
+
+    async fn fetch_daily(
+        &self,
+        instrument: &Instrument,
+        symbol: &str,
+        recent: bool,
+    ) -> Result<RawDocument, SourceError> {
+        let url = format!("{}{symbol}", self.endpoint);
+        let end = Utc::now().timestamp().to_string();
+        Ok(http::fetch(Source::YahooFinance, Some(instrument), || {
+            let request = self.client.get(&url).query(&[
+                ("interval", "1d"),
+                ("events", "div,splits"),
+                ("includeAdjustedClose", "true"),
+            ]);
+            if recent {
+                request.query(&[("range", "1mo")])
+            } else {
+                // range=max can yield coarser data; explicit bounds retain 1d bars.
+                request.query(&[("period1", "0"), ("period2", end.as_str())])
+            }
+        })
+        .await?)
     }
 }
 
@@ -415,12 +409,15 @@ mod tests {
         assert_eq!(raw.body, "ready");
     }
 
-    fn serve_stooq(status: u16, body: &str) -> (String, thread::JoinHandle<String>) {
+    fn serve_yahoo(status: u16, body: &str) -> (String, thread::JoinHandle<String>) {
         let listener = TcpListener::bind("127.0.0.1:0").unwrap();
         listener.set_nonblocking(true).unwrap();
-        let url = format!("http://{}/q/d/l/", listener.local_addr().unwrap());
+        let url = format!(
+            "http://{}/v8/finance/chart/",
+            listener.local_addr().unwrap()
+        );
         let response = format!(
-            "HTTP/1.1 {status} Test\r\nContent-Type: text/csv\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+            "HTTP/1.1 {status} Test\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
             body.len()
         );
         let handle = thread::spawn(move || {
@@ -455,96 +452,74 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn requests_full_daily_history_and_keeps_the_key_out_of_archives() {
+    async fn yahoo_requests_daily_history_without_authentication_or_aggregation() {
         use crate::{
-            history::{StooqSymbolMap, parse_history_document},
+            history::{YahooSymbolMap, parse_history_document},
             storage::{archive_raw, read_raw},
         };
-
-        let csv = include_str!("../tests/fixtures/stooq_daily.csv");
-        let (endpoint, server) = serve_stooq(200, csv);
-        let client = StooqClient {
-            client: Client::builder().no_proxy().build().unwrap(),
-            endpoint,
-            api_key: "fixture-key&encoded".into(),
-        };
-        let symbols = StooqSymbolMap::bundled().unwrap();
-        let instrument = symbols.instrument("KGHM").unwrap();
-        let raw = client
-            .fetch_history(&instrument, symbols.symbol_for(&instrument).unwrap())
-            .await
-            .unwrap();
-        let request = server.join().unwrap();
-        let requested = reqwest::Url::parse(&format!(
-            "http://localhost{}",
-            request.split_whitespace().nth(1).unwrap()
-        ))
-        .unwrap();
-        let query: std::collections::HashMap<_, _> = requested.query_pairs().collect();
-        assert_eq!(query.get("s").unwrap(), "kgh");
-        assert_eq!(query.get("i").unwrap(), "d");
-        assert_eq!(query.get("apikey").unwrap(), "fixture-key&encoded");
-        assert_eq!(
-            query.len(),
-            3,
-            "history must not be truncated by date or row limits"
-        );
-        assert_eq!(raw.source, Source::Stooq);
-        assert_eq!(raw.body, csv);
-
-        let directory = tempfile::tempdir().unwrap();
-        let archived = archive_raw(directory.path(), &raw).unwrap();
-        let saved = read_raw(&archived.raw_path()).unwrap();
-        assert_eq!(saved.body, csv);
-        assert!(
-            !std::fs::read_to_string(archived.raw_path())
+        let body = include_str!("../tests/fixtures/yahoo_daily.json");
+        for recent in [false, true] {
+            let (endpoint, server) = serve_yahoo(200, body);
+            let client = YahooClient {
+                client: Client::builder().no_proxy().build().unwrap(),
+                endpoint,
+            };
+            let instrument = YahooSymbolMap::bundled()
                 .unwrap()
-                .contains("fixture-key")
-        );
-        assert!(!saved.url.contains("apikey"));
-        let history = parse_history_document(&saved).unwrap();
-        assert_eq!(history.candles.len(), 3);
-        assert_eq!(history.candles[0].close.to_string(), "118.95100");
+                .instrument("KGHM")
+                .unwrap();
+            let raw = if recent {
+                client.fetch_recent_history(&instrument, "KGH.WA").await
+            } else {
+                client.fetch_history(&instrument, "KGH.WA").await
+            }
+            .unwrap();
+            let request = server.join().unwrap();
+            let requested = reqwest::Url::parse(&format!(
+                "http://localhost{}",
+                request.split_whitespace().nth(1).unwrap()
+            ))
+            .unwrap();
+            assert_eq!(requested.path(), "/v8/finance/chart/KGH.WA");
+            let query: std::collections::HashMap<_, _> = requested.query_pairs().collect();
+            assert_eq!(query.get("interval").unwrap(), "1d");
+            assert_eq!(query.get("events").unwrap(), "div,splits");
+            assert_eq!(query.get("includeAdjustedClose").unwrap(), "true");
+            if recent {
+                assert_eq!(query.get("range").unwrap(), "1mo");
+                assert_eq!(query.len(), 4);
+            } else {
+                assert_eq!(query.get("period1").unwrap(), "0");
+                assert!(query.get("period2").unwrap().parse::<i64>().unwrap() > 0);
+                assert_eq!(query.len(), 5);
+            }
+            let directory = tempfile::tempdir().unwrap();
+            let archived = archive_raw(directory.path(), &raw).unwrap();
+            let saved = read_raw(&archived.raw_path()).unwrap();
+            assert_eq!(saved.source, Source::YahooFinance);
+            assert_eq!(saved.body, body);
+            assert_eq!(parse_history_document(&saved).unwrap().candles.len(), 3);
+        }
     }
 
     #[tokio::test]
-    async fn stooq_http_errors_remain_available_before_parsing() {
-        let (endpoint, server) = serve_stooq(403, "API access denied");
-        let client = StooqClient {
+    async fn yahoo_http_errors_remain_available_for_archiving() {
+        let (endpoint, server) = serve_yahoo(403, "Forbidden");
+        let client = YahooClient {
             client: Client::builder().no_proxy().build().unwrap(),
             endpoint,
-            api_key: "fixture-secret".into(),
         };
-        let raw = client
-            .fetch_history(&Instrument::wig20_index(), "wig20")
-            .await
+        let instrument = crate::history::YahooSymbolMap::bundled()
+            .unwrap()
+            .instrument("KGHM")
             .unwrap();
+        let raw = client.fetch_history(&instrument, "KGH.WA").await.unwrap();
         server.join().unwrap();
         assert_eq!(raw.http_status, 403);
-        assert_eq!(raw.body, "API access denied");
-        assert!(!raw.url.contains("fixture-secret"));
+        assert_eq!(raw.body, "Forbidden");
         assert!(matches!(
             crate::history::parse_history_document(&raw),
             Err(crate::history::HistoryError::HttpStatus(403))
         ));
-    }
-
-    #[tokio::test]
-    async fn stooq_request_errors_do_not_disclose_the_api_key() {
-        let client = StooqClient {
-            client: Client::builder()
-                .https_only(true)
-                .no_proxy()
-                .build()
-                .unwrap(),
-            endpoint: "http://127.0.0.1:1/".into(),
-            api_key: "fixture-secret".into(),
-        };
-        let error = client
-            .fetch_history(&Instrument::wig20_index(), "wig20")
-            .await
-            .unwrap_err();
-        assert!(!format!("{error:?}").contains("fixture-secret"));
-        assert!(!error.to_string().contains("apikey"));
     }
 }

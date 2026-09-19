@@ -1,0 +1,30 @@
+{
+  "chart": {
+    "result": [{
+      "meta": {
+        "symbol": "KGH.WA",
+        "currency": "PLN",
+        "exchangeName": "WSE",
+        "exchangeTimezoneName": "Europe/Warsaw",
+        "instrumentType": "EQUITY",
+        "dataGranularity": "1d",
+        "currentTradingPeriod": {
+          "regular": {"start": 1704355200, "end": 1704384300}
+        }
+      },
+      "timestamp": [1704182400, 1704268800, 1704355200],
+      "indicators": {
+        "quote": [{
+          "open": [121.871, 122.125, 123.5],
+          "high": [125.614, 128.0, 125.0],
+          "low": [117.812, 120.0, 120.0],
+          "close": [118.95100, 123.5, 121.125],
+          "volume": [475373, 512345, 456789]
+        }],
+        "adjclose": [{"adjclose": [112.234567890123, 116.125, 113.8125]}]
+      },
+      "events": {"dividends": {"1704355200": {"amount": 2.5, "date": 1704355200}}}
+    }],
+    "error": null
+  }
+}
