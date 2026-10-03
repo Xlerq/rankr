@@ -16,6 +16,7 @@ use rankr_import::{
     source::{GpwClient, TradingViewClient, YahooClient, parse_portfolio},
     storage::{archive_raw, read_raw},
     technical::{TechnicalHistory, score},
+    technical_table::rank_directory,
 };
 use serde::Serialize;
 
@@ -39,6 +40,14 @@ enum Command {
         as_of: NaiveDate,
         /// history.json produced by history; reads date and close only.
         file: PathBuf,
+    },
+    /// Rank companies offline using history.json files found recursively.
+    TechnicalTable {
+        /// Ranking date; only candles strictly before this date are used.
+        #[arg(long)]
+        as_of: NaiveDate,
+        /// Directory containing archived history.json files.
+        directory: PathBuf,
     },
     /// Archive fundamentals; omit CODE to collect the current WIG20.
     Collect {
@@ -94,6 +103,33 @@ async fn run(cli: Cli) -> Result<()> {
             let history: TechnicalHistory = serde_json::from_reader(input)
                 .with_context(|| format!("parsing {}", file.display()))?;
             print_json(&score(&history.candles, as_of)?)
+        }
+        Command::TechnicalTable { as_of, directory } => {
+            let table = rank_directory(&directory, as_of)
+                .with_context(|| format!("reading histories under {}", directory.display()))?;
+            for skipped in &table.skipped {
+                eprintln!(
+                    "Skipped {}: {}",
+                    skipped.source_file.display(),
+                    skipped.reason
+                );
+            }
+            let missing = table
+                .rows
+                .iter()
+                .filter(|row| row.technical_score.is_none())
+                .count();
+            eprintln!(
+                "Ranked {} companies; {missing} with null technical_score; skipped {} paths",
+                table.rows.len(),
+                table.skipped.len()
+            );
+            ensure!(
+                !table.rows.is_empty(),
+                "no valid companies found under {}",
+                directory.display()
+            );
+            print_json(&table.rows)
         }
         Command::Parse { file } => {
             let raw = read_raw(&file).with_context(|| format!("reading {}", file.display()))?;

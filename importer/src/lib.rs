@@ -9,4 +9,5 @@ pub mod prices;
 pub mod source;
 pub mod storage;
 pub mod technical;
+pub mod technical_table;
 mod yahoo;

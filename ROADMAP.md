@@ -8,13 +8,13 @@ Koszyk MVP obejmuje pełne WIG20. Później możliwe będzie rozszerzenie na inn
 
 Widokiem głównym jest tabela spółek. Dla każdej spółki liczone są wyniki trzech rodzin, każdy z ustaloną wagą. Wynik końcowy to suma ważona wyników tych trzech rodzin, będąca miarą potencjału wzrostu i podstawą sortowania. Suma nie podlega normalizacji końcowej ani mapowaniu na oczekiwany procent zwrotu.
 
-Trzy rodziny wyników v1: `fundamental` — najważniejsza, obejmująca kondycję finansową, wycenę i dynamikę wyników (wzrost przychodów i zysku, nie sam poziom ROE); `technical` — trend/momentum ceny i sezonowość miesięczna z wieloletniej historii dziennej; `sentiment` — sentyment, bez ustalonego źródła danych. v1 używa jednego zestawu wag dla całego WIG20, w tym banków. Sezonowość jest sygnałem wewnątrz `technical`, bez czwartej wagi; jej wzór pozostaje do opracowania w etapie scoringu.
+Trzy rodziny wyników v1: `fundamental` — najważniejsza, obejmująca kondycję finansową, wycenę i dynamikę wyników (wzrost przychodów i zysku, nie sam poziom ROE); `technical` — sezonowość miesiąca kalendarzowego i trend SMA200 z dziennego `close`; `sentiment` — sentyment, bez ustalonego źródła danych. v1 używa jednego zestawu wag dla całego WIG20, w tym banków. Wzór `technical` v1 jest zaimplementowany: `technical_score = seasonality_points + trend_points`, każdy składnik to -1, 0 albo +1, bez wag wewnętrznych i osobnego sygnału momentum. Brak sezonowości oznacza `null`, także dla pełnego wyniku technicznego; sezonowość nie dodaje czwartej wagi rodziny.
 
 Frontend, backend i silnik scoringu w pełni w Rust. Stos: Rust, Leptos/WASM, Axum/Tokio, SurrealDB, Plotters. Import, automatyzacja i analiza również w Rust.
 
 Poza zakresem MVP: bot inwestycyjny, integracja z brokerem, dane realtime i uczenie maszynowe.
 
-Dane zbieramy od uruchomienia importera do lutego 2027. Dla cen pobieramy także całą dostępną historię dzienną OHLCV z Yahoo Finance, potrzebną do trendu/momentum i sezonowości; zakaz pobierania archiwów nie dotyczy cen. Ostatnie kompletne dane dzienne spółek pochodzą z Yahoo Finance, a FX/złoto z TradingView. Fundamenty zbieramy wyłącznie jako bieżące dane GPW/Notoria: najnowsze dostępne raporty, potem kolejne aktualizacje, bez odtwarzania archiwum sprawozdań. Zapisujemy również bieżący skład WIG20.
+Dane zbieramy od uruchomienia importera do lutego 2027. Dla cen pobieramy także całą dostępną historię dzienną OHLCV z Yahoo Finance, potrzebną do trendu SMA200 i sezonowości; zakaz pobierania archiwów nie dotyczy cen. Ostatnie kompletne dane dzienne spółek pochodzą z Yahoo Finance, a FX/złoto z TradingView. Fundamenty zbieramy wyłącznie jako bieżące dane GPW/Notoria: najnowsze dostępne raporty, potem kolejne aktualizacje, bez odtwarzania archiwum sprawozdań. Zapisujemy również bieżący skład WIG20.
 
 Po każdym etapie uzupełniamy odpowiadającą mu część `thesis/main.tex` i testujemy wykonany moduł.
 
@@ -42,7 +42,7 @@ Po każdym etapie uzupełniamy odpowiadającą mu część `thesis/main.tex` i t
 ## Etap 3. Scoring potencjału wzrostu
 
 - [ ] Zaimplementować wynik najważniejszej rodziny `fundamental` dla pełnego WIG20, obejmującej kondycję finansową, wycenę i dynamikę wyników; dynamika obejmuje wzrost przychodów i zysku, nie sam poziom ROE.
-- [ ] Dodać wynik rodziny `technical` oparty na trendzie/momentum oraz sezonowości cen w analogicznych miesiącach z wieloletniej historii EOD z Yahoo Finance (docelowo około 12 lat lub więcej); oznaczać niewystarczającą długość serii dla danego sygnału. Sezonowość nie dodaje czwartej wagi.
+- [x] Zaimplementować `technical` v1: `technical_score = seasonality_points + trend_points`, bez wag wewnętrznych i osobnego sygnału momentum. Sezonowość używa wszystkich dostępnych zakończonych analogicznych miesięcy z lat ubiegłych (wystarczy jeden), z progami ±2%; trend to SMA200 z pasem 3%, a mniej niż 200 sesji daje trend 0. Liczyć z `close`, wyłącznie dla `date < as_of`; brak sezonowości i pełnego wyniku oznaczać jako `null`. Komendy offline: `technical` dla jednego pliku i `technical-table` dla rankingu spółek z najnowszych `history.json`.
 - [ ] Uwzględnić wynik `sentiment` jako trzecią rodzinę; źródło danych pozostaje nieustalone.
 - [ ] Obliczać potencjał wzrostu jako sumę ważoną wyników `fundamental`, `technical` i `sentiment`, bez normalizacji końcowej i mapowania na procent zwrotu. Stosować jeden zestaw wag dla całego WIG20, w tym banków, oraz prezentować wyniki rodzin i ich wagi.
 

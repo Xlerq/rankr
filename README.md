@@ -109,6 +109,7 @@ importer/src/
   history.rs  # GPW/Yahoo symbol mapping and legacy archive parsing
   yahoo.rs    # pure Yahoo daily OHLCV JSON parsing and validation
   technical.rs # pure calendar-month seasonality + SMA200 trend scoring
+  technical_table.rs # offline history selection and technical ranking
   storage.rs  # raw and parsed JSON archive
   main.rs     # CLI and orchestration
 ```
@@ -248,6 +249,26 @@ JSON output remain in the CLI. Duplicate dates and nonpositive past closes
 produce explicit errors. Fixture tests cover future exclusion, the open month,
 January/December boundaries, exact thresholds, short histories and missing
 seasonality.
+
+Rank multiple companies from an archive directory offline:
+
+```bash
+rankr-import technical-table --as-of 2026-09-19 data/collected > /tmp/technical-ranking.json
+```
+
+The command recursively finds `history.json`, reads `instrument.code` and
+`fetched_at`, and uses the existing technical formula. For each company it keeps
+the latest fetch before scoring; equal timestamps keep the first path in lexical
+order. Older files are reported on stderr. A selected history with a scoring error
+is skipped. Invalid JSON, missing companies and file errors are also reported and
+skipped; an empty directory or no usable companies produces a nonzero exit status
+without JSON output.
+
+Stdout contains only a pretty JSON array, sorted by `technical_score` descending,
+with `null` scores last and company codes A–Z on ties. Each row contains `code`,
+`as_of`, `seasonality_points`, `trend_points`, `technical_score`, `r`, `years` and
+`source_file`. Stderr lists skipped paths and reports the company count and the
+number with a `null` score. This command uses no network or database.
 
 ## Planned Stack
 
