@@ -75,14 +75,38 @@ The scoring must be deterministic and explainable.
 The v1 score families are exactly:
 
 - `fundamental`: the most important family, covering financial condition, valuation, and revenue/profit dynamics,
-- `technical`: price trend/momentum and monthly seasonality from multi-year daily history,
+- `technical`: SMA200 price trend and calendar-month seasonality from daily history,
 - `sentiment`: sentiment, with a schema field now and no data source specified.
 
 Each company has component scores (metrics/signals), each with an assigned, fixed weight. The final score is the sum (component score × weight), measures relative growth potential, and determines table sorting. Do not normalize the final score or map the sum to an expected percentage return. Explain the result through its component scores and their weights.
 
 v1 uses one set of weights for the entire WIG20, including banks. Some bank fields may be empty. Do not introduce a separate banking model in v1.
 
-Seasonality describes price behaviour in analogous months over roughly 12 or more years and belongs to `technical`, without a fourth family weight. Import the daily history now; the seasonality formula and scoring engine remain for a later implementation stage. That stage must mark insufficient series length instead of assuming every company has a long history. Sector macro and COT are outside v1 and may only be optional extensions after MVP.
+Technical v1 is implemented in the pure `importer/src/technical.rs` module and
+exposed through `rankr-import technical --as-of YYYY-MM-DD history.json`.
+Its formula is exactly `technical_score = seasonality_points + trend_points`.
+Both components are -1, 0 or +1, with no internal weights, 0–100 scaling or
+separate momentum signal. This task does not implement the other families.
+
+- Input: project only `candles[].date` and `candles[].close` from history JSON,
+  including the Yahoo shape. Ignore provider metadata and `adjusted_close`.
+  Filter strictly to `date < as_of` before calculations and validation.
+- Seasonality: use the calendar month of `as_of`. Average all available completed
+  matching months from prior years, using `last_close(month) / last_close(previous
+  calendar month) - 1`. Skip pairs with no preceding-month close. One usable year
+  is enough. R > 0.02 gives +1; R < -0.02 gives -1; otherwise 0, including the
+  exact ±2% boundaries. Zero usable years means `seasonality_points: null` and
+  `technical_score: null`, never imputed zero.
+- Trend: arithmetic SMA200 of the latest 200 past daily closes, including the
+  latest close. `d = abs(close - SMA200) / SMA200`; d < 0.03 gives 0, otherwise
+  +1 above SMA200 or -1 below it. Exactly ±3% is directional. Fewer than 200
+  sessions gives `trend_points: 0`, with SMA200/d null.
+- JSON explanation: R (`r`), usable year count, latest session/close, SMA200,
+  d and available trend-session count. Preserve Decimal statistics as strings.
+  Reject duplicate past dates and nonpositive past closes explicitly.
+
+Seasonality belongs to `technical`, without a fourth family weight. Sector macro
+and COT are outside v1 and may only be optional extensions after MVP.
 
 Database contract: `score_config` and `score_result` in `database/schema.surql` define the product contract for the three families above. Each weight is a nonnegative number with no upper bound or required total. Component scores and `final_score` are unrestricted numbers, including negative values; `final_score` is the sum of the three component scores multiplied by their corresponding weights. Only `data_quality_score` retains its 0–100 range. `database/seed.surql` provides the illustrative `default_growth_v1` configuration with the largest weight on `fundamental` and a record-shape placeholder, not a calibrated ranking. This contract does not implement scoring or define component formulas.
 
@@ -105,7 +129,8 @@ Database contract: `score_config` and `score_result` in `database/schema.surql` 
 The Rust workspace currently contains the `rankr-import` package in `importer/`.
 It collects basic GPW/Notoria fundamentals, Yahoo daily company prices/history and TradingView FX/gold quotes,
 and obtains the current WIG20 list from GPW Benchmark. CLI: `collect [CODE]`,
-`prices [CODE]`, `history [CODE]`, `fetch CODE`, `parse FILE`.
+`prices [CODE]`, `history [CODE]`, `fetch CODE`, `parse FILE`,
+`technical --as-of YYYY-MM-DD history.json`.
 
 - One package with a reusable library and a thin CLI; keep HTTP, pure parsing,
   serializable model types and JSON persistence in separate modules.

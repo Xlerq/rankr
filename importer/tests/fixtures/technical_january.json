@@ -1,0 +1,10 @@
+{
+  "source": "yahoo",
+  "yahoo_symbol": "KGH.WA",
+  "candles": [
+    {"date": "2023-12-29", "close": "100", "adjusted_close": "1"},
+    {"date": "2024-01-31", "close": "103", "adjusted_close": "1"},
+    {"date": "2024-12-31", "close": "200", "adjusted_close": "1"},
+    {"date": "2025-01-17", "close": "500", "adjusted_close": "1"}
+  ]
+}

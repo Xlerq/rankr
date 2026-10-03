@@ -1,10 +1,12 @@
 use std::{
+    fs::File,
     io::{self, Write},
     path::PathBuf,
     process::ExitCode,
 };
 
 use anyhow::{Context, Result, bail, ensure};
+use chrono::NaiveDate;
 use clap::{Parser, Subcommand};
 use rankr_import::{
     history::{YahooSymbolMap, parse_history_document},
@@ -13,6 +15,7 @@ use rankr_import::{
     prices::parse_price_document,
     source::{GpwClient, TradingViewClient, YahooClient, parse_portfolio},
     storage::{archive_raw, read_raw},
+    technical::{TechnicalHistory, score},
 };
 use serde::Serialize;
 
@@ -29,6 +32,14 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Command {
+    /// Calculate seasonality and SMA200 trend points from a local history.json.
+    Technical {
+        /// Ranking date; only candles with date strictly before this date are used.
+        #[arg(long)]
+        as_of: NaiveDate,
+        /// history.json produced by history; reads date and close only.
+        file: PathBuf,
+    },
     /// Archive fundamentals; omit CODE to collect the current WIG20.
     Collect {
         /// GPW company code, e.g. KGHM, PKOBP, PZU (case-insensitive).
@@ -78,6 +89,12 @@ async fn main() -> ExitCode {
 
 async fn run(cli: Cli) -> Result<()> {
     match cli.command {
+        Command::Technical { as_of, file } => {
+            let input = File::open(&file).with_context(|| format!("reading {}", file.display()))?;
+            let history: TechnicalHistory = serde_json::from_reader(input)
+                .with_context(|| format!("parsing {}", file.display()))?;
+            print_json(&score(&history.candles, as_of)?)
+        }
         Command::Parse { file } => {
             let raw = read_raw(&file).with_context(|| format!("reading {}", file.display()))?;
             match raw.source {

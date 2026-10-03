@@ -26,7 +26,7 @@ does not provide investment advice.
   their assigned weights, and the final score
 - deterministic scoring from exactly three families: `fundamental` (the most
   important family, covering financial condition, valuation, and revenue/profit
-  dynamics), `technical` (price trend/momentum and monthly seasonality from
+  dynamics), `technical` (SMA200 price trend and monthly seasonality from
   multi-year daily history), and `sentiment` (sentiment, with its data source
   unspecified)
 - the final score is the weighted sum of the three family scores, measures growth
@@ -35,9 +35,9 @@ does not provide investment advice.
 - one set of fixed weights for the entire WIG20, including banks
 - basic charts and score history validation notes
 
-Seasonality belongs to `technical`, without a fourth family weight. Its formula
-and the scoring engine remain to be implemented. Sector macro and COT are optional
-extensions after MVP.
+Seasonality belongs to `technical`, without a fourth family weight. Technical v1
+is implemented as seasonality points plus SMA200 trend points; the other score
+families remain planned. Sector macro and COT are optional extensions after MVP.
 
 ## Fundamentals importer
 
@@ -108,6 +108,7 @@ importer/src/
   prices.rs   # pure current-quote parsing
   history.rs  # GPW/Yahoo symbol mapping and legacy archive parsing
   yahoo.rs    # pure Yahoo daily OHLCV JSON parsing and validation
+  technical.rs # pure calendar-month seasonality + SMA200 trend scoring
   storage.rs  # raw and parsed JSON archive
   main.rs     # CLI and orchestration
 ```
@@ -128,8 +129,8 @@ cargo clippy --workspace --all-targets --locked -- -D warnings
 
 Tests use small fixtures and local HTTP servers, without contacting GPW, Yahoo or
 TradingView. Old Python/Bash scripts and `data/raw/` samples remain as earlier
-research material. Detailed banking fundamentals, macro data and scoring are
-later steps.
+research material. Detailed banking fundamentals, macro data and the other score
+families are later steps.
 
 ## Daily company prices and history
 
@@ -205,6 +206,48 @@ Offline parsing also supports old Stooq CSV and GPW quote archives. There are no
 active Stooq downloads or GPW company-price requests. The earlier Stooq samples
 and database seed retain their original source labels. FX/gold commands such as
 `prices USDPLN` use TradingView and write their existing `price.json` snapshots.
+
+## Technical score v1
+
+Calculate one instrument's score offline from a local `history.json`:
+
+```bash
+rankr-import technical --as-of 2026-09-19 /path/to/history.json
+```
+
+The input projection reads only `candles[].date` and `candles[].close`, accepting
+decimal strings or numeric literals. This includes the Yahoo `history.json`
+shape; provider metadata, OHLCV fields and `adjusted_close` are ignored. Only
+candles with `date < as_of` participate, including in data validation. The
+command performs no download and writes only result JSON to stdout.
+
+`technical_score = seasonality_points + trend_points`. Each available component
+is exactly `-1`, `0` or `+1`; there are no internal weights, normalization or
+additional momentum signal.
+
+- **Seasonality:** use the calendar month of `as_of`, taking matching completed
+  months from prior years only. Each return is the last close of that month
+  divided by the last close of the immediately preceding calendar month, minus
+  one. Skip a month if its preceding-month close is unavailable. `R` is the
+  arithmetic mean over all usable years. `R > 0.02` gives `+1`, `R < -0.02`
+  gives `-1`, and the inclusive interval `[-0.02, 0.02]` gives `0`. One matching
+  month suffices; zero usable months yields `seasonality_points: null`.
+- **Trend:** average the latest 200 daily closes before `as_of`. For the latest
+  close, `d = abs(close - SMA200) / SMA200`. `d < 0.03` gives `0`; otherwise
+  the result is `+1` above SMA200 and `-1` below it. Exactly 3% is directional.
+  With fewer than 200 sessions, `trend_points` is `0` and SMA200/d are `null`.
+
+When seasonality is missing, `technical_score` is also `null`, so an incomplete
+sum is not presented as a complete score. `explanation` contains `r` (R),
+`years`, `last_session`, `close`, `sma200`, `d` and `trend_sessions`. Decimal
+statistics use the project's decimal-string JSON format; point values are JSON
+integers. Present complete scores range from `-2` to `+2`.
+
+The pure entry point is `technical::score(&candles, as_of)`; file reading and
+JSON output remain in the CLI. Duplicate dates and nonpositive past closes
+produce explicit errors. Fixture tests cover future exclusion, the open month,
+January/December boundaries, exact thresholds, short histories and missing
+seasonality.
 
 ## Planned Stack
 

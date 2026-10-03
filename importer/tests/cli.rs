@@ -147,3 +147,47 @@ fn yahoo_parse_is_offline_and_preserves_adjusted_close_separately() {
     assert_eq!(json["candles"][0]["adjusted_close"], "112.234567890123");
     assert!(json.get("stooq_symbol").is_none());
 }
+
+#[test]
+fn technical_is_offline_and_reports_the_fixture_score_as_json() {
+    let directory = tempfile::tempdir().unwrap();
+    let input = directory.path().join("history.json");
+    fs::write(&input, include_str!("fixtures/technical_history.json")).unwrap();
+    let result = Command::new(env!("CARGO_BIN_EXE_rankr-import"))
+        .args([
+            "technical",
+            "--as-of",
+            "2026-09-19",
+            input.to_str().unwrap(),
+        ])
+        .current_dir(directory.path())
+        .env_remove("STOOQ_API_KEY")
+        .env("HTTPS_PROXY", "http://127.0.0.1:1")
+        .output()
+        .unwrap();
+    assert!(
+        result.status.success(),
+        "{}",
+        String::from_utf8_lossy(&result.stderr)
+    );
+    assert!(result.stderr.is_empty());
+    let json: Value = serde_json::from_slice(&result.stdout).unwrap();
+    assert_eq!(json["as_of"], "2026-09-19");
+    assert_eq!(json["seasonality_points"], 1);
+    assert_eq!(json["trend_points"], 0);
+    assert_eq!(json["technical_score"], 1);
+    assert_eq!(json["explanation"]["years"], 2);
+    assert_eq!(json["explanation"]["close"], "100");
+    assert!(!directory.path().join("data").exists());
+}
+
+#[test]
+fn technical_rejects_an_invalid_ranking_date() {
+    let result = Command::new(env!("CARGO_BIN_EXE_rankr-import"))
+        .args(["technical", "--as-of", "2026-02-30", "history.json"])
+        .output()
+        .unwrap();
+    assert!(!result.status.success());
+    assert!(result.stdout.is_empty());
+    assert!(String::from_utf8_lossy(&result.stderr).contains("invalid value"));
+}
