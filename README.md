@@ -98,11 +98,28 @@ inventing publication dates or fiscal period boundaries.
 Amounts use `rust_decimal::Decimal` in Rust and decimal strings in JSON, such as
 `"24711000.00"`. The original currency, sign and scale are preserved: a value in
 thousands has `unit_multiplier: 1000`. The multiplier applies to monetary fields,
-not provider ratios. Ratios retain the source scale and are not recomputed.
+not provider ratios. Provider ratios retain the source scale and are not recomputed.
+
+Calculate raw fundamental ratios offline from the latest `fundamentals.json` per
+company, found recursively in an archive directory:
+
+```bash
+rankr-import fundamental-table data/collected
+```
+
+The pretty JSON array contains company/report metadata, `net_margin`,
+`operating_margin`, `equity_ratio`, `debt_to_equity`, `ocf_to_net_income` and
+`source_file`, sorted by company code A–Z. Monetary amounts are multiplied by
+`unit_multiplier` before division; missing inputs or a zero denominator yield
+`null`. Ratios are decimal strings expressed as fractions, without annualization
+or currency conversion. Stderr reports skipped paths, the company count and
+missing values for each ratio; no valid companies means an error with empty stdout.
 
 ```text
 importer/src/
   model.rs    # serializable data types, independent of HTTP/files/database
+  fundamental_ratios.rs # pure monetary scaling and raw ratio calculations
+  fundamental_table.rs # offline fundamental snapshot selection and ratio table
   source.rs   # HTTP client and current WIG20 composition
   parser.rs   # pure HTML/raw document -> typed fundamentals/snapshot
   prices.rs   # pure current-quote parsing

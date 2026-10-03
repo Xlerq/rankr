@@ -9,6 +9,7 @@ use anyhow::{Context, Result, bail, ensure};
 use chrono::NaiveDate;
 use clap::{Parser, Subcommand};
 use rankr_import::{
+    fundamental_table::build_table,
     history::{YahooSymbolMap, parse_history_document},
     model::{Instrument, MarketPair, RawDocument, Source},
     parser::parse_document,
@@ -33,6 +34,11 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Command {
+    /// List raw fundamental ratios from the latest archived snapshot per company.
+    FundamentalTable {
+        /// Directory containing archived fundamentals.json files.
+        directory: PathBuf,
+    },
     /// Calculate seasonality and SMA200 trend points from a local history.json.
     Technical {
         /// Ranking date; only candles with date strictly before this date are used.
@@ -98,6 +104,37 @@ async fn main() -> ExitCode {
 
 async fn run(cli: Cli) -> Result<()> {
     match cli.command {
+        Command::FundamentalTable { directory } => {
+            let table = build_table(&directory)
+                .with_context(|| format!("reading fundamentals under {}", directory.display()))?;
+            for skipped in &table.skipped {
+                eprintln!(
+                    "Skipped {}: {}",
+                    skipped.source_file.display(),
+                    skipped.reason
+                );
+            }
+            let nulls = table.null_counts();
+            eprintln!(
+                "Fundamental ratios for {} companies; skipped {} paths",
+                table.rows.len(),
+                table.skipped.len()
+            );
+            eprintln!(
+                "Null ratios: net_margin={}, operating_margin={}, equity_ratio={}, debt_to_equity={}, ocf_to_net_income={}",
+                nulls.net_margin,
+                nulls.operating_margin,
+                nulls.equity_ratio,
+                nulls.debt_to_equity,
+                nulls.ocf_to_net_income
+            );
+            ensure!(
+                !table.rows.is_empty(),
+                "no valid companies found under {}",
+                directory.display()
+            );
+            print_json(&table.rows)
+        }
         Command::Technical { as_of, file } => {
             let input = File::open(&file).with_context(|| format!("reading {}", file.display()))?;
             let history: TechnicalHistory = serde_json::from_reader(input)

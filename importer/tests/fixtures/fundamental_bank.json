@@ -1,0 +1,24 @@
+{
+  "fixture": "Synthetic bank snapshot without revenue or complete liability data.",
+  "instrument": {"code": "PKOBP", "isin": "PLPKO0000016", "name": "PKO BP"},
+  "source": "gpw_notoria",
+  "source_url": "https://example.invalid/fundamentals",
+  "fetched_at": "2026-10-02T17:00:00Z",
+  "fundamentals": {
+    "report_period": "I-II kw. 2026",
+    "currency": "PLN",
+    "unit_multiplier": 1000,
+    "consolidated": false,
+    "revenue": null,
+    "net_income_parent": "100.00",
+    "operating_profit": null,
+    "equity_parent": "200.00",
+    "assets": "2000.00",
+    "long_term_liabilities": null,
+    "short_term_liabilities": "300.00",
+    "operating_cash_flow": "-50.00",
+    "reported_roe": "50.00",
+    "reported_roa": "5.00",
+    "extra_fields": {}
+  }
+}

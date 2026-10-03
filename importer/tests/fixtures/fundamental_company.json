@@ -1,0 +1,24 @@
+{
+  "fixture": "Synthetic company snapshot with monetary amounts in thousands of PLN.",
+  "instrument": {"code": "KGHM", "isin": "PLKGHM000017", "name": "KGHM"},
+  "source": "gpw_notoria",
+  "source_url": "https://example.invalid/fundamentals",
+  "fetched_at": "2026-10-02T17:00:00Z",
+  "fundamentals": {
+    "report_period": "I-II kw. 2026",
+    "currency": "PLN",
+    "unit_multiplier": 1000,
+    "consolidated": true,
+    "revenue": "1000.00",
+    "net_income_parent": "100.00",
+    "operating_profit": "125.00",
+    "equity_parent": "400.00",
+    "assets": "1000.00",
+    "long_term_liabilities": "200.00",
+    "short_term_liabilities": "100.00",
+    "operating_cash_flow": "150.00",
+    "reported_roe": "25.00",
+    "reported_roa": "10.00",
+    "extra_fields": {}
+  }
+}
