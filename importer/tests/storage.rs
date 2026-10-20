@@ -27,7 +27,14 @@ fn raw_survives_parser_failure_and_duplicate_timestamps() {
     first.save_error("financial table missing").unwrap();
     let second = archive_raw(root.path(), &document).unwrap();
 
-    assert_ne!(first.raw_path(), second.raw_path());
+    assert_eq!(
+        first.raw_path(),
+        root.path().join("2026-09-14_KGHM_fundamentals/raw.json")
+    );
+    assert_eq!(
+        second.raw_path(),
+        root.path().join("2026-09-14_KGHM_fundamentals_2/raw.json")
+    );
     assert_eq!(read_raw(&first.raw_path()).unwrap().body, document.body);
     assert_eq!(read_raw(&second.raw_path()).unwrap().body, document.body);
     assert!(first.raw_path().with_file_name("error.json").exists());
@@ -38,4 +45,60 @@ fn raw_survives_parser_failure_and_duplicate_timestamps() {
             .exists()
     );
     assert!(first.save_error("overwrite attempt").is_err());
+}
+
+#[test]
+fn archive_names_identify_the_date_company_and_data_kind() {
+    let root = tempfile::tempdir().unwrap();
+    let mut document = raw();
+    document.source = Source::YahooFinance;
+    let history = archive_raw(root.path(), &document).unwrap();
+    assert_eq!(
+        history.raw_path(),
+        root.path().join("2026-09-14_KGHM_history/raw.json")
+    );
+
+    document.source = Source::GpwBenchmark;
+    document.instrument = None;
+    let portfolio = archive_raw(root.path(), &document).unwrap();
+    assert_eq!(
+        portfolio.raw_path(),
+        root.path().join("2026-09-14_wig20/raw.json")
+    );
+}
+
+#[test]
+fn company_codes_cannot_create_nested_archive_paths() {
+    let root = tempfile::tempdir().unwrap();
+    let mut document = raw();
+    document.instrument.as_mut().unwrap().code = "../KGHM/../escape".into();
+    let archive = archive_raw(root.path(), &document).unwrap();
+    assert_eq!(
+        archive.raw_path().parent().unwrap().parent().unwrap(),
+        root.path()
+    );
+    assert_eq!(read_raw(&archive.raw_path()).unwrap(), document);
+}
+
+#[test]
+fn simultaneous_collections_keep_all_observations() {
+    let root = tempfile::tempdir().unwrap();
+    let document = raw();
+    let mut paths = std::thread::scope(|scope| {
+        let mut workers = Vec::new();
+        for _ in 0..8 {
+            workers.push(scope.spawn(|| archive_raw(root.path(), &document).unwrap().raw_path()));
+        }
+        let mut paths = Vec::new();
+        for worker in workers {
+            paths.push(worker.join().unwrap());
+        }
+        paths
+    });
+    paths.sort();
+    paths.dedup();
+    assert_eq!(paths.len(), 8);
+    for path in paths {
+        assert_eq!(read_raw(&path).unwrap(), document);
+    }
 }

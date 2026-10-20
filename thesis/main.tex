@@ -49,6 +49,8 @@
 \usepackage{ifthen}
 \usepackage{ragged2e}
 
+\renewcommand{\tabularxcolumn}[1]{>{\RaggedRight\arraybackslash}p{#1}}
+
 \graphicspath{{assets/}}
 \newcolumntype{Y}{>{\centering\arraybackslash}X}
 \newcolumntype{j}{>{\raggedleft}p{200pt}}
@@ -170,142 +172,693 @@
 
 \hypersetup{pageanchor=true}
 \renewcommand{\contentsname}{\LARGE Spis treści}
-\tableofcontents
 \setcounter{tocdepth}{1}
+\tableofcontents
 \cleardoublepage
 
 \chapter*{Wstęp}
 \addcontentsline{toc}{chapter}{Wstęp}
 
-TODO: Opisać motywację oraz problem badawczo-inżynierski.
+Porównanie spółek giełdowych wymaga zebrania informacji, które zwykle znajdują się w kilku miejscach i mają różną postać. Ceny zmieniają się w trakcie każdej sesji, natomiast dane finansowe dotyczą okresów sprawozdawczych. Sam dostęp do tych danych nie daje jeszcze wspólnej podstawy porównania. Potrzebne są zasady, które określą, jakie informacje uwzględnić, jak potraktować ich braki oraz w jaki sposób wyjaśnić końcową kolejność spółek.
 
-Celem pracy jest przygotowanie aplikacji webowej \textit{rankr} do rankingu spółek Giełdy Papierów Wartościowych w Warszawie według względnego potencjału wzrostu w horyzoncie 3--12 miesięcy. Wyższy wynik końcowy oznacza większą szansę na lepszy zwrot niż inne spółki z tego samego koszyka. Wynik nie jest oceną tego, jak dobra jest spółka, ani prognozą zwrotu w procentach. Koszyk MVP obejmuje pełne WIG20, a późniejszym kierunkiem rozwoju są inne akcje GPW; zakres aplikacji nie jest na stałe ograniczony do 20 spółek.
+Celem pracy jest przygotowanie aplikacji webowej \textit{rankr} do rankingu spółek Giełdy Papierów Wartościowych w Warszawie według względnego potencjału wzrostu w horyzoncie 3--12 miesięcy. Wyższy wynik ma wskazywać większą szansę na lepszy zwrot niż inne spółki z tego samego koszyka. Jest to założona interpretacja wyniku, której przydatność wymaga sprawdzenia na późniejszych danych. Wynik nie jest oceną ogólnej jakości spółki ani prognozą zwrotu w procentach.
 
-Widokiem głównym jest tabela spółek. Dla każdej spółki wyznaczane są wyniki trzech rodzin: \texttt{fundamental} (najważniejsza rodzina, obejmująca kondycję finansową, wycenę i dynamikę wyników), \texttt{technical} (trend/momentum ceny i sezonowość miesięczna) oraz \texttt{sentiment} (sentyment). Każda rodzina ma ustaloną wagę, a suma ważona wyników tych trzech rodzin jest miarą potencjału wzrostu oraz podstawą sortowania tabeli. Wynik końcowy nie podlega normalizacji ani przeliczeniu na oczekiwany procent zwrotu. v1 używa jednego zestawu wag dla całego WIG20, w tym banków.
+Pierwsza wersja obejmuje pełny koszyk WIG20. Ograniczenie to pozwala przygotować i sprawdzić cały proces dla niewielkiej grupy instrumentów, bez zamykania możliwości późniejszego dodania innych akcji GPW. Planowanym widokiem głównym jest tabela spółek z wynikami rodzin \texttt{fundamental}, \texttt{technical} i \texttt{sentiment}, ich wagami oraz wynikiem końcowym. Rodzina fundamentalna ma mieć największe znaczenie, jednak wartości wag i reguły przyznawania punktów nie zostały jeszcze skalibrowane.
 
-Frontend, backend i silnik scoringu są planowane w pełni w języku Rust, z wykorzystaniem Leptos/WASM, Axum/Tokio, SurrealDB i Plotters. MVP obejmuje dzienne dane OHLCV, dane finansowe, deterministyczny scoring, podstawowe wykresy oraz analizę historii wyników zestawioną z późniejszymi zmianami cen. Aplikacja nie stanowi porady inwestycyjnej.
+W pracy przyjęto Rust jako język importera, obliczeń oraz planowanej aplikacji webowej. Do 18 października 2026 roku wykonano program konsolowy do zbierania danych, archiwum JSON, scoring techniczny oraz tabelę surowych wskaźników fundamentalnych. Te elementy działają bez backendu, frontendu i połączenia z bazą danych. Dalsze rozdziały opisują zarówno ich realizację, jak i granice obecnego rozwiązania. Części dotyczące aplikacji webowej oraz pełnego rankingu pozostają projektem dalszych prac.
 
-Poza zakresem MVP znajdują się dane czasu rzeczywistego, logika bota inwestycyjnego, integracja z brokerem oraz uczenie maszynowe.
+Zakres pierwszej wersji nie obejmuje składania zleceń, integracji z brokerem, danych czasu rzeczywistego ani uczenia maszynowego. Aplikacja ma wspierać porównywanie danych i analizę przyjętych reguł, a nie wykonywać transakcje. Praca rozdziela sprawdzenie poprawności programu od oceny tego, czy ranking rzeczywiście pomaga wskazać spółki osiągające później lepsze zwroty.
 
 \cleardoublepage
 \chapter{Analiza problemu i źródła danych}
+\label{chap:data}
 
-Projekt zakłada przygotowanie aplikacji do wieloczynnikowego rankingu polskich spółek giełdowych. Z tego powodu pojedyncze źródło danych nie jest wystarczające. Ceny dzienne pozwalają ocenić zachowanie instrumentu na rynku, ale nie opisują kondycji fundamentalnej spółki ani otoczenia makroekonomicznego. Warstwa danych została więc zaplanowana jako rozwiązanie wieloźródłowe, w którym każde źródło pełni inną rolę.
+\section{Zakres porównania i wymagania}
 
-Źródłem dziennych cen spółek oraz ich historii jest Yahoo Finance. Polecenie \texttt{rankr-import history} pobiera całą dostępną serię dzienną OHLCV, czyli cenę otwarcia, maksimum, minimum, zamknięcie oraz wolumen. Dane te są podstawą do przygotowania sygnałów rodziny \texttt{technical}: trendu/momentum oraz sezonowości opisującej zachowanie cen w analogicznych miesiącach przez około 12 lat lub dłużej. Służą również do wykresów i późniejszej walidacji historii wyników. Zakres dostępnej serii zależy od instrumentu; krótsza historia wymaga oznaczenia niewystarczających danych przy wyznaczaniu danego sygnału. W pierwszym etapie import obejmuje bieżące spółki WIG20. Historia samego indeksu WIG20 wymaga osobnego źródła, ponieważ sprawdzony endpoint Yahoo nie udostępniał użytecznej serii historycznej indeksu.
+Podstawową jednostką porównania jest spółka w określonym dniu rankingu. Dla każdej spółki należy wskazać wykorzystane dane i zachować możliwość ponownego wykonania obliczeń. Wynik bez daty, źródła oraz informacji o brakach byłby trudny do oceny, nawet gdyby sam wzór był prosty.
 
-Polecenie \texttt{rankr-import prices} zapisuje dla spółki ostatnią kompletną, zakończoną świecę dzienną Yahoo, a dla walut i złota pobiera bieżące kursy z TradingView. Import zachowuje surową odpowiedź JSON przed parsowaniem oraz dziesiętną precyzję wartości. Cena zamknięcia i skorygowana cena zamknięcia \texttt{adjusted\_close} pozostają osobnymi polami; importer nie przelicza dywidend ani splitów. Daty sesji są wyznaczane w strefie Europe/Warsaw. Świeca bieżącego dnia jest pomijana do końca sesji wskazanego przez Yahoo z dodatkowym marginesem 15 minut. Niekompletne lub błędne świece są pomijane z zapisem daty i przyczyny; brakujące sesje nie są uzupełniane.
+WIG20 skupia 20 dużych i płynnych spółek z Głównego Rynku GPW \cite{gpwbenchmark}. W projekcie jest koszykiem startowym, a nie dodatkowym składnikiem wzoru technicznego. Punkty sezonowości i trendu są obliczane osobno dla każdej spółki. Dopiero gotowe wyniki służą do uporządkowania tabeli. Wagi spółek w indeksie nie są wagami rodzin scoringu.
 
-Skład indeksu WIG20 oraz wagi instrumentów są pobierane z GPW Benchmark. To źródło pełni rolę punktu odniesienia dla aktualnego portfela indeksu, dzięki czemu lista spółek nie musi być utrzymywana ręcznie. Dane z GPW Benchmark są również potrzebne do mapowania instrumentów między źródłami, ponieważ symbole używane przez GPW, Yahoo Finance i inne serwisy mogą się różnić.
+Dla obecnego etapu przyjęto następujące wymagania:
+\begin{itemize}
+    \item dane można pobierać bez płatnego abonamentu i odnawiania kluczy API;
+    \item odpowiedź dostawcy zostaje zapisana przed próbą jej interpretacji;
+    \item nieudane pobranie jednej spółki nie usuwa poprawnych wyników pozostałych;
+    \item brak wartości jest odróżniany od rzeczywistego zera;
+    \item obliczenia można powtórzyć lokalnie, bez ponownego pobierania danych;
+    \item wynik zawiera dane pozwalające wyjaśnić jego pochodzenie.
+\end{itemize}
 
-Dane fundamentalne spółek są badane na podstawie zakładki finansowej GPW / Notoria dostępnej na kartach spółek GPW. W projekcie jest to eksperymentalne darmowe źródło informacji takich jak przychody, wynik netto, aktywa, kapitał własny, zobowiązania, przepływy pieniężne oraz EBITDA. Dane sprawozdawcze służą do oceny fundamentów i dynamiki wyników, a wraz z cenami także wyceny; wymagają ostrożnej walidacji. Zbierane są bieżące raporty i ich kolejne aktualizacje, bez odtwarzania historii sprawozdań.
+Opóźnienie publikacji cen jest dopuszczalne, ponieważ projekt korzysta z zakończonych sesji dziennych. Nie jest potrzebne odtwarzanie każdej transakcji ani zmiany kursu w trakcie sesji. Pozwala to rozpocząć pracę od dostępnych źródeł i skupić się na zgodności danych oraz regułach obliczeń.
 
-Kolejnym źródłem jest Narodowy Bank Polski. Dane NBP są wykorzystywane jako kontekst makroekonomiczny i walutowy. W szczególności dotyczy to kursów USD/PLN, EUR/PLN oraz ceny złota. Takie dane mogą zostać użyte jako tło dla interpretacji zachowania spółek z GPW, zwłaszcza tych, których wyniki są wrażliwe na kursy walut, surowce lub sytuację makroekonomiczną.
+\section{Źródła wykorzystywane przez importer}
 
-Takie podejście pozwala rozdzielić odpowiedzialności: Yahoo Finance odpowiada za dzienne ceny spółek oraz ich historię, TradingView za bieżące kursy walut i złota, GPW Benchmark za skład i wagi WIG20, GPW / Notoria za fundamenty, a NBP za kontekst makro/FX. Dzięki temu model rankingowy może być rozwijany stopniowo, bez wiązania całej aplikacji z jednym dostawcą danych.
+Źródła rozdzielono według rodzaju informacji. Zestawienie w tabeli~\ref{tab:sources} opisuje działający importer. Nie oznacza ono, że wszystkie pobierane dane uczestniczą już w scoringu.
 
-Istnieją jednak istotne ograniczenia. Wykorzystywany endpoint wykresów Yahoo nie wymaga konta ani klucza API, ale nie jest gwarantowanym publicznym API; może zmienić strukturę odpowiedzi lub ograniczyć liczbę żądań. GPW / Notoria nie jest stabilnym, publicznie udokumentowanym API, lecz endpointem używanym przez stronę GPW, dlatego struktura HTML może się zmienić. Dane NBP nie wymagają klucza, ale mają określoną częstotliwość publikacji i zakres historyczny zależny od danego endpointu. Dane fundamentalne mogą być niepełne, opóźnione lub niedostępne dla części spółek, a ich historia może być trudniejsza do wykorzystania w analizie historycznej. Dodatkowo pełne dane pobierane z zewnętrznych źródeł nie powinny być redystrybuowane przez repozytorium projektu. W repozytorium mogą znajdować się jedynie małe próbki danych oraz mapowania symboli potrzebne do odtworzenia procesu badawczego.
+\begin{table}[htbp]
+\centering
+\caption{Źródła danych wykorzystywane w bieżącej implementacji}
+\label{tab:sources}
+\small
+\begin{tabularx}{\textwidth}{p{2.7cm}XX}
+\toprule
+Źródło & Pobierane dane & Obecne zastosowanie \\
+\midrule
+GPW Benchmark & Bieżący skład WIG20, kody i ISIN & Ustalenie listy spółek do pobrania \\
+GPW / Notoria & Bieżąca tabela danych finansowych spółki & Archiwizacja raportu i pięć surowych wskaźników \\
+Yahoo Finance & Dzienne OHLCV i osobne skorygowane zamknięcie & Historia cen, ostatnia świeca i scoring techniczny \\
+TradingView, strumień IDC & Bieżące USD/PLN, EUR/PLN i XAU/USD & Oddzielne obserwacje kursów, bez punktów w rankingu \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+Skład WIG20 jest odczytywany z GPW Benchmark. Parser sprawdza liczbę pozycji oraz poprawność i unikalność identyfikatorów. Obecna implementacja wymaga 20 spółek; nie traktuje częściowo odczytanej listy jako pełnego indeksu. Z odpowiedzi wyciągane są kod i ISIN. Wagi udziału spółek nie są obecnie przenoszone do osobnych struktur importera, choć ich zapis przewidziano we wcześniejszym projekcie bazy.
+
+Ten sam instrument może mieć inny kod w GPW i inny symbol u dostawcy cen. Dlatego plik \path{data/raw/wig20_symbols.csv} zawiera jawne powiązania kodu GPW, ISIN i symbolu Yahoo. Bieżąca lista spółek pochodzi ze źródła, natomiast mapowanie identyfikatorów jest częścią projektu. Nieznany kod lub niezgodny ISIN powoduje błąd. Program nie próbuje odgadnąć symbolu na podstawie nazwy spółki.
+
+\section{Ceny dzienne i obserwacje walutowe}
+
+Polecenie \texttt{history} pobiera z Yahoo Finance całą dostępną historię dzienną spółki. Każda świeca zawiera datę, cenę otwarcia, maksimum, minimum, cenę zamknięcia i wolumen, czyli dane OHLCV. Zapisywane jest również osobne pole \texttt{adjusted\_close}. Według opisu dostawcy skorygowana cena zamknięcia uwzględnia odpowiednie splity i wypłaty dywidend \cite{yahoo}. Projekt zachowuje oba pola w postaci dostarczonej przez źródło; nie wylicza korekt samodzielnie.
+
+Wzór techniczny v1 korzysta wyłącznie z pola \texttt{close}. Oznacza to wybór konkretnej serii dostawcy, a nie zapewnienie, że archiwalne ceny nigdy nie podlegały jego korektom. Wyniku nie należy też utożsamiać z pełną stopą zwrotu inwestora uwzględniającą dywidendy. Rozdzielenie obu pól pozwala później sprawdzić wpływ tego wyboru bez zmiany zachowanych odpowiedzi źródłowych.
+
+Długość historii zależy od spółki. Program nie wymaga jednakowej daty początkowej i nie dopisuje sesji sprzed debiutu. W szczególności liczba obserwacji sezonowych może być różna dla poszczególnych spółek. Obecny importer nie pobiera historii samego indeksu WIG20, ponieważ podczas sprawdzania źródła nie uzyskano użytecznej serii tego indeksu z wykorzystywanego endpointu Yahoo.
+
+Polecenie \texttt{prices} dla spółki zachowuje ostatnią kompletną, zakończoną świecę dzienną. Dla par USD/PLN, EUR/PLN i XAU/USD zapisuje bieżącą obserwację z TradingView. Są to dwa różne rodzaje danych: pojedynczy kurs walutowy nie stanowi wieloletniej serii dziennej i nie trafia do rankingu technicznego spółek. W przypadku XAU/USD jednostką jest uncja trojańska złota wyceniana w dolarach.
+
+\section{Dane finansowe i ich zakres}
+
+Dane fundamentalne pochodzą z tabeli GPW / Notoria dostępnej na stronie spółki. Importer zapisuje aktualnie udostępniony zestaw wartości wraz z okresem raportowym, walutą, mnożnikiem jednostki oraz informacją o konsolidacji. Każde następne pobranie tworzy kolejną obserwację. Dwa pobrania mogą jednak zawierać ten sam raport, dlatego liczba plików nie jest liczbą różnych sprawozdań.
+
+Obecny zakres obejmuje między innymi przychody, wyniki na kolejnych poziomach działalności, aktywa, kapitał własny, zobowiązania oraz przepływy pieniężne. Tabela nie daje pełnego archiwum raportów. Nie zawiera również kompletu danych potrzebnych do wyceny rynkowej i porównań rok do roku. Samo zapisanie zysku oraz ceny akcji nie wystarcza do obliczenia wskaźnika P/E bez dodatkowych informacji o liczbie akcji albo zysku przypadającym na akcję.
+
+Zachowywany jest dokładny opis okresu, na przykład \textit{I--II kw. 2026}. Taka etykieta nie jest datą publikacji. Nie zakłada się również, że każda wartość w takim raporcie dotyczy tylko ostatniego kwartału. Rachunek wyników i przepływy mogą obejmować okres narastający, a bilans opisuje stan na określony dzień. W obecnych obliczeniach wszystkie potrzebne wartości pochodzą z jednego snapshotu, czyli jednego zapisanego stanu tabeli źródłowej.
+
+W przypadku banków część pozycji charakterystycznych dla spółek niefinansowych może nie występować. Brak przychodów ze sprzedaży oznacza wówczas brak możliwości wyliczenia przyjętych marż. Bank pozostaje w tabeli wskaźników, ale odpowiednie pola mają wartość \texttt{null}. Nie zastępuje się ich zerami ani wartościami z innej pozycji rachunku wyników.
+
+\section{Źródła pomocnicze i ograniczenia}
+
+W repozytorium znajdują się próbki danych NBP oraz starsze próbki Stooq. NBP udostępnia kursy walut i ceny złota przez własne API \cite{nbp}; próbki służyły do rozpoznania możliwych źródeł. Pobieranie NBP nie jest jednak częścią bieżącego importera Rust. Cena złota z NBP i notowanie XAU/USD mają różne jednostki i waluty, dlatego nie są zamiennie traktowane jako ta sama seria. Dawne pliki Stooq można nadal odczytać lokalnie, ale obecny program nie pobiera stamtąd nowych cen.
+
+Zależność od zewnętrznych serwisów pozostaje ograniczeniem technicznym. Zmiana struktury HTML lub JSON może przerwać import mimo poprawnego działania wcześniejszych wersji. Surowa odpowiedź pozwala wtedy sprawdzić problem i poprawić parser bez ponownego wykonywania wszystkich żądań. Pełne pobrania przechowywane są lokalnie w katalogu wyłączonym z repozytorium, a testy korzystają z niewielkich próbek.
+
+Istotne są także trzy różne informacje czasowe: data sesji, okres raportu i moment pobrania. Żadna z nich nie zastępuje automatycznie daty udostępnienia raportu rynkowi. Z tego powodu bieżącej tabeli fundamentalnej nie można użyć do wyliczenia historycznego rankingu tak, jakby wszystkie zawarte w niej informacje były znane w dowolnym wcześniejszym dniu.
 
 \cleardoublepage
 \chapter{Architektura systemu}
+\label{chap:architecture}
 
-TODO: Opisać architekturę aplikacji.
+\section{Zrealizowany zakres}
 
-Planowany stos technologiczny:
+Obecny projekt składa się z jednego pakietu Rust \texttt{rankr-import}, zawierającego bibliotekę oraz program wykonywalny. Taki podział jest zgodny z organizacją pakietów Rust: biblioteka udostępnia funkcje, a program określa sposób ich uruchamiania \cite{rust}. W praktyce umożliwia to wywołanie parsera i obliczeń bez uruchamiania procesu konsolowego.
 
-\begin{itemize}
-    \item frontend: Rust, Leptos, WebAssembly,
-    \item backend: Rust, Axum, Tokio,
-    \item baza danych: SurrealDB,
-    \item wykresy: Plotters,
-    \item analityka pomocnicza: R i Rscript,
-    \item wymiana danych: JSON i CSV.
-\end{itemize}
+Pobieranie, parsowanie i zapis działają w ramach jednego programu, ale mają oddzielne odpowiedzialności. Nie wymagają dwóch baz danych ani osobnych usług. Użytkownik uruchamia jedną komendę, natomiast wewnątrz programu wykonywane są kolejne kroki przedstawione na rysunku~\ref{fig:pipeline}.
+
+\begin{figure}[htbp]
+\centering
+\begin{tabular}{c}
+\fbox{Pobranie odpowiedzi HTTP} \\
+$\downarrow$ \\
+\fbox{Zapis odpowiedzi jako \texttt{raw.json}} \\
+$\downarrow$ \\
+\fbox{Parser oraz walidacja danych} \\
+$\downarrow$ \\
+\fbox{Zapis poprawnie odczytanych danych} \\
+$\downarrow$ \\
+\fbox{Niezależne obliczenia offline i wynik JSON}
+\end{tabular}
+\caption{Przepływ poprawnego pobrania. Przy błędzie parsera zamiast odczytanych danych zapisywany jest opis błędu. Obliczenia można uruchomić później, korzystając wyłącznie z archiwum.}
+\label{fig:pipeline}
+\end{figure}
+
+Zapis odpowiedzi przed parsowaniem rozdziela dwa rodzaje awarii. Błąd połączenia może uniemożliwić otrzymanie dokumentu. Błąd parsera dotyczy natomiast dokumentu, który już został pobrany. W drugim przypadku surowe dane pozostają dostępne i można wrócić do nich po poprawieniu kodu.
+
+\section{Podział kodu i zależności}
+
+Moduły mają niewielkie, określone zadania. Ich zestawienie przedstawiono w tabeli~\ref{tab:modules}. Rozdzielenie plików nie służy tworzeniu osobnych aplikacji. Ma przede wszystkim ułatwiać odnalezienie kodu odpowiedzialnego za pobranie, interpretację albo obliczenie wyniku.
+
+\begin{table}[htbp]
+\centering
+\caption{Podstawowe odpowiedzialności modułów importera}
+\label{tab:modules}
+\small
+\begin{tabularx}{\textwidth}{p{5.1cm}X}
+\toprule
+Moduł & Zadanie \\
+\midrule
+\texttt{main.rs} & Odczyt komendy, wywołanie kolejnych kroków i wypisanie wyniku \\
+\texttt{model.rs} & Struktury instrumentów, odpowiedzi, świec i danych finansowych \\
+\texttt{source.rs}, \texttt{http.rs} & Dostęp do źródeł, limity czasu i ponawianie żądań \\
+\texttt{parser.rs} & Odczyt danych finansowych z HTML GPW / Notoria \\
+\texttt{history.rs}, \texttt{yahoo.rs} & Mapowanie symboli, interpretacja historii i obsługa starszych plików \\
+\texttt{prices.rs} & Odczyt pojedynczych notowań walut i złota oraz dawnych notowań GPW \\
+\texttt{storage.rs} & Zapis archiwum i odczyt surowego dokumentu \\
+\texttt{technical.rs} & Punkty sezonowości i trendu dla jednej serii \\
+\texttt{technical\_table.rs} & Wybór plików spółek i sortowanie rankingu \\
+\texttt{fundamental\_ratios.rs} & Pięć wskaźników z pojedynczego raportu \\
+\texttt{fundamental\_table.rs} & Wybór snapshotów i tabela wskaźników \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+Parser przyjmuje dokument i zwraca strukturę danych albo błąd. Nie wykonuje żądań HTTP i nie zapisuje plików. Podobnie funkcja techniczna otrzymuje świece oraz datę rankingu, a funkcja wskaźników fundamentalnych otrzymuje wymagane kwoty. Dzięki temu testowanie wzoru nie zależy od dostępności serwisu zewnętrznego ani od stanu katalogu na dysku.
+
+Obsługa komend jest podzielona na krótkie funkcje. Tam, gdzie kilka połączonych operacji utrudniało śledzenie przebiegu programu, zastosowano nazwane kroki, pętle i wcześniejsze zwracanie błędów. Zachowano przy tym sprawdzanie zakresu liczb i jawne rozróżnienie między błędem a brakującą wartością. Uproszczenie kodu nie polega na usunięciu tych kontroli.
+
+\section{Archiwum JSON jako pierwszy sposób zapisu}
+
+Na obecnym etapie pliki JSON wystarczają do przechowywania pojedynczych odpowiedzi i wykonywania obliczeń offline. Można je otworzyć w edytorze, wskazać jako wejście komendy i porównać z dokumentem dostawcy. Serde umożliwia przekształcanie struktur Rust do JSON i ich ponowny odczyt \cite{serdejson}. Ogranicza to potrzebę utrzymywania osobnego formatu dla każdego kroku.
+
+Każda obserwacja znajduje się we własnym katalogu. Przykładowy układ nowego pobrania wygląda następująco:
+\begin{verbatim}
+data/collected/
+  2026-10-18_KGHM_fundamentals/
+    raw.json
+    fundamentals.json
+  2026-10-18_KGHM_history/
+    raw.json
+    history.json
+\end{verbatim}
+
+Nazwy zawierają datę pobrania w UTC, kod spółki i rodzaj danych. Jeżeli taki katalog już istnieje, następny otrzymuje końcówkę \texttt{\_2}, następny \texttt{\_3} i tak dalej. Dotychczasowe pliki nie są nadpisywane. Sama nazwa ułatwia przeglądanie archiwum, ale przy wyborze najnowszej obserwacji program porównuje pełne pole \texttt{fetched\_at} wewnątrz JSON. Starsze katalogi z długimi znacznikami czasu pozostają odczytywalne.
+
+Zaletą archiwum jest prostota i zachowanie historii pobrań. Jego ograniczeniem jest konieczność ponownego przeglądania plików przy budowaniu tabeli. Nie ma jeszcze indeksów bazy, wspólnego harmonogramu aktualizacji ani automatycznego łączenia kolejnych fragmentów serii. Archiwum jest działającym etapem pośrednim, ale nie zastępuje wszystkich zadań przyszłej bazy danych.
+
+\section{Planowane połączenie z aplikacją webową}
+
+Planowana warstwa serwerowa ma używać Axum i Tokio, frontend ma powstać w Leptos z wykorzystaniem WebAssembly, a dane mają trafiać do SurrealDB. Wykresy przewidziano w Plotters. Są to decyzje dotyczące dalszej architektury; w bieżącym workspace nie ma jeszcze działającego serwera, interfejsu ani adaptera bazy.
+
+Docelowy backend powinien korzystać z istniejącej biblioteki, zamiast ponownie implementować wzory na potrzeby API. Adapter zapisu będzie odpowiadał za powiązanie instrumentu, obserwacji źródłowej i wyniku. Parser nadal powinien działać niezależnie od tego, czy wynik trafia do pliku, czy do bazy. Wymaga to przygotowania mapowania i testów integracyjnych, lecz pozwala zachować dotychczasowy kod obliczeń.
+
+Przed udostępnieniem głównego rankingu potrzebna jest jednak decyzja o punktach fundamentalnych i zasadach obsługi braków. Sam interfejs nie rozwiązuje problemu porównywalności wyników. Dlatego kolejny etap metodyki dotyczy punktacji, a nie prezentacji niepełnej sumy trzech rodzin jako gotowego wyniku końcowego.
 
 \cleardoublepage
 \chapter{Model danych}
+\label{chap:model}
 
-Pliki \texttt{database/schema.surql} i \texttt{database/seed.surql} opisują osiem kolekcji w SurrealDB. Kontrakt tabel scoringu jest aktualnym kontraktem produktu; pozostałe kolekcje zachowują wcześniejszy projekt. Kolekcja \texttt{instrument} przechowuje spółki oraz indeksy wraz z identyfikatorami używanymi przez różne źródła danych, takimi jak symbol Yahoo, zachowany identyfikator dawnych danych Stooq, kod GPW, nazwa GPW Benchmark oraz ISIN. Kolekcja \texttt{index\_membership} opisuje skład indeksu WIG20 i wagi instrumentów pobierane z GPW Benchmark.
+\section{Instrument i odpowiedź źródłowa}
 
-Dane cenowe są przechowywane w kolekcji \texttt{price\_daily}. Każdy rekord reprezentuje dzienną obserwację OHLCV dla instrumentu i źródła danych. Dane fundamentalne spółek trafiają do kolekcji \texttt{fundamental\_snapshot}, która przechowuje okres raportowy, przychody, wynik operacyjny, wynik netto, aktywa, kapitał własny, zobowiązania, przepływy pieniężne, EBITDA oraz wskaźniki pomocnicze. Dane makroekonomiczne i walutowe z NBP są zapisywane w kolekcji \texttt{macro\_observation} jako obserwacje w formacie długim: data, seria, wartość, jednostka i źródło.
+Instrument spółki jest opisany kodem GPW, numerem ISIN oraz nazwą lub etykietą pochodzącą ze źródła. Kod służy do obsługi komend i identyfikacji wiersza tabeli, a ISIN pozwala sprawdzić zgodność mapowania. Dla walut i złota stosowana jest osobna struktura zawierająca kod, walutę notowania oraz jednostkę. Para walutowa nie otrzymuje fikcyjnego ISIN spółki.
 
-Kolekcja \texttt{score\_config} przechowuje trzy nieujemne wagi typu \texttt{number}: \texttt{fundamental\_weight}, \texttt{technical\_weight} i \texttt{sentiment\_weight}, bez górnego limitu ani wymaganego łącznego poziomu. Rodzina \texttt{fundamental} obejmuje kondycję, wycenę i dynamikę wyników; \texttt{technical} obejmuje trend/momentum ceny i sezonowość miesięczną, a \texttt{sentiment} sentyment, bez ustalania jego źródła danych na tym etapie. Jeden zestaw wag obejmuje całe WIG20, w tym banki; w przykładowej konfiguracji \texttt{default\_growth\_v1} waga fundamentów jest największa. Kolekcja \texttt{score\_result} przechowuje \texttt{fundamental\_score}, \texttt{technical\_score}, \texttt{sentiment\_score} oraz \texttt{final\_score} jako liczby bez ograniczenia zakresu, także ujemne. Wynik końcowy jest sumą iloczynów tych trzech składowych i ich wag, bez normalizacji ani mapowania na procent zwrotu. Zakres 0--100 pozostaje wyłącznie dla \texttt{data\_quality\_score}. Zachowane są odwołania do instrumentu, konfiguracji i snapshotu fundamentalnego, data wyniku oraz wyjaśnienie; unikalność zapewnia zestaw \texttt{instrument}, \texttt{score\_date}, \texttt{config}. Seed przedstawia kształt rekordu, a nie skalibrowany ranking. Kontrakt pozwala przechowywać historię wyników i później zestawiać ją z cenami z \texttt{price\_daily}; nie implementuje scoringu ani wzorów składowych. Kolekcja \texttt{data\_source\_log} zapisuje informacje o pobraniach próbek i przyszłych importach danych, w tym źródło, status, zakres dat, ścieżkę pliku surowego oraz ewentualny błąd.
+Struktura \texttt{RawDocument} przechowuje źródło, opcjonalny instrument, czas pobrania, adres żądania, status HTTP oraz treść odpowiedzi. Pole \texttt{body} zawiera oryginalny tekst otrzymany przez klienta, na przykład HTML albo JSON dostawcy. Nie jest to jeszcze zbiór odczytanych wskaźników. Taki zapis umożliwia porównanie wyniku parsera z dokumentem, na podstawie którego powstał.
+
+Czas \texttt{fetched\_at} opisuje moment pobrania. Nie jest datą publikacji raportu ani datą ostatniej sesji. Adres źródłowy i status odpowiedzi pomagają rozpoznać sytuację, gdy serwer zamiast danych zwrócił komunikat błędu lub stronę weryfikacji dostępu.
+
+\section{Historia cen i pojedyncze notowania}
+
+Plik \texttt{history.json} przechowuje instrument, symbol dostawcy, walutę, źródło, adres odpowiedzi, czas pobrania oraz listę świec. Datą świecy jest dzień sesji w strefie \texttt{Europe/Warsaw}. Cena otwarcia, maksimum, minimum, zamknięcie, skorygowane zamknięcie i wolumen mają reprezentację dziesiętną.
+
+Dodatkowa lista \texttt{skipped\_candles} zapisuje daty i przyczyny pominięcia nieprawidłowych lub nieukończonych obserwacji. Brakujące dane nie są uzupełniane poprzednią ceną. W rezultacie liczba zapisanych świec oznacza liczbę poprawnych, dostępnych obserwacji, a nie liczbę wszystkich sesji, które powinny były wystąpić według kalendarza giełdowego.
+
+Bieżące kursy walut i złota trafiają do \texttt{price.json}. Model rozróżnia czas pobrania, dostępny czas aktualizacji źródła oraz początek okresu notowania. Początek dziennego okresu nie jest automatycznie czasem ostatniej transakcji. Oddzielenie tych pól zapobiega przypisaniu obserwacji dokładności czasowej, której dostawca faktycznie nie podaje.
+
+\section{Snapshot danych finansowych}
+
+Plik \texttt{fundamentals.json} łączy instrument i informacje o źródle ze strukturą \texttt{Fundamentals}. W niej znajdują się okres raportowy, waluta, \texttt{unit\_multiplier} i flaga \texttt{consolidated}. Dane jednostkowe oraz skonsolidowane są zatem jawnie rozróżnione. Kwoty są przechowywane w jednostce podanej w tabeli źródłowej; mnożnik określa sposób przeliczenia do podstawowej jednostki waluty.
+
+Model zachowuje wszystkie rozpoznane pozycje, a nie tylko pola potrzebne do pięciu obecnych wskaźników. Ich grupy przedstawiono w tabeli~\ref{tab:financialfields}. Pozwala to później wykorzystać dodatkowe dane bez zmiany znaczenia istniejących pól.
+
+\begin{table}[htbp]
+\centering
+\caption{Zakres rozpoznanych danych finansowych}
+\label{tab:financialfields}
+\small
+\begin{tabularx}{\textwidth}{p{3cm}X}
+\toprule
+Grupa & Zachowywane pozycje \\
+\midrule
+Wyniki działalności & Przychody ze sprzedaży, wynik ze sprzedaży, pozostałe przychody operacyjne, wynik operacyjny, przychody finansowe, wynik brutto, wynik netto udziałowców jednostki dominującej, amortyzacja, EBITDA \\
+Aktywa i finansowanie & Aktywa razem, trwałe i obrotowe, kapitał własny udziałowców podmiotu dominującego, kapitał podstawowy, zobowiązania długo- i krótkoterminowe \\
+Przepływy & Przepływy operacyjne, inwestycyjne i finansowe, przepływy netto oraz nabycie rzeczowych aktywów trwałych i wartości niematerialnych \\
+Wskaźniki dostawcy & ROE, ROA, płynność bieżąca i szybka, wskaźnik obsługi zadłużenia \\
+Pozostałe pozycje & Nierozpoznane etykiety i ich oryginalne wartości w \texttt{extra\_fields} \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+Pola \texttt{net\_income\_parent} i \texttt{equity\_parent} odnoszą się do udziałowców podmiotu dominującego. Parser nie zastępuje ich dowolnym wierszem podpisanym jako zysk netto albo kapitał własny. Jeżeli etykieta nie określa wymaganej kategorii, pozostaje ona w dodatkowych danych, a znane pole może być puste. Zachowanie tego rozróżnienia jest ważniejsze niż wypełnienie wszystkich komórek za wszelką cenę.
+
+Wskaźniki dostarczone przez Notorię mają prefiks \texttt{reported\_}. Pozostają w skali źródła i nie są mnożone przez jednostkę kwot. Obecna funkcja wyliczająca pięć surowych wskaźników nie używa \texttt{reported\_roe} ani \texttt{reported\_roa}. Jej wyniki powstają wyłącznie z podanych kwot tego samego snapshotu.
+
+\section{Liczby dziesiętne i brakujące wartości}
+
+Kwoty i ceny są reprezentowane w Rust przez \texttt{Decimal}. Typ ten przechowuje liczbę dziesiętną wraz ze skalą, co pozwala zachować zapis kwot bez pośredniej konwersji do binarnego typu \texttt{f64} \cite{decimal}. Nie oznacza to nieograniczonej precyzji: dzielenie może wymagać zaokrąglenia, a zakres typu jest skończony. Dlatego działania wykorzystują operacje sprawdzające możliwość obliczenia wyniku.
+
+W JSON liczby są zapisywane bez cudzysłowów, na przykład \texttt{24711000.00}. Konfiguracja serializacji zachowuje ich dziesiętną reprezentację. Odczyt obsługuje również wcześniejsze pliki, w których te same wartości występowały jako tekst. Zmiana sposobu zapisu nie wymaga przepisania zebranego archiwum.
+
+Wartość opcjonalna w Rust jest reprezentowana przez \texttt{Option}. Jej brak przechodzi do JSON jako \texttt{null}. Jest to informacja o niedostępności, nie liczba zero. Przykładowo zerowy wynik netto przy dodatnich przychodach daje marżę równą zero, natomiast brak wyniku netto uniemożliwia obliczenie marży. Podobnie podzielenie przez zerowy mianownik nie daje zerowego wskaźnika, tylko brak wyniku.
+
+\section{Wyniki obliczeń i projekt bazy}
+
+Wiersz rankingu technicznego zawiera kod spółki, datę rankingu, dwa składniki punktowe, ich sumę, średni zwrot sezonowy, liczbę użytych lat i ścieżkę pliku źródłowego. W pojedynczym wyniku dostępne są dodatkowo ostatnia użyta sesja, cena zamknięcia, SMA200 i odległość od średniej. Tabela fundamentalna zawiera kod, dane opisujące raport, pięć wskaźników i ścieżkę źródła. Nie ma w niej pola punktacji fundamentalnej.
+
+W katalogu \texttt{database/} znajduje się wcześniejszy projekt ośmiu tabel SurrealDB: \texttt{instrument}, \texttt{index\_membership}, \texttt{price\_daily}, \texttt{fundamental\_snapshot}, \texttt{macro\_observation}, \texttt{score\_config}, \texttt{score\_result} oraz \texttt{data\_source\_log}. Opisują one docelowe grupy danych i powiązania. Pliki schematu i przykładowych rekordów nie są jednak uruchamiane przez importer.
+
+Przed integracją projekt wymaga uzgodnienia z aktualnymi strukturami Rust. Dotyczy to między innymi nazw danych przypisanych udziałowcom dominującym, rozdzielenia waluty i mnożnika jednostki oraz obsługi brakującego wyniku technicznego. Obecny projekt \texttt{score\_result} wymaga wartości liczbowych rodzin, podczas gdy działający moduł techniczny dopuszcza \texttt{null}. Nie można więc przenieść wyników do tego schematu bez świadomej decyzji o brakach danych.
+
+W projekcie bazy przewidziano też konfigurację wag i odwołanie wyniku do instrumentu, daty oraz konfiguracji. Przykładowe rekordy służą pokazaniu struktury. Ich wartości nie są wynikami obliczeń ani dowodem dobrania wag. Pole jakości danych w skali 0--100 jest również tylko elementem wcześniejszego projektu i nie oznacza istnienia działającego algorytmu jakości.
 
 \cleardoublepage
 \chapter{Metodyka scoringu}
+\label{chap:scoring}
 
-Scoring ma deterministycznie wyznaczać względny potencjał wzrostu spółek z tego samego koszyka w horyzoncie 3--12 miesięcy. Wyższy wynik końcowy oznacza większą szansę na lepszy zwrot niż inne spółki z tego koszyka. Kondycja finansowa jest częścią rodziny \texttt{fundamental}; sama nie stanowi miary potencjału wzrostu.
+\section{Interpretacja i obecny zakres}
 
-Trzy rodziny wyników składowych w v1:
+Scoring ma porządkować spółki według przyjętych reguł. W przeciwieństwie do modelu prognozującego cenę nie zwraca oczekiwanego kursu ani procentowej stopy zwrotu. Na obecnym etapie działa tylko punktacja techniczna. Wskaźniki fundamentalne są obliczane, ale nie mają przypisanych punktów. Rodzina sentymentu pozostaje planowana, bez wybranego źródła.
 
-\begin{itemize}
-    \item \texttt{fundamental}: najważniejsza rodzina, obejmująca kondycję finansową, wycenę oraz dynamikę wyników (wzrost przychodów i zysku, nie sam poziom ROE),
-    \item \texttt{technical}: trend SMA200 ceny oraz sezonowość miesięczna z historii EOD,
-    \item \texttt{sentiment}: sentyment; źródło danych pozostaje nieustalone.
-\end{itemize}
+Podstawowym założeniem jest powtarzalność: ten sam plik wejściowy i ta sama data rankingu powinny dać ten sam wynik. Nie ma losowania, uczenia modelu ani automatycznego dopasowania progów do analizowanej spółki. Przejrzystość reguł pozwala sprawdzić poprawność obliczeń, lecz sama w sobie nie potwierdza ich skuteczności rynkowej.
 
-Każda z trzech rodzin ma ustaloną wagę. Wynik końcowy jest sumą ważoną wyników \texttt{fundamental}, \texttt{technical} i \texttt{sentiment}, stanowi miarę potencjału wzrostu i wyznacza kolejność spółek w tabeli. Suma nie podlega normalizacji końcowej ani mapowaniu na oczekiwany procent zwrotu. Wyjaśnialność wyniku zapewnia prezentacja wyników rodzin i ich wag. v1 stosuje jeden zestaw wag dla całego WIG20, w tym banków, bez osobnego modelu bankowego.
+\section{Dane dostępne dla daty rankingu}
 
-W wersji v1 wynik \texttt{technical\_score} jest sumą punktów sezonowości i trendu, z których każdy przyjmuje wartość $-1$, $0$ albo $+1$, bez wag wewnętrznych, normalizacji do skali 0--100 ani dodatkowego sygnału momentum. Dla daty rankingu $t$ wykorzystywane są wyłącznie świece o dacie wcześniejszej niż $t$ oraz pole \texttt{close} z pliku \texttt{history.json}, bez użycia \texttt{adjusted\_close}. Sezonowość dotyczy miesiąca kalendarzowego daty rankingu: dla wszystkich dostępnych zakończonych takich miesięcy z lat ubiegłych oblicza się zwrot jako iloraz ceny zamknięcia ostatniej sesji danego miesiąca i ceny zamknięcia ostatniej sesji poprzedniego miesiąca, pomniejszony o jeden; miesiąc bez dostępnej ceny bazowej jest pomijany. Średnia arytmetyczna tych zwrotów $R$ daje $+1$ dla $R>0{,}02$, $-1$ dla $R<-0{,}02$ oraz $0$ w pozostałych przypadkach. Wystarczy jeden zakończony miesiąc; brak takich obserwacji oznacza brak sezonowości i brak pełnego wyniku technicznego, zapisane jako \texttt{null}. Trend wykorzystuje średnią arytmetyczną SMA200 z ostatnich 200 dziennych zamknięć przed $t$ oraz odległość $d=|C-\mathrm{SMA200}|/\mathrm{SMA200}$ dla ostatniego dostępnego zamknięcia $C$: dla $d<0{,}03$ przyznaje się $0$, a poza tym $+1$ powyżej średniej i $-1$ poniżej niej, również na granicy $3\%$. Przy mniej niż 200 sesjach trend otrzymuje $0$, a SMA200 i $d$ pozostają niedostępne. Wynik jest wyjaśniany przez $R$, liczbę użytych lat, ostatnie zamknięcie, SMA200 i $d$; sezonowość nie jest porównywana z koszykiem ani indeksem. Makro sektorowe i COT pozostają poza v1, a pozostałe rodziny scoringu i walidacja metodyki są dalszymi etapami.
+Niech $t$ oznacza datę przekazaną przez parametr \texttt{as-of}. Do punktacji technicznej dopuszczane są wyłącznie świece, dla których
+\begin{equation}
+    \text{data świecy} < t.
+\end{equation}
+Świeca z dnia rankingu nie uczestniczy w obliczeniach, nawet jeżeli plik zawiera już jej zamknięcie. Dla przykładowego $t=19.09.2026$ ostatnia dopuszczalna data to 18 września, o ile taka obserwacja jest dostępna. Nie oznacza to obowiązku istnienia notowania każdego dnia kalendarzowego.
 
-Klasyczny backtest portfela typu top N nie jest częścią obecnego MVP. Zamiast tego aplikacja będzie przechowywać historię rekordów \texttt{score\_result} i umożliwiać porównanie wartości \texttt{final\_score} z późniejszym wykresem ceny instrumentu. Takie podejście lepiej pasuje do danych fundamentalnych, które są publikowane okresowo i z opóźnieniem.
+Po odcięciu przyszłości dane są sortowane według dat. Powtórzona data albo niedodatnia cena zamknięcia w wykorzystanej części historii powoduje błąd. Moduł nie rozstrzyga samodzielnie, którą z dwóch różnych cen tej samej sesji wybrać. Kontrola tych warunków dotyczy części serii wcześniejszej niż $t$; cały dokument nadal musi mieć poprawną strukturę możliwą do odczytania.
+
+\section{Sezonowość miesiąca kalendarzowego}
+
+Sezonowość odpowiada na pytanie, jak dana spółka zachowywała się zwykle w tym samym miesiącu kalendarzowym co data rankingu. Dla daty wrześniowej wykorzystywane są więc zakończone wrześnie z poprzednich lat. Nie jest to średni zwrot z ostatnich 30 dni ani analiza miesiąca następującego po dniu rankingu.
+
+Niech $C_{y,m}$ oznacza cenę \texttt{close} ostatniej dostępnej sesji miesiąca $m$ w roku $y$. Zwrot dla jednego historycznego miesiąca wynosi
+\begin{equation}
+    r_{y,m}=\frac{C_{y,m}}{C_{\mathrm{poprz}(y,m)}}-1,
+    \label{eq:monthly}
+\end{equation}
+gdzie $\mathrm{poprz}(y,m)$ wskazuje bezpośrednio poprzedni miesiąc kalendarzowy. Dla stycznia jest to grudzień poprzedniego roku. Jeśli w którymś z potrzebnych miesięcy nie ma ceny, dana para nie uczestniczy w średniej. Program nie zastępuje brakującego poprzedniego miesiąca starszą obserwacją.
+
+Dla $n$ dostępnych lat wyliczana jest średnia arytmetyczna
+\begin{equation}
+    R=\frac{1}{n}\sum_{y\in Y_m}r_{y,m},
+\end{equation}
+gdzie $Y_m$ jest zbiorem lat wcześniejszych niż rok daty rankingu, dla których można obliczyć zwrot z równania~\eqref{eq:monthly}. Każdy rok ma taki sam udział w średniej. Używana jest cała dostępna historia, bez ograniczenia do stałej liczby lat. Miesiąc bieżący nie wchodzi do tego zbioru.
+
+Punkty sezonowości $S$ są określone jako
+\begin{equation}
+    S=\begin{cases}
+        +1, & R>0{,}02,\\
+        -1, & R<-0{,}02,\\
+        0, & -0{,}02\leq R\leq 0{,}02.
+    \end{cases}
+    \label{eq:seasonpoints}
+\end{equation}
+Wartości dokładnie równe $+2\%$ i $-2\%$ należą zatem do przedziału neutralnego. Jeżeli $n=0$, średnia oraz punkty są niedostępne i mają wartość \texttt{null}. Jeden poprawny historyczny miesiąc wystarcza do obliczenia wyniku, ale nie jest tak samo mocną podstawą interpretacji jak kilkanaście lat. Z tego powodu obok średniej zachowywana jest liczba lat.
+
+Przykład wyłącznie obliczeniowy: cena bazowa 100 i zamknięcie miesiąca 103 dają zwrot $3\%$. Gdy jest to jedyny dostępny rok, sezonowość otrzymuje $+1$. Jeśli dostępne są dwa zwroty, $3\%$ oraz $-1\%$, ich średnia wynosi $1\%$ i punktacja jest neutralna. Są to wartości poglądowe, nie wyniki rzeczywistej spółki.
+
+Reguła nie mierzy rozrzutu zwrotów ani odsetka dodatnich miesięcy. Różne przebiegi historii mogą dawać tę samą średnią. Wynik nie jest też porównywany ze zwrotem WIG20 lub średnią pozostałych spółek. Te ograniczenia należy uwzględnić przy późniejszej ocenie przydatności sygnału.
+
+\section{Trend względem SMA200}
+
+Trend jest oceniany na podstawie ostatnich 200 dostępnych dziennych zamknięć wcześniejszych niż $t$. Są to obserwacje sesyjne, nie 200 dni kalendarzowych. Średnia ma postać
+\begin{equation}
+    \mathrm{SMA200}=\frac{1}{200}\sum_{j=1}^{200}C_j,
+\end{equation}
+przy czym okno obejmuje również ostatnie dostępne zamknięcie $C$. Jego względna odległość od średniej wynosi
+\begin{equation}
+    d=\frac{|C-\mathrm{SMA200}|}{\mathrm{SMA200}}.
+\end{equation}
+Dla pełnego okna punkty trendu $G$ są przyznawane według reguły
+\begin{equation}
+    G=\begin{cases}
+        0, & d<0{,}03,\\
+        +1, & d\geq 0{,}03\ \text{i}\ C>\mathrm{SMA200},\\
+        -1, & d\geq 0{,}03\ \text{i}\ C<\mathrm{SMA200}.
+    \end{cases}
+    \label{eq:trendpoints}
+\end{equation}
+Dokładnie $3\%$ odchylenia jest już wynikiem kierunkowym. W implementacji porównywana jest bezpośrednio różnica cen z $0{,}03\cdot\mathrm{SMA200}$. Pozwala to uniknąć przesunięcia granicy przez zaokrąglenie dzielenia użytego do przedstawienia $d$.
+
+Jeżeli dostępnych jest mniej niż 200 sesji, punkty trendu wynoszą zero, a SMA200 i $d$ pozostają \texttt{null}. Jest to przyjęta reguła dla krótkiej historii, nie stwierdzenie, że cena na pewno porusza się bocznie. Wyjaśnienie wyniku podaje liczbę obserwacji użytych do okna, maksymalnie 200, co pozwala rozróżnić te sytuacje.
+
+\section{Łączny wynik techniczny i ranking}
+
+Gdy sezonowość jest dostępna, wynik techniczny wynosi
+\begin{equation}
+    T=S+G,\qquad T\in\{-2,-1,0,1,2\}.
+    \label{eq:technical}
+\end{equation}
+Każdy składnik przyjmuje $-1$, $0$ albo $+1$. Nie stosuje się wag wewnętrznych, dodatkowego momentum ani przeliczenia na skalę 0--100. Brak sezonowości oznacza \texttt{null} także dla całego \texttt{technical\_score}; sam trend nie jest wtedy przedstawiany jako pełny wynik.
+
+Polecenie \texttt{technical-table} wywołuje tę samą funkcję co obliczenie dla pojedynczego pliku. Wyniki liczbowe sortuje malejąco, wiersze z \texttt{null} umieszcza na końcu, a remisy rozstrzyga alfabetycznie według kodu. Kolejność alfabetyczna nie oznacza przewagi jednej spółki nad drugą. Przy tylko pięciu możliwych pełnych wynikach należy spodziewać się remisów i tak je interpretować także podczas walidacji.
+
+Wspólny katalog może zawierać wiele pobrań tej samej spółki. Tabela wybiera plik o najpóźniejszym \texttt{fetched\_at}; przy równym czasie zachowuje pierwszy plik według uporządkowanej ścieżki. Wybór odbywa się przed scoringiem. Jeśli wybrana seria ma błąd obliczeń, spółka jest pomijana, bez cichego powrotu do starszej wersji. Dzięki temu wynik nie zależy od ukrytej próby znalezienia dowolnego pliku, który akurat daje się policzyć.
+
+\section{Surowe wskaźniki fundamentalne}
+\label{sec:ratios}
+
+Polecenie \texttt{fundamental-table} tworzy zestawienie pięciu wskaźników z jednego raportu na spółkę. Nie przyznaje punktów i nie łączy wyników z rodziną techniczną. Przed działaniami kwoty są mnożone przez \texttt{unit\_multiplier}. Jeśli wartości źródłowe są podane w tysiącach złotych, mnożnik wynosi 1000. Nie dotyczy on gotowych wskaźników dostawcy.
+
+Do zapisu wzorów przyjęto oznaczenia: $P$ --- przychody ze sprzedaży, $Z_n$ --- wynik netto udziałowców jednostki dominującej, $Z_o$ --- wynik operacyjny, $K$ --- kapitał własny udziałowców podmiotu dominującego, $A$ --- aktywa, $L_d$ i $L_k$ --- zobowiązania długo- i krótkoterminowe, a $CF_o$ --- przepływy operacyjne. Wszystkie oznaczają kwoty z tego samego snapshotu, po zastosowaniu mnożnika.
+
+\begin{table}[htbp]
+\centering
+\caption{Wskaźniki obliczane przez tabelę fundamentalną}
+\label{tab:ratios}
+\small
+\begin{tabularx}{\textwidth}{p{4.2cm}p{2.2cm}X}
+\toprule
+Pole wyniku & Wzór & Znaczenie przyjętej relacji \\
+\midrule
+\texttt{net\_margin} & $Z_n/P$ & Wynik netto przypisany udziałowcom dominującym w relacji do sprzedaży \\
+\texttt{operating\_margin} & $Z_o/P$ & Wynik działalności operacyjnej w relacji do sprzedaży \\
+\texttt{equity\_ratio} & $K/A$ & Kapitał przypisany udziałowcom dominującym w relacji do aktywów \\
+\texttt{debt\_to\_equity} & $(L_d+L_k)/K$ & Suma zobowiązań w relacji do wskazanego kapitału \\
+\texttt{ocf\_to\_net\_income} & $CF_o/Z_n$ & Przepływy operacyjne w relacji do wskazanego wyniku netto \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+Nazwy pól odpowiadają konkretnym definicjom w tabeli~\ref{tab:ratios}. W szczególności \texttt{debt\_to\_equity} używa sumy dostępnych zobowiązań długo- i krótkoterminowych, a nie wyodrębnionego długu odsetkowego. Podobnie \texttt{equity\_ratio} opiera się na kapitale udziałowców dominujących. W opisie wyników nie należy zamiennie przedstawiać tych danych jako innych kategorii bilansowych.
+
+Wskaźnik jest niedostępny, jeśli brakuje licznika, mianownika albo mianownik wynosi zero. Dla sumy zobowiązań wymagane są oba składniki. Jeżeli znane są tylko zobowiązania krótkoterminowe, drugi składnik nie zostaje uznany za zerowy. Nie wykonuje się annualizacji, przeliczenia walut ani łączenia kwot z różnych raportów.
+
+Mnożnik jednostki skraca się w ilorazie, jeśli obie kwoty są podane w tej samej skali. Przykładowo 100 tysięcy zysku i 1000 tysięcy przychodów daje $0{,}1$, czyli $10\%$, tak samo jak po przeliczeniu obu kwot na złote. Jest to przykład rachunkowy. W JSON wskaźnik pozostaje ułamkiem \texttt{0.1}, a nie liczbą \texttt{10}. Jawne zastosowanie mnożnika zachowuje spójny sposób interpretacji kwot i pozwala wykryć przekroczenie zakresu typu.
+
+Ujemne wartości pozostają ujemne. Program nie przypisuje im automatycznie znaczenia inwestycyjnego. Dodatni iloraz przepływów i wyniku netto może powstać również wtedy, gdy obie kwoty są ujemne. Z kolei ujemny kapitał zmienia interpretację relacji zobowiązań do kapitału. Są to powody, dla których samo obliczenie wskaźników nie rozstrzyga jeszcze ich punktacji.
+
+\section{Decyzja o punktach fundamentalnych}
+
+Progu sezonowości nie można bezpośrednio przenieść do fundamentów. Sezonowość mierzy zwrot wokół zera, natomiast marża $10\%$ albo udział kapitału $0{,}40$ opisują inne relacje. Wspólny próg $2\%$ przypisywałby w takich przykładach dodatni punkt bez wystarczającego uzasadnienia. Dla zadłużenia trzeba dodatkowo rozważyć przeciwny kierunek oceny oraz przypadki ujemnego kapitału.
+
+Rozpatrywane są dwie ścieżki. Pierwsza opiera się na porównaniu w obrębie koszyka: górna tercja otrzymuje $+1$, środkowa zero, dolna $-1$, z odwróconym kierunkiem dla zadłużenia i pominięciem brakujących wartości. Wymaga to jednak zasad rozstrzygania remisów, minimalnej liczby poprawnych obserwacji i oceny, czy porównywane spółki są dostatecznie podobne. Pozycja względna może zmienić się także przez zmianę pozostałych spółek, mimo niezmienionych danych danego podmiotu.
+
+Druga ścieżka polega na ustaleniu osobnych progów absolutnych dla każdego wskaźnika. Pozwala zachować znaczenie progu niezależnie od składu koszyka, ale wymaga uzasadnienia jego wartości i sposobu traktowania różnych branż. Żadna z tych ścieżek nie została jeszcze przyjęta jako działający algorytm fundamentalny.
+
+Osobnej decyzji wymaga brak pojedynczego wskaźnika: czy uniemożliwia obliczenie całej rodziny, czy wynik powstaje tylko z dostępnych składników. Drugi wariant prowadzi do porównywania sum o różnej liczbie składników. Pierwszy może istotnie ograniczyć liczbę spółek z pełnym wynikiem, szczególnie wśród banków. Brak wyniku nie powinien być bez wyjaśnienia zastępowany neutralnym zerem.
+
+Pozostaje również kwestia skali. Suma pięciu punktowanych wskaźników miałaby zakres od $-5$ do $+5$, podczas gdy wynik techniczny ma zakres od $-2$ do $+2$. Zwiększenie wagi fundamentów dodatkowo wzmacnia tę różnicę. Dlatego przed połączeniem rodzin należy ustalić, co ma oznaczać jeden punkt każdej z nich. Nie wymaga to końcowej skali 0--100, ale wymaga świadomego określenia zakresów i wag.
+
+Obecne dane nie pokrywają jeszcze całego planowanego zakresu fundamentów. Bez liczby akcji nie ma wyliczanych P/E i P/B, a bez poprzednich porównywalnych raportów nie ma dynamiki rok do roku. Pięć dostępnych wskaźników opisuje wybrane relacje finansowe; nie zastępuje ani wyceny, ani pełnej oceny sektora bankowego.
+
+\section{Planowany wynik końcowy}
+
+Docelowo trzy rodziny mają być łączone w postaci
+\begin{equation}
+    Q=w_F F+w_T T+w_S S_{\mathrm{sent}},
+\end{equation}
+gdzie $F$ jest wynikiem fundamentalnym, $T$ wynikiem technicznym, a $S_{\mathrm{sent}}$ wynikiem sentymentu. Wagi mają być nieujemne i wspólne dla koszyka WIG20, również dla banków. Fundamenty mają być rodziną najważniejszą, ale liczbowe wartości wag pozostają decyzją do podjęcia po ustaleniu punktacji.
+
+Jest to zapis planu, a nie wzór wykonywany obecnie przez program. Nie istnieje jeszcze komplet trzech wyników ani obliczany \texttt{final\_score}. Sentyment pozostaje poza punktami do czasu wyboru źródła i zasad jego interpretacji. Przyszła suma nie ma być normalizowana do 0--100 ani przedstawiana jako procent oczekiwanego zwrotu.
 
 \cleardoublepage
 \chapter{Implementacja}
+\label{chap:implementation}
 
-Pierwszym zaimplementowanym modułem jest program konsolowy \texttt{rankr-import} napisany w języku Rust. Pobiera on bieżący skład WIG20 z GPW Benchmark oraz podstawowe dane finansowe spółek z tabel GPW/Notoria. Program udostępnia polecenia zbierania danych, pobierania pojedynczej odpowiedzi oraz przetwarzania zapisanego dokumentu bez połączenia z siecią.
+\section{Komendy i sposób uruchamiania}
 
-Kod rozdziela modele danych, komunikację HTTP, parser HTML i zapis plików JSON. Podczas zbierania danych odpowiedź źródłowa jest zapisywana przed parsowaniem. Dzięki temu błąd odczytu nie powoduje utraty dokumentu, a poprawiony parser może ponownie przetworzyć lokalną odpowiedź. Wartości finansowe zachowują walutę, jednostkę i znak źródłowy. W programie są reprezentowane przez typ dziesiętny, natomiast w JSON przez tekstowy zapis liczby dziesiętnej; brak wartości jest reprezentowany przez \texttt{null}. Parser nie wyznacza dat publikacji na podstawie okresu raportowego.
+Program \texttt{rankr-import} udostępnia osobne komendy do pobierania i lokalnej analizy. Po instalacji z katalogu repozytorium można uruchamiać je bezpośrednio z terminala:
+\begin{verbatim}
+cargo install --path importer --locked
+rankr-import collect
+rankr-import history
+rankr-import prices USDPLN
+\end{verbatim}
 
-Integracja tego modułu z SurrealDB pozostaje kolejnym etapem. Serializowalne struktury odpowiedzi źródłowej i danych finansowych są niezależne od warstwy plikowej, co pozwala wykorzystać je w przyszłym adapterze bazy danych.
+Komendy \texttt{collect}, \texttt{history} i \texttt{prices} przyjmują opcjonalny kod. Dla zbierania fundamentów brak kodu oznacza bieżące WIG20; dla historii cen również cały bieżący koszyk. Komenda \texttt{prices} bez kodu zbiera dzienne ceny spółek oraz trzy obsługiwane pary walutowe i złota. Katalog wyjściowy można zmienić argumentem \texttt{--output}.
 
-TODO: Opisać implementację backendu, frontendu, importu danych, integracji z bazą oraz uruchamiania części analitycznej.
+\begin{table}[htbp]
+\centering
+\caption{Komendy działającej wersji programu}
+\label{tab:commands}
+\small
+\begin{tabularx}{\textwidth}{p{3.4cm}p{1.8cm}X}
+\toprule
+Komenda & Sieć & Rezultat \\
+\midrule
+\texttt{collect [CODE]} & Tak & Surowa odpowiedź i snapshot fundamentów \\
+\texttt{history [CODE]} & Tak & Pełna dostępna historia dzienna spółki lub koszyka \\
+\texttt{prices [CODE]} & Tak & Ostatnia świeca spółki albo bieżące notowanie pary \\
+\texttt{fetch CODE} & Tak & Surowa odpowiedź fundamentalna na standardowym wyjściu \\
+\texttt{parse FILE} & Nie & Ponowne przetworzenie zapisanego dokumentu \\
+\texttt{technical} & Nie & Wynik techniczny jednej serii dla podanej daty \\
+\texttt{technical-table} & Nie & Posortowany ranking techniczny z katalogu historii \\
+\texttt{fundamental-table} & Nie & Tabela pięciu wskaźników z najnowszych snapshotów \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+Dla analizy offline wystarczy istniejące archiwum:
+\begin{verbatim}
+rankr-import fundamental-table data/collected
+rankr-import technical-table --as-of 2026-10-18 data/collected
+rankr-import technical --as-of 2026-10-18 /path/to/history.json
+\end{verbatim}
+Są to przykłady użycia komend, a nie wyniki rankingu. Polecenia analityczne wypisują sformatowany JSON na standardowe wyjście. Informacje o liczbie spółek i pominiętych plikach trafiają na standardowe wyjście błędów. Dzięki temu przekierowanie wyniku do pliku nie miesza danych z komunikatami diagnostycznymi.
+
+\section{Pobieranie i obsługa błędów HTTP}
+
+Klienci źródeł korzystają ze wspólnego transportu opartego na \texttt{reqwest} i Tokio. Połączenie ma limit 10 sekund, a całe żądanie 20 sekund. Dla przejściowych błędów, w tym odpowiedzi HTTP 429 i błędów serwera, wykonywane są maksymalnie trzy próby z przerwami. Końcowa odpowiedź HTTP może zostać zarchiwizowana również wtedy, gdy zawiera kod błędu.
+
+Żądania historii kolejnych spółek są rozdzielone przerwą 500 milisekund. Nie uruchamia się pobierania wszystkich instrumentów naraz. Program potrzebuje poprawnie zgromadzonych danych dziennych, więc ograniczenie jednoczesnych żądań jest akceptowalne. Nie przeprowadzono pomiaru przepustowości i nie zakłada się na tej podstawie określonej wydajności całego systemu.
+
+Lista spółek jest odczytywana z aktualnej strony indeksu i jej odpowiedzi pomocniczej. Identyfikator modułu strony jest wyszukiwany w treści, zamiast polegać wyłącznie na zapisanym na stałe numerze. Jeśli strona ma nieoczekiwaną postać, program zachowuje otrzymaną odpowiedź do diagnozy. Poprawność listy jest sprawdzana przed przejściem do pobrań spółek.
+
+Niepowodzenie jednego instrumentu jest raportowane, a pozostałe pobrania mogą być kontynuowane. Jeżeli choć jedno z zaplanowanych pobrań zakończyło się błędem, komenda zbierająca zwraca niezerowy kod zakończenia. Wcześniej zapisane poprawne obserwacje pozostają w archiwum. Pozwala to odróżnić pełne powodzenie od częściowego zebrania danych.
+
+\section{Parser fundamentów}
+
+Parser HTML wyszukuje tabelę zawierającą rozpoznane etykiety finansowe. Brak takiej tabeli i znalezienie kilku pasujących tabel są różnymi błędami. Program nie wybiera dowolnej tabeli tylko dlatego, że występują w niej liczby.
+
+Wiersz musi zawierać etykietę i jedną wartość. Dodanie przez dostawcę drugiego okresu w kolejnej kolumnie nie powoduje automatycznego wyboru jednej kolumny. Jest zgłaszane jako zmiana układu, którą trzeba świadomie obsłużyć. W ten sposób ograniczono ryzyko obliczania wskaźników z pomieszanych okresów.
+
+Odczyt liczb uwzględnia przecinek dziesiętny, odstępy pomiędzy grupami cyfr oraz spotykane w HTML odmiany białych znaków. Zachowywany jest znak liczby. Rozpoznany wiersz z niepoprawną wartością powoduje błąd, a nie zamianę na zero. Nierozpoznane wiersze pozostają w \texttt{extra\_fields}, żeby zmiana źródła nie oznaczała ich całkowitej utraty.
+
+Parser sprawdza też zgodność powtórzonych pól. Dwa wiersze przypisane do tej samej kategorii i zawierające sprzeczne wartości są traktowane jako niejednoznaczność. Dotyczy to także sytuacji, w której jeden z tych wierszy jest pusty, a drugi zawiera kwotę. Metadane raportu są odczytywane osobno; nie zgaduje się daty publikacji na podstawie tytułu.
+
+\section{Parser historii i granica zakończonej sesji}
+
+Dla pełnej historii Yahoo wysyłane jest żądanie z interwałem \texttt{1d}, początkiem zakresu \texttt{period1=0} i końcem odpowiadającym czasowi pobrania. Użycie jawnych granic pozwala zachować żądanie danych dziennych. Tryb ostatniej ceny pobiera ostatni miesiąc, a po sprawdzeniu odpowiedzi zapisuje ostatnią kompletną świecę.
+
+Parser sprawdza symbol, rynek, walutę, strefę czasową i interwał zapisane w metadanych. Kontroluje również jednakową długość tablic dat, OHLCV i skorygowanego zamknięcia. Niedopasowanych tablic nie łączy według domysłów. Powtórzona data sesji jest błędem całej serii.
+
+Każda świeca musi mieć poprawne ceny i wolumen. Maksimum nie może być mniejsze od otwarcia, zamknięcia ani minimum, a minimum nie może być większe od otwarcia i zamknięcia. Niepoprawne zakresy nie są naprawiane przez zamianę pól miejscami. Obserwacje z brakującymi wartościami, w tym wymaganym przez parser Yahoo skorygowanym zamknięciem, trafiają do listy pominiętych świec. Jest to bardziej restrykcyjne wymaganie niż potrzeby samego scoringu, który odczytuje wyłącznie datę i \texttt{close}.
+
+Znaczniki czasu są przeliczane na dzień sesji w Warszawie. Świeca dnia pobrania jest dopuszczana dopiero po zakończeniu regularnej sesji wskazanej przez dostawcę i dodatkowych 15 minutach. Brak informacji pozwalającej potwierdzić koniec sesji również powoduje jej pominięcie. Daty późniejsze niż dzień pobrania są odrzucane jako niespójne z odpowiedzią.
+
+Jeśli część świec jest użyteczna, historia zostaje zapisana razem z opisem pominięć. Jeśli nie ma żadnej poprawnej zakończonej obserwacji albo struktura odpowiedzi jest niezgodna, pozostaje surowy dokument i opis błędu. Obecna cena rynkowa nie jest używana w miejsce brakującego dziennego zamknięcia.
+
+\section{Zapis plików i ponowne przetwarzanie}
+
+Plik docelowy jest publikowany dopiero po zapisaniu kompletnej zawartości do pliku tymczasowego. Zapis odmawia nadpisania istniejącej obserwacji. Nazwa katalogu jest zajmowana przez jego utworzenie, co chroni także przed kolizją dwóch równoczesnych uruchomień. Dodatkowo znaki kodu spółki nie mogą utworzyć niezamierzonych podkatalogów.
+
+Po błędzie parsera obok \texttt{raw.json} powstaje \texttt{error.json}. Poprawioną wersję parsera można uruchomić na surowym pliku poleceniem \texttt{parse}. Wynik trafia na standardowe wyjście, więc użytkownik może zapisać go w osobnym miejscu i porównać z poprzednim. Nie trzeba w tym celu zmieniać archiwalnego dokumentu.
+
+Zapis nie eliminuje powtarzających się treści raportu. Dwa identyczne pobrania nadal mają odrębne katalogi i czasy. Ochrona przed nadpisaniem danych i wybór najnowszego pliku do tabeli są dwoma różnymi zadaniami; żadne z nich nie oznacza jeszcze rozpoznawania rewizji sprawozdań.
+
+\section{Budowanie tabel offline}
+
+Obie komendy tabelaryczne rekurencyjnie przeglądają katalog wejściowy. Szukają odpowiednio plików \texttt{history.json} i \texttt{fundamentals.json}, a pozostałe pliki archiwum ignorują. Odczytują kod spółki i moment pobrania, po czym wybierają najnowszy poprawnie odczytany dokument dla danego kodu. Daty porównywane są jako znaczniki czasu, z uwzględnieniem przesunięcia strefy.
+
+Uszkodzony JSON, brak kodu lub błąd obliczeń są raportowane wraz ze ścieżką. Pojedynczy niepoprawny plik nie przerywa całej tabeli. Pusty katalog albo brak poprawnych spółek kończy się błędem i pustym standardowym wyjściem. Tabela techniczna podaje liczbę brakujących pełnych wyników, a fundamentalna liczbę braków osobno dla każdego wskaźnika.
+
+Wybór najnowszego pliku ma praktyczne ograniczenie. Polecenia \texttt{history} i spółkowe \texttt{prices} zapisują ten sam typ pliku, ale drugie z nich zachowuje tylko ostatnią świecę. Nowszy jednoelementowy plik może więc zastąpić pełną serię przy budowie tabeli z tego samego katalogu. Program nie skleja historii automatycznie. Do rankingu należy wskazać katalog zawierający pobrania pełnej historii; osobny katalog można wybrać przez \texttt{--output}.
+
+Tabela fundamentalna jest sortowana według kodu, ponieważ jej liczby nie stanowią wspólnego wyniku punktowego. Najnowszy czas pobrania oznacza ostatni zapisany stan źródła, a nie automatycznie najnowszy okres sprawozdawczy. Reguła ta nie porównuje etykiet raportów ani dat ich publikacji.
 
 \cleardoublepage
 \chapter{Testy i walidacja}
+\label{chap:tests}
 
-TODO: Opisać testy backendu, parsera danych, scoringu, interfejsu użytkownika oraz walidację historii score'u.
+\section{Zakres sprawdzenia programu}
+
+Testy podzielono według odpowiedzialności kodu. Parsery i obliczenia korzystają z małych plików wejściowych o znanej zawartości, nazywanych dalej próbkami testowymi. Zapis i wyszukiwanie plików są sprawdzane w katalogach tymczasowych. Testy klienta HTTP używają lokalnego serwera, dzięki czemu mogą odtworzyć błędy bez połączenia z GPW, Yahoo lub TradingView.
+
+Dla wersji analizowanej 18 października 2026 roku poprawnie zakończyło się 78 testów. Ich podział przedstawiono w tabeli~\ref{tab:tests}. Liczba testów nie jest miarą pokrycia wszystkich możliwych sytuacji. Pokazuje zakres sprawdzonej implementacji; nie wykonano pomiaru procentowego pokrycia kodu.
+
+\begin{table}[htbp]
+\centering
+\caption{Zestawy testów działającej części projektu}
+\label{tab:tests}
+\small
+\begin{tabularx}{\textwidth}{Xr}
+\toprule
+Obszar & Liczba testów \\
+\midrule
+Skład WIG20 i komunikacja HTTP & 8 \\
+Komendy CLI i archiwizacja w programie wykonywalnym & 10 \\
+Parser fundamentów & 13 \\
+Historia CSV i mapowanie symboli & 8 \\
+Parser dziennych danych Yahoo & 8 \\
+Zapis archiwum, nazwy i kolizje katalogów & 4 \\
+Wzór techniczny & 13 \\
+Tabela techniczna & 5 \\
+Wskaźniki fundamentalne & 5 \\
+Tabela fundamentalna & 4 \\
+\midrule
+Łącznie & 78 \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+Weryfikacja obejmowała trzy polecenia:
+\begin{verbatim}
+cargo fmt --all -- --check
+cargo test --workspace --locked
+cargo clippy --workspace --all-targets --locked -- -D warnings
+\end{verbatim}
+Sprawdzenie formatowania, testy oraz kontrola Clippy zakończyły się poprawnie. Użycie \texttt{--locked} wymaga zachowania zależności zapisanych w \texttt{Cargo.lock}, co ogranicza przypadkową zmianę środowiska bibliotek przy ponownym uruchomieniu.
+
+\section{Dane wejściowe, zapis i brakujące wartości}
+
+Testy parsera fundamentów sprawdzają rozpoznanie pól finansowych, znaki kwot, waluty i mnożniki jednostek. Obejmują też odmiany odstępów w HTML, brak tabeli, kilka pasujących tabel, niejednoznaczne metadane oraz zmianę liczby kolumn. Osobny przypadek potwierdza, że brak danych banku pozostaje \texttt{null}, a rzeczywiste zero pozostaje liczbą zero.
+
+Zachowanie precyzji jest sprawdzane między innymi kwotą testową \texttt{9007199254740993.01}. Po zapisaniu i ponownym odczytaniu JSON musi ona zachować swoją wartość, a w dokumencie wynikowym występować jako liczba. Test obejmuje również odczyt wcześniejszego formatu z cudzysłowami. Pozwala to wykryć przypadkową konwersję przez \texttt{f64}, która mogłaby zgubić część cyfr.
+
+Testy archiwum sprawdzają zachowanie surowej odpowiedzi po błędzie parsera, odmowę nadpisania pliku i tworzenie kolejnych katalogów. Równoczesne uruchomienia muszą zachować wszystkie obserwacje w różnych miejscach. Niepoprawny kod instrumentu nie może przenieść plików poza wybrany katalog przez użycie separatorów ścieżki.
+
+Dla historii cen sprawdzane są niezgodne metadane, różna długość tablic, brakujące wartości i powtórzone daty. Przypadki czasowe obejmują sesje zimowe i letnie oraz granicę dopuszczenia świecy bieżącego dnia. Testy potwierdzają również, że brak dziennego zamknięcia nie jest uzupełniany notowaniem bieżącym.
+
+\section{Wzory i przypadki graniczne}
+
+W testach sezonowości wykorzystano serie, dla których średni zwrot można policzyć niezależnie. Sprawdzane są dodatni, ujemny i neutralny wynik, dokładne granice $\pm2\%$, przejście ze stycznia do grudnia oraz brak poprzedniego miesiąca. Osobne przypadki potwierdzają wyłączenie miesiąca bieżącego i dopuszczenie pojedynczego historycznego roku.
+
+Test odcięcia przyszłości zmienia świece przypadające na datę rankingu i później. Wynik obliczeń nie może się przez to zmienić. Analogicznie niepoprawne wartości w późniejszej, odrzuconej części odczytanej serii nie mogą wpływać na walidację wykorzystanych cen. Dla trendu sprawdzane są obie strony pasa $3\%$, jego granice oraz serie krótsze niż 200 sesji.
+
+Wskaźniki fundamentalne mają testy brakujących operandów, rzeczywistego zera w liczniku i zera w mianowniku. Sprawdzane jest wymaganie obu części zobowiązań oraz zastosowanie mnożnika tysięcy. Przypadek przekroczenia zakresu liczby musi zwrócić błąd zamiast pozornie poprawnego wskaźnika. Liczbowe i tekstowe zapisy tych samych kwot wejściowych dają te same wyniki.
+
+Testy komend tabelarycznych odtwarzają kilka spółek, podkatalogi i duplikaty pobrań. Nowszy znacznik czasu musi wygrać niezależnie od kolejności nazw katalogów. Dla rankingu technicznego weryfikowane są remisy i \texttt{null} na końcu. Dla fundamentów sprawdzono pozostawienie banku z brakującymi marżami. Uszkodzony plik nie może usuwać poprawnych spółek, natomiast zero poprawnych wierszy musi oznaczać błąd.
+
+\section{Sprawdzenie na lokalnym archiwum}
+
+Po testach na kontrolowanych próbkach uruchomiono obie tabele na danych znajdujących się w lokalnym archiwum. Każda zwróciła 20 spółek. Kontrola formatu potwierdziła, że pola wskaźników i średniego zwrotu zawierają liczby albo \texttt{null}. Nie była to ocena tego, które spółki powinny zajmować wyższe miejsca.
+
+Stan plików w chwili sprawdzenia przedstawiono w tabeli~\ref{tab:archive}. Liczby pochodzą z odczytu archiwum; nie są przykładowym rankingiem ani wynikami symulacji.
+
+\begin{table}[htbp]
+\centering
+\caption{Lokalne archiwum sprawdzone 18 października 2026 roku}
+\label{tab:archive}
+\small
+\begin{tabularx}{\textwidth}{Xrr}
+\toprule
+Wielkość & Fundamenty & Historia cen \\
+\midrule
+Liczba plików z odczytanymi danymi & 47 & 20 \\
+Liczba różnych kodów spółek & 20 & 20 \\
+Najkrótsza seria świec & --- & 494 \\
+Najdłuższa seria świec & --- & 6882 \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+Pobrania fundamentów pochodziły z 15--17 września 2026 roku, a pełne historie cen z 14 października 2026 roku. Oznacza to, że w chwili sprawdzenia dane nie były odświeżone do jednego wspólnego dnia. Liczba 47 snapshotów nie potwierdza również 47 różnych okresów raportowych. Archiwum pokazuje działanie zbierania danych, ale nie stanowi jeszcze ciągłego, automatycznie aktualizowanego zbioru obserwacji do oceny rankingu.
+
+Pliki pełnej historii zawierają wiele sesji, lecz nie zweryfikowano ich kompletności względem niezależnego kalendarza GPW. Ostatnia dostępna świeca danego miesiąca jest podstawą sezonowości nawet wtedy, gdy w źródle brakuje rzeczywistej ostatniej sesji. Taki brak może zmienić wyliczony zwrot. Liczba świec i lista pominięć powinny więc być rozpatrywane razem z zakresem dat.
+
+\section{Granice poprawności historycznej}
+
+Odcięcie danych przez \texttt{date < as\_of} zabezpiecza wzór przed użyciem przyszłych świec, ale nie zapewnia pełnego odtworzenia informacji dostępnych historycznie. Komenda \texttt{technical-table} wybiera najnowszy plik według \texttt{fetched\_at}, nawet jeśli został pobrany po zadanej dacie rankingu. Może zatem użyć później poprawionej wersji dawnych notowań. Jest to obliczenie na wskazanej wersji archiwum z odcięciem dat, a nie kompletna symulacja dostępu do danych w przeszłości.
+
+Podobne ograniczenie dotyczy składu indeksu. Długa historia cen obecnych spółek WIG20 nie jest historią dawnych składów WIG20. Porównanie wyłącznie podmiotów, które znajdują się w koszyku dzisiaj, może pominąć spółki usunięte z indeksu albo wycofane z rynku. Takie porównanie należy opisać jako analizę obecnego koszyka, zamiast przedstawiać je jako dawny ranking całego indeksu.
+
+Dla fundamentów problem jest większy, ponieważ obecny zbiór nie odtwarza raportów i ich dostępności w dawnych latach. Komenda \texttt{fundamental-table} nie przyjmuje daty historycznej. Przy późniejszej walidacji można opierać się na rzeczywiście zachowanych obserwacjach i momentach ich pobrania. Nie można przenosić dzisiejszego raportu do rankingu sprzed jego publikacji.
+
+Na etapie zapisu wyników trzeba więc zachować użyte dane, skład koszyka, datę obliczenia i konfigurację. Archiwum dostarcza części potrzebnych informacji, ale automatyczna historia rankingów nie jest jeszcze zaimplementowana. Same testy jednostkowe nie rozwiązują problemów brakujących obserwacji i zmian źródła.
+
+\section{Plan oceny przydatności rankingu}
+
+Dalsza walidacja powinna zestawiać wyniki zapisane przed okresem obserwacji z późniejszymi zmianami cen. Dla spółek mających pełne trzy miesiące danych można porównać kolejność punktacji z kolejnością zwrotów oraz obliczyć korelację rang Spearmana. Przy częstych remisach punktowych należy użyć wspólnych, średnich rang. Alfabetyczny porządek wyświetlania nie może sztucznie tworzyć odmiennych rang dla spółek z tym samym wynikiem.
+
+Przed rozpoczęciem oceny trzeba ustalić cenę odniesienia, sposób wyznaczania końca horyzontu, traktowanie dywidend i podział na porównywane grupy. Te zasady powinny być takie same dla wszystkich spółek. Późniejszy zwrot cenowy można wtedy zapisać jako
+\begin{equation}
+    r_i^{(h)}=\frac{P_i^{\mathrm{koniec}(h)}}{P_i^{\mathrm{start}}}-1,
+\end{equation}
+gdzie $h$ oznacza uzgodniony horyzont obserwacji. Wzór opisuje przyszły sposób oceny, a nie wyliczony wynik badania.
+
+Pomocniczo można porównać średnie zwroty grup najwyżej i najniżej ocenionych oraz prosty, wcześniej ustalony punkt odniesienia. Jeżeli rozpatrywane będzie momentum jako taki punkt odniesienia, pozostanie ono oddzielnym modelem porównawczym, a nie trzecim składnikiem technicznego wzoru v1. Klasyczny backtest portfela top~N z wykonywaniem transakcji nie należy do obecnego zakresu.
+
+Wyniki trzeba opisać razem z liczbą spółek, liczbą dat rankingu, brakami danych i zmiennością późniejszych zwrotów. Kolejne dzienne obserwacje z nakładającym się horyzontem trzech miesięcy nie są niezależnymi próbami. Mały koszyk i jeden krótki okres rynkowy nie uzasadniają wniosku o trwałej przewadze. Zmiana progów po obejrzeniu tych samych wyników wymagałaby oddzielenia danych do doboru reguł od danych do ich oceny.
+
+Do terminu ukończenia pracy w lutym 2027 roku możliwy będzie ograniczony okres obserwacji. Pełne sześć lub dwanaście miesięcy od nowo zapisywanych rankingów nie będzie jeszcze dostępne. Ocena tych horyzontów wymaga dalszego zbierania danych i nie powinna być zastępowana wnioskami z krótszego okresu. Dotychczas potwierdzono poprawność implementacji reguł, ale nie wykazano ich zdolności do przewidywania lepszych zwrotów.
 
 \cleardoublepage
 \chapter{Podsumowanie}
 
-TODO: Podsumować wykonany projekt, ograniczenia rozwiązania oraz możliwe kierunki rozwoju.
+Dotychczasowy etap pracy doprowadził do powstania działającego procesu od pobrania danych do lokalnego wyniku obliczeń. Importer Rust pobiera bieżący skład WIG20, podstawowe fundamenty, historię dziennych cen oraz wybrane kursy walut i złota. Zachowuje odpowiedzi źródłowe, odczytuje dane do jawnych struktur i zgłasza błędy bez usuwania poprawnych obserwacji.
+
+Zaimplementowano techniczny wzór v1 oparty na sezonowości miesiąca kalendarzowego i położeniu ceny względem SMA200. Ta sama funkcja służy do analizy jednej serii i budowy rankingu wielu spółek. Każdy wynik można powiązać z danymi wejściowymi i wartościami użytymi w obliczeniach. Osobno powstała tabela pięciu surowych wskaźników fundamentalnych, z zachowaniem braków danych i bez przypisywania im punktów.
+
+Testy potwierdziły działanie parserów, obsługę granic wzorów, precyzję zapisu oraz wybór najnowszych plików. Uruchomienie na lokalnym archiwum potwierdziło możliwość przetworzenia danych 20 spółek. Te rezultaty dotyczą poprawności programu. Nie oznaczają jeszcze, że uzyskana kolejność wskazuje przyszłych zwycięzców rynkowych.
+
+\begin{table}[htbp]
+\centering
+\caption{Stan realizacji po zakończeniu opisanego etapu}
+\label{tab:progress}
+\small
+\begin{tabularx}{\textwidth}{p{4.6cm}X}
+\toprule
+Obszar & Stan \\
+\midrule
+Importer i archiwum JSON & Działają; uruchamiane ręcznie \\
+Scoring techniczny i tabela & Działają offline, ze stałymi regułami v1 \\
+Wskaźniki fundamentalne & Działają jako surowe relacje, bez punktów \\
+Punktacja fundamentalna & Wymaga decyzji o progach, skali i brakach \\
+Sentyment i wynik końcowy & Brak źródła sentymentu i pełnego algorytmu sumy rodzin \\
+SurrealDB & Wcześniejszy projekt schematu, bez połączenia z importerem \\
+Backend, frontend i wykresy & Planowane \\
+Walidacja późniejszych zwrotów & Planowana; nie ma wyników skuteczności modelu \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+Najbliższym zadaniem metodycznym jest ustalenie punktów fundamentalnych. Dopiero po tej decyzji można nadać znaczenie wagom rodzin i określić warunki powstania pełnego wyniku. Równolegle potrzebne jest regularne zbieranie obserwacji, aby przyszła ocena nie opierała się wyłącznie na jednorazowo pobranych danych. Integracja z bazą i interfejsem powinna wykorzystać istniejące parsery oraz funkcje obliczeniowe.
+
+Główne ograniczenia są już widoczne: brak historii sprawozdań i ich dat publikacji, różna długość serii cenowych, niepełne dane banków, brak wyceny i dynamiki rok do roku oraz krótki okres możliwej obserwacji przyszłych zwrotów. Dalszy rozwój powinien odpowiadać na te konkretne braki. Rozszerzenie koszyka i dodatkowe źródła mają sens po sprawdzeniu pełnego przepływu dla obecnego zakresu.
 
 \cleardoublepage
+\phantomsection
 \addcontentsline{toc}{chapter}{Bibliografia}
 \begin{thebibliography}{9}
 
 \bibitem{rust}
 Rust Project Developers.
-\newblock \textit{The Rust Programming Language}.
-\newblock Dostępne online: \url{https://doc.rust-lang.org/book/}.
-
-\bibitem{gpw}
-Giełda Papierów Wartościowych w Warszawie.
-\newblock \textit{Oficjalny serwis GPW}.
-\newblock Dostępne online: \url{https://www.gpw.pl/}.
-
-\bibitem{yahoo}
-Yahoo Finance.
-\newblock \textit{What is the adjusted close?}.
-\newblock Dostępne online: \url{https://help.yahoo.com/kb/SLN28256.html}.
+\newblock \textit{The Rust Programming Language: Packages and Crates}.
+\newblock \url{https://doc.rust-lang.org/book/ch07-01-packages-and-crates.html}.
+\newblock Dostęp: 18.10.2026.
 
 \bibitem{gpwbenchmark}
 GPW Benchmark.
 \newblock \textit{Karta indeksu WIG20}.
-\newblock Dostępne online: \url{https://gpwbenchmark.pl/karta-indeksu?isin=PL9999999987}.
+\newblock \url{https://gpwbenchmark.pl/karta-indeksu?isin=PL9999999987}.
+\newblock Dostęp: 18.10.2026.
+
+\bibitem{yahoo}
+Yahoo Help.
+\newblock \textit{What is the adjusted close?}
+\newblock \url{https://in.help.yahoo.com/kb/adjusted-close-sln28256.html}.
+\newblock Dostęp: 18.10.2026.
 
 \bibitem{nbp}
 Narodowy Bank Polski.
-\newblock \textit{API NBP}.
-\newblock Dostępne online: \url{https://api.nbp.pl/}.
+\newblock \textit{NBP Web API}.
+\newblock \url{https://api.nbp.pl/}.
+\newblock Dostęp: 18.10.2026.
+
+\bibitem{decimal}
+Autorzy biblioteki rust\_decimal.
+\newblock \textit{Dokumentacja rust\_decimal, wersja 1.43.0}.
+\newblock \url{https://docs.rs/rust_decimal/1.43.0/rust_decimal/}.
+\newblock Dostęp: 18.10.2026.
+
+\bibitem{serdejson}
+Autorzy biblioteki serde\_json.
+\newblock \textit{Dokumentacja Serde JSON}.
+\newblock \url{https://docs.rs/serde_json/latest/serde_json/}.
+\newblock Dostęp: 18.10.2026.
 
 \end{thebibliography}
 
 \cleardoublepage
+\begingroup
+\small
+\linespread{1.0}\selectfont
 \thispagestyle{empty}
 \setlength{\parindent}{0in}
 \setlength{\parskip}{0em}
+\phantomsection
 \addcontentsline{toc}{chapter}{Streszczenie}
 
 \textbf{POLITECHNIKA RZESZOWSKA} \hfill Rzeszów \ThesisYear \\
@@ -319,13 +872,13 @@ Narodowy Bank Polski.
 \textbf{Tytuł:} \ThesisTitle \\
 \textbf{Autor:} \AuthorName \\
 \textbf{Promotor:} \SupervisorName \\
-\textbf{Słowa kluczowe:} GPW, WIG20, scoring, ranking, Rust, aplikacja webowa
+\textbf{Słowa kluczowe:} GPW, WIG20, scoring, ranking, Rust, dane finansowe
 \\
 
-Praca opisuje aplikację webową \textit{rankr}, w pełni w Rust, rankingującą pełne WIG20 według względnego potencjału wzrostu w horyzoncie 3--12 miesięcy. Wyższy wynik oznacza większą szansę na lepszy zwrot niż inne spółki z tego samego koszyka. Główny widok to tabela sortowana według sumy ważonej trzech rodzin: \texttt{fundamental} (najważniejszej), \texttt{technical} i \texttt{sentiment}. Suma nie podlega normalizacji końcowej ani nie jest prognozą procentowego zwrotu. Późniejsze rozszerzenie obejmie inne akcje GPW.
+Praca przedstawia projekt aplikacji \textit{rankr} do rankingu spółek GPW według względnego potencjału wzrostu w horyzoncie 3--12 miesięcy oraz zrealizowany etap importu i analizy offline w języku Rust. Wykonano archiwizację danych źródłowych, odczyt podstawowych fundamentów i historii cen, punktację sezonowości i trendu SMA200 oraz tabelę pięciu surowych wskaźników fundamentalnych. Opisano reguły braków danych, testy i ograniczenia analiz historycznych. Pełny wynik ważony, integracja z bazą oraz interfejs webowy pozostają planowane. Skuteczność rankingu w ocenie przyszłych zwrotów wymaga dalszej walidacji.
 
 \vfill
-$$\noindent\rule{\textwidth}{2pt}$$
+\noindent\rule{\textwidth}{2pt}
 
 \textbf{RZESZOW UNIVERSITY OF TECHNOLOGY} \hfill Rzeszów \ThesisYear \\
 \textbf{FACULTY OF MATHEMATICS AND APPLIED PHYSICS} \\
@@ -337,15 +890,18 @@ $$\noindent\rule{\textwidth}{2pt}$$
 \textbf{Title:} \ThesisTitleEnglish \\
 \textbf{Author:} \AuthorName \\
 \textbf{Supervisor:} Mariusz Startek, PhD \\
-\textbf{Key words:} Warsaw Stock Exchange, WIG20, scoring, ranking, Rust, web application
+\textbf{Key words:} Warsaw Stock Exchange, WIG20, scoring, ranking, Rust, financial data
 \\
 
-This thesis describes \textit{rankr}, a web application written entirely in Rust that ranks the full WIG20 by relative growth potential over 3--12 months. A higher score means a greater chance of a better return than other companies in the same basket. The main view is a table sorted by a weighted sum of three family scores: \texttt{fundamental} (the most important), \texttt{technical}, and \texttt{sentiment}. The sum is not subject to final-score normalization and does not predict a percentage return. Other GPW stocks are a later extension.
+This thesis presents the design of \textit{rankr}, an application for ranking Warsaw Stock Exchange companies by relative growth potential over 3--12 months, and its implemented data collection and offline analysis in Rust. Completed components include source archiving, financial and price data parsing, calendar-month seasonality and SMA200 trend scoring, and a table of five raw financial ratios. The thesis describes missing-data rules, tests and limitations of historical analysis. The full weighted score, database integration and web interface remain planned. The ranking's ability to identify better subsequent returns requires further validation.
 
 \vfill
+\clearpage
+\endgroup
 
 \cleardoublepage
 \thispagestyle{empty}
+\phantomsection
 \addcontentsline{toc}{chapter}{Wykaz wykorzystania narzędzi GenAI}
 
 \begin{center}
@@ -353,12 +909,13 @@ This thesis describes \textit{rankr}, a web application written entirely in Rust
     wykorzystanych przez autora w trakcie wykonywania pracy dyplomowej
 \end{center}
 
-\begin{table}[ht]
+\begin{table}[htbp]
     \centering
     \begin{tabularx}{\linewidth}{|c|X|X|}\hline
        \textbf{Lp.} & \multicolumn{1}{c|}{\textbf{Obszar wykorzystywania}} & \multicolumn{1}{c|}{\textbf{Narzędzie}} \\ \hline
-       1 & Redakcja, korekta techniczna oraz porządkowanie struktury repozytorium i dokumentacji. & ChatGPT / Codex \\ \hline
-       2 & Wsparcie przy tworzeniu szkieletu pracy dyplomowej i planowaniu zakresu projektu. & ChatGPT / Codex \\ \hline
+       1 & Przygotowanie i redakcja fragmentów pracy, korekta techniczna oraz porównanie opisu z kodem projektu. & ChatGPT / Codex \\ \hline
+       2 & Wsparcie w planowaniu zakresu, tworzeniu implementacji importera i obliczeń oraz przygotowaniu testów. & ChatGPT / Codex \\ \hline
+       3 & Wsparcie w analizie dokumentacji technicznej i przygotowaniu prezentacji postępu prac. & ChatGPT / Codex \\ \hline
     \end{tabularx}
 \end{table}
 

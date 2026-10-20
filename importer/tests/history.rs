@@ -36,11 +36,11 @@ fn preserves_csv_precision_fractional_volume_and_close_scale() {
     );
     let json = serde_json::to_value(&history).unwrap();
     assert_eq!(json["source"], "stooq");
-    assert_eq!(json["candles"][0]["open"], "121.871");
-    assert_eq!(json["candles"][0]["high"], "122.614");
-    assert_eq!(json["candles"][0]["low"], "117.812");
-    assert_eq!(json["candles"][0]["close"], "118.95100");
-    assert_eq!(json["candles"][0]["volume"], "475373.24396983");
+    assert_eq!(json["candles"][0]["open"].to_string(), "121.871");
+    assert_eq!(json["candles"][0]["high"].to_string(), "122.614");
+    assert_eq!(json["candles"][0]["low"].to_string(), "117.812");
+    assert_eq!(json["candles"][0]["close"].to_string(), "118.95100");
+    assert_eq!(json["candles"][0]["volume"].to_string(), "475373.24396983");
     assert!(json.get("price").is_none());
 }
 

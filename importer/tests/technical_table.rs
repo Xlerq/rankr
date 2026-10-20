@@ -79,12 +79,12 @@ fn ranks_two_companies_using_the_latest_fetch_regardless_of_path_order() {
                 json!({
                     "code": "PKOBP", "as_of": AS_OF,
                     "seasonality_points": 0, "trend_points": 0, "technical_score": 0,
-                    "r": "0.01", "years": 1, "source_file": bank
+                    "r": 0.01, "years": 1, "source_file": bank
                 }),
                 json!({
                     "code": "KGHM", "as_of": AS_OF,
                     "seasonality_points": -1, "trend_points": 0, "technical_score": -1,
-                    "r": "-0.03", "years": 1, "source_file": new
+                    "r": -0.03, "years": 1, "source_file": new
                 })
             ]
         );

@@ -63,10 +63,14 @@ Each run archives the WIG20 response and creates a new observation directory for
 each downloaded company under `data/collected/`:
 
 ```text
-data/collected/<timestamp>-<suffix>/
+data/collected/2026-10-18_KGHM_fundamentals/
   raw.json           # source, company, URL, UTC fetch time, HTTP status, HTML
   fundamentals.json  # company, source metadata and parsed financial fields
 ```
+
+Directory names use the UTC fetch date, company code and data kind. Further
+collections with the same name add `_2`, `_3`, etc.; the WIG20 list uses
+`2026-10-18_wig20`. Existing archives with older names remain readable.
 
 Raw responses are saved before parsing. A parse/HTTP failure leaves `raw.json`
 and an `error.json` explanation. A network failure without a response is reported
@@ -95,8 +99,9 @@ Malformed known numbers or ambiguous reports cause a parse error. Consolidated
 and standalone data remain distinct; the report label is preserved without
 inventing publication dates or fiscal period boundaries.
 
-Amounts use `rust_decimal::Decimal` in Rust and decimal strings in JSON, such as
-`"24711000.00"`. The original currency, sign and scale are preserved: a value in
+Amounts use `rust_decimal::Decimal` in Rust and JSON numbers, such as
+`24711000.00`, without conversion through `f64`. Older files containing quoted
+decimal values are still accepted. The original currency, sign and scale are preserved: a value in
 thousands has `unit_multiplier: 1000`. The multiplier applies to monetary fields,
 not provider ratios. Provider ratios retain the source scale and are not recomputed.
 
@@ -111,7 +116,7 @@ The pretty JSON array contains company/report metadata, `net_margin`,
 `operating_margin`, `equity_ratio`, `debt_to_equity`, `ocf_to_net_income` and
 `source_file`, sorted by company code A–Z. Monetary amounts are multiplied by
 `unit_multiplier` before division; missing inputs or a zero denominator yield
-`null`. Ratios are decimal strings expressed as fractions, without annualization
+`null`. Ratios are JSON numbers expressed as fractions, without annualization
 or currency conversion. Stderr reports skipped paths, the company count and
 missing values for each ratio; no valid companies means an error with empty stdout.
 
@@ -183,13 +188,13 @@ from the live WIG20 portfolio.
 Each response creates an immutable observation:
 
 ```text
-data/collected/<timestamp>-<suffix>/
+data/collected/2026-10-18_KGHM_history/
   raw.json      # original Yahoo JSON body, company, fetch time, HTTP status, URL
   history.json  # source=yahoo_finance, symbol, currency, candles, skipped_candles
 ```
 
 Each candle contains `date`, `open`, `high`, `low`, `close`, `adjusted_close`, and
-`volume`. Numbers are Decimal values serialized as decimal strings, preserving
+`volume`. Decimal values are serialized as JSON numbers without passing through `f64`, preserving
 Yahoo's precision, including its visible floating-point artifacts. `close` and
 Yahoo's split/dividend-adjusted `adjusted_close` are stored separately; no dividend
 or split adjustments are recomputed. The importer does not calculate seasonality
@@ -258,7 +263,7 @@ additional momentum signal.
 When seasonality is missing, `technical_score` is also `null`, so an incomplete
 sum is not presented as a complete score. `explanation` contains `r` (R),
 `years`, `last_session`, `close`, `sma200`, `d` and `trend_sessions`. Decimal
-statistics use the project's decimal-string JSON format; point values are JSON
+statistics use exact JSON numbers; point values are JSON
 integers. Present complete scores range from `-2` to `+2`.
 
 The pure entry point is `technical::score(&candles, as_of)`; file reading and

@@ -6,11 +6,11 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use serde::{Serialize, de::DeserializeOwned};
-use tempfile::{Builder, NamedTempFile};
+use serde::Serialize;
+use tempfile::NamedTempFile;
 use thiserror::Error;
 
-use crate::model::{DailyPriceHistory, FundamentalSnapshot, PriceSnapshot, RawDocument};
+use crate::model::{DailyPriceHistory, FundamentalSnapshot, PriceSnapshot, RawDocument, Source};
 
 #[derive(Debug, Error)]
 pub enum StorageError {
@@ -58,22 +58,60 @@ impl ArchivedFetch {
     }
 }
 
-/// Archive raw data first. Random suffixes prevent collisions between runs.
+/// Archive raw data first, e.g. 2026-10-18_KGHM_history/raw.json.
 pub fn archive_raw(root: &Path, raw: &RawDocument) -> Result<ArchivedFetch, StorageError> {
     fs::create_dir_all(root)?;
-    let prefix = raw.fetched_at.format("%Y%m%dT%H%M%S%.9fZ-").to_string();
-    let directory = Builder::new().prefix(&prefix).tempdir_in(root)?;
-    write_json(&directory.path().join("raw.json"), raw)?;
-    Ok(ArchivedFetch {
-        directory: directory.keep(),
-    })
+    let name = archive_name(raw);
+    let directory = create_archive_directory(root, &name)?;
+    if let Err(error) = write_json(&directory.join("raw.json"), raw) {
+        // Remove only the empty directory created by this call.
+        let _ = fs::remove_dir(&directory);
+        return Err(error);
+    }
+    Ok(ArchivedFetch { directory })
+}
+
+fn archive_name(raw: &RawDocument) -> String {
+    let date = raw.fetched_at.format("%Y-%m-%d");
+    let kind = match raw.source {
+        Source::GpwNotoria => "fundamentals",
+        Source::GpwBenchmark => "wig20",
+        Source::GpwPrices => "price",
+        Source::TradingViewIdc => "prices",
+        Source::YahooFinance | Source::Stooq => "history",
+    };
+    match &raw.instrument {
+        Some(instrument) => {
+            // Company codes come from external data; keep them inside one directory name.
+            let code = instrument.code.replace(
+                |character: char| {
+                    !character.is_ascii_alphanumeric() && character != '-' && character != '_'
+                },
+                "_",
+            );
+            format!("{date}_{code}_{kind}")
+        }
+        None => format!("{date}_{kind}"),
+    }
+}
+
+fn create_archive_directory(root: &Path, name: &str) -> io::Result<PathBuf> {
+    let mut directory = root.join(name);
+    let mut number = 2;
+    loop {
+        // Creating the directory atomically also handles simultaneous collectors.
+        match fs::create_dir(&directory) {
+            Ok(()) => return Ok(directory),
+            Err(error) if error.kind() == io::ErrorKind::AlreadyExists => {
+                directory = root.join(format!("{name}_{number}"));
+                number += 1;
+            }
+            Err(error) => return Err(error),
+        }
+    }
 }
 
 pub fn read_raw(path: &Path) -> Result<RawDocument, StorageError> {
-    read_json(path)
-}
-
-fn read_json<T: DeserializeOwned>(path: &Path) -> Result<T, StorageError> {
     Ok(serde_json::from_reader(BufReader::new(File::open(path)?))?)
 }
 

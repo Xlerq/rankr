@@ -109,7 +109,7 @@ fn missing_bank_fields_are_null_and_zero_remains_zero() {
     let json = serde_json::to_value(parsed).unwrap();
     assert!(json["revenue"].is_null());
     assert!(json["long_term_liabilities"].is_null());
-    assert_eq!(json["assets"], "440000000.00");
+    assert_eq!(json["assets"].to_string(), "440000000.00");
 }
 
 #[test]
@@ -242,9 +242,24 @@ fn decimal_values_round_trip_through_json_without_float_conversion() {
     let html = report("<tr><th>AKTYWA</th><td>9 007 199 254 740 993,01</td></tr>");
     let parsed = parse_fundamentals(&html).unwrap();
     let json = serde_json::to_value(&parsed).unwrap();
-    assert_eq!(json["assets"], "9007199254740993.01");
+    assert!(json["assets"].is_number());
+    assert_eq!(json["assets"].to_string(), "9007199254740993.01");
     assert_eq!(
         serde_json::from_value::<Fundamentals>(json).unwrap(),
+        parsed
+    );
+    let encoded = serde_json::to_string(&parsed).unwrap();
+    assert!(encoded.contains("\"assets\":9007199254740993.01"));
+    assert_eq!(
+        serde_json::from_str::<Fundamentals>(&encoded).unwrap(),
+        parsed
+    );
+    let legacy = encoded.replace(
+        "\"assets\":9007199254740993.01",
+        "\"assets\":\"9007199254740993.01\"",
+    );
+    assert_eq!(
+        serde_json::from_str::<Fundamentals>(&legacy).unwrap(),
         parsed
     );
 }

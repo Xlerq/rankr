@@ -47,10 +47,40 @@ fn rows(result: &Output) -> Vec<Value> {
 }
 
 fn assert_ratio(value: &Value, expected: &str) {
+    assert!(value.is_number(), "expected a JSON number, got {value}");
     assert_eq!(
-        Decimal::from_str_exact(value.as_str().unwrap()).unwrap(),
+        Decimal::from_str_exact(&value.to_string()).unwrap(),
         Decimal::from_str_exact(expected).unwrap()
     );
+}
+
+#[test]
+fn numeric_and_legacy_snapshots_produce_the_same_exact_ratios() {
+    let directory = tempfile::tempdir().unwrap();
+    let mut snapshot = company_fixture();
+    snapshot["fundamentals"]["unit_multiplier"] = json!(1);
+    snapshot["fundamentals"]["revenue"] = json!("10.00");
+    snapshot["fundamentals"]["net_income_parent"] = json!("9007199254740993.01");
+    write_snapshot(directory.path(), "company/fundamentals.json", &snapshot);
+    let legacy_rows = rows(&run_table(directory.path()));
+    assert_ratio(&legacy_rows[0]["net_margin"], "900719925474099.301");
+
+    for field in [
+        "revenue",
+        "net_income_parent",
+        "operating_profit",
+        "equity_parent",
+        "assets",
+        "long_term_liabilities",
+        "short_term_liabilities",
+        "operating_cash_flow",
+    ] {
+        let amount = snapshot["fundamentals"][field].as_str().unwrap();
+        snapshot["fundamentals"][field] = serde_json::from_str(amount).unwrap();
+    }
+    write_snapshot(directory.path(), "company/fundamentals.json", &snapshot);
+    let numeric_rows = rows(&run_table(directory.path()));
+    assert_eq!(numeric_rows, legacy_rows);
 }
 
 #[test]

@@ -37,8 +37,8 @@ fn parse_command_is_offline_and_emits_only_json() {
     );
     assert!(result.stderr.is_empty());
     let json: Value = serde_json::from_slice(&result.stdout).unwrap();
-    assert_eq!(json["fundamentals"]["revenue"], "141034.32");
-    assert_eq!(json["fundamentals"]["capex"], "-37993.69");
+    assert_eq!(json["fundamentals"]["revenue"].to_string(), "141034.32");
+    assert_eq!(json["fundamentals"]["capex"].to_string(), "-37993.69");
     assert_eq!(json["fundamentals"]["unit_multiplier"], 1000);
     assert_eq!(json["instrument"]["isin"], "PL11BTS00015");
     assert!(!String::from_utf8_lossy(&result.stdout).contains("parser_version"));
@@ -90,7 +90,7 @@ fn history_parse_is_offline_and_preserves_daily_decimals() {
     assert!(result.stderr.is_empty());
     let json: Value = serde_json::from_slice(&result.stdout).unwrap();
     assert_eq!(json["source"], "stooq");
-    assert_eq!(json["candles"][0]["close"], "118.95100");
+    assert_eq!(json["candles"][0]["close"].to_string(), "118.95100");
 }
 
 #[test]
@@ -143,8 +143,11 @@ fn yahoo_parse_is_offline_and_preserves_adjusted_close_separately() {
     let json: Value = serde_json::from_slice(&result.stdout).unwrap();
     assert_eq!(json["source"], "yahoo_finance");
     assert_eq!(json["symbol"], "KGH.WA");
-    assert_eq!(json["candles"][0]["close"], "118.95100");
-    assert_eq!(json["candles"][0]["adjusted_close"], "112.234567890123");
+    assert_eq!(json["candles"][0]["close"].to_string(), "118.95100");
+    assert_eq!(
+        json["candles"][0]["adjusted_close"].to_string(),
+        "112.234567890123"
+    );
     assert!(json.get("stooq_symbol").is_none());
 }
 
@@ -177,7 +180,7 @@ fn technical_is_offline_and_reports_the_fixture_score_as_json() {
     assert_eq!(json["trend_points"], 0);
     assert_eq!(json["technical_score"], 1);
     assert_eq!(json["explanation"]["years"], 2);
-    assert_eq!(json["explanation"]["close"], "100");
+    assert_eq!(json["explanation"]["close"], 100);
     assert!(!directory.path().join("data").exists());
 }
 

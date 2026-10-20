@@ -45,7 +45,7 @@ fn missing_inputs_stay_null_and_actual_zero_numerators_stay_zero() {
     assert_eq!(result.ocf_to_net_income, None);
     let json = serde_json::to_value(result).unwrap();
     assert!(json["net_margin"].is_null());
-    assert_eq!(json["operating_margin"], "0");
+    assert_eq!(json["operating_margin"], 0);
 
     let mut input = fixture();
     input.revenue = None;

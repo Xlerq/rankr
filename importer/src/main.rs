@@ -1,7 +1,7 @@
 use std::{
     fs::File,
     io::{self, Write},
-    path::PathBuf,
+    path::{Path, PathBuf},
     process::ExitCode,
 };
 
@@ -104,93 +104,103 @@ async fn main() -> ExitCode {
 
 async fn run(cli: Cli) -> Result<()> {
     match cli.command {
-        Command::FundamentalTable { directory } => {
-            let table = build_table(&directory)
-                .with_context(|| format!("reading fundamentals under {}", directory.display()))?;
-            for skipped in &table.skipped {
-                eprintln!(
-                    "Skipped {}: {}",
-                    skipped.source_file.display(),
-                    skipped.reason
-                );
-            }
-            let nulls = table.null_counts();
-            eprintln!(
-                "Fundamental ratios for {} companies; skipped {} paths",
-                table.rows.len(),
-                table.skipped.len()
-            );
-            eprintln!(
-                "Null ratios: net_margin={}, operating_margin={}, equity_ratio={}, debt_to_equity={}, ocf_to_net_income={}",
-                nulls.net_margin,
-                nulls.operating_margin,
-                nulls.equity_ratio,
-                nulls.debt_to_equity,
-                nulls.ocf_to_net_income
-            );
-            ensure!(
-                !table.rows.is_empty(),
-                "no valid companies found under {}",
-                directory.display()
-            );
-            print_json(&table.rows)
-        }
-        Command::Technical { as_of, file } => {
-            let input = File::open(&file).with_context(|| format!("reading {}", file.display()))?;
-            let history: TechnicalHistory = serde_json::from_reader(input)
-                .with_context(|| format!("parsing {}", file.display()))?;
-            print_json(&score(&history.candles, as_of)?)
-        }
-        Command::TechnicalTable { as_of, directory } => {
-            let table = rank_directory(&directory, as_of)
-                .with_context(|| format!("reading histories under {}", directory.display()))?;
-            for skipped in &table.skipped {
-                eprintln!(
-                    "Skipped {}: {}",
-                    skipped.source_file.display(),
-                    skipped.reason
-                );
-            }
-            let missing = table
-                .rows
-                .iter()
-                .filter(|row| row.technical_score.is_none())
-                .count();
-            eprintln!(
-                "Ranked {} companies; {missing} with null technical_score; skipped {} paths",
-                table.rows.len(),
-                table.skipped.len()
-            );
-            ensure!(
-                !table.rows.is_empty(),
-                "no valid companies found under {}",
-                directory.display()
-            );
-            print_json(&table.rows)
-        }
-        Command::Parse { file } => {
-            let raw = read_raw(&file).with_context(|| format!("reading {}", file.display()))?;
-            match raw.source {
-                Source::YahooFinance | Source::Stooq => print_json(&parse_history_document(&raw)?),
-                Source::GpwPrices | Source::TradingViewIdc => {
-                    print_json(&parse_price_document(&raw)?)
-                }
-                _ => print_json(&parse_document(&raw)?),
-            }
-        }
-        Command::Fetch { code } => {
-            let client = GpwClient::new()?;
-            let raw_portfolio = client.fetch_portfolio().await?;
-            let instruments = select(portfolio(&raw_portfolio)?, Some(&code))?;
-            let raw = client.fetch_fundamentals(&instruments[0]).await?;
-            // Keep an HTTP error response inspectable through shell redirection.
-            print_json(&raw)?;
-            check_http(&raw)
-        }
+        Command::FundamentalTable { directory } => show_fundamental_table(&directory),
+        Command::Technical { as_of, file } => show_technical(&file, as_of),
+        Command::TechnicalTable { as_of, directory } => show_technical_table(&directory, as_of),
+        Command::Parse { file } => parse_file(&file),
+        Command::Fetch { code } => fetch(&code).await,
         Command::Collect { code, output } => collect(code.as_deref(), output).await,
         Command::Prices { code, output } => collect_prices(code.as_deref(), output).await,
         Command::History { code, output } => collect_history(code.as_deref(), output).await,
     }
+}
+
+fn show_fundamental_table(directory: &Path) -> Result<()> {
+    let table = build_table(directory)
+        .with_context(|| format!("reading fundamentals under {}", directory.display()))?;
+    for skipped in &table.skipped {
+        eprintln!(
+            "Skipped {}: {}",
+            skipped.source_file.display(),
+            skipped.reason
+        );
+    }
+    let nulls = table.null_counts();
+    eprintln!(
+        "Fundamental ratios for {} companies; skipped {} paths",
+        table.rows.len(),
+        table.skipped.len()
+    );
+    eprintln!(
+        "Null ratios: net_margin={}, operating_margin={}, equity_ratio={}, debt_to_equity={}, ocf_to_net_income={}",
+        nulls.net_margin,
+        nulls.operating_margin,
+        nulls.equity_ratio,
+        nulls.debt_to_equity,
+        nulls.ocf_to_net_income
+    );
+    ensure!(
+        !table.rows.is_empty(),
+        "no valid companies found under {}",
+        directory.display()
+    );
+    print_json(&table.rows)
+}
+
+fn show_technical(file: &Path, as_of: NaiveDate) -> Result<()> {
+    let input = File::open(file).with_context(|| format!("reading {}", file.display()))?;
+    let history: TechnicalHistory =
+        serde_json::from_reader(input).with_context(|| format!("parsing {}", file.display()))?;
+    let result = score(&history.candles, as_of)?;
+    print_json(&result)
+}
+
+fn show_technical_table(directory: &Path, as_of: NaiveDate) -> Result<()> {
+    let table = rank_directory(directory, as_of)
+        .with_context(|| format!("reading histories under {}", directory.display()))?;
+    for skipped in &table.skipped {
+        eprintln!(
+            "Skipped {}: {}",
+            skipped.source_file.display(),
+            skipped.reason
+        );
+    }
+    let mut missing = 0;
+    for row in &table.rows {
+        if row.technical_score.is_none() {
+            missing += 1;
+        }
+    }
+    eprintln!(
+        "Ranked {} companies; {missing} with null technical_score; skipped {} paths",
+        table.rows.len(),
+        table.skipped.len()
+    );
+    ensure!(
+        !table.rows.is_empty(),
+        "no valid companies found under {}",
+        directory.display()
+    );
+    print_json(&table.rows)
+}
+
+fn parse_file(file: &Path) -> Result<()> {
+    let raw = read_raw(file).with_context(|| format!("reading {}", file.display()))?;
+    match raw.source {
+        Source::YahooFinance | Source::Stooq => print_json(&parse_history_document(&raw)?),
+        Source::GpwPrices | Source::TradingViewIdc => print_json(&parse_price_document(&raw)?),
+        _ => print_json(&parse_document(&raw)?),
+    }
+}
+
+async fn fetch(code: &str) -> Result<()> {
+    let client = GpwClient::new()?;
+    let raw_portfolio = client.fetch_portfolio().await?;
+    let instruments = select(portfolio(&raw_portfolio)?, Some(code))?;
+    let raw = client.fetch_fundamentals(&instruments[0]).await?;
+    // Keep an HTTP error response inspectable through shell redirection.
+    print_json(&raw)?;
+    check_http(&raw)
 }
 
 async fn collect_history(code: Option<&str>, output: PathBuf) -> Result<()> {
@@ -209,7 +219,7 @@ async fn collect_history(code: Option<&str>, output: PathBuf) -> Result<()> {
 
 async fn collect_company_daily(
     code: Option<&str>,
-    output: &std::path::Path,
+    output: &Path,
     latest_only: bool,
 ) -> Result<(usize, usize)> {
     let symbols = YahooSymbolMap::bundled()?;
@@ -224,16 +234,8 @@ async fn collect_company_daily(
         if i > 0 {
             tokio::time::sleep(std::time::Duration::from_millis(500)).await;
         }
-        let result = async {
-            let symbol = symbols.symbol_for(instrument)?;
-            let raw = if latest_only {
-                client.fetch_recent_history(instrument, symbol).await?
-            } else {
-                client.fetch_history(instrument, symbol).await?
-            };
-            archive_history(&raw, output, latest_only)
-        }
-        .await;
+        let result =
+            collect_company_history(&client, &symbols, instrument, output, latest_only).await;
         match result {
             Ok(()) => collected += 1,
             Err(error) => {
@@ -245,7 +247,23 @@ async fn collect_company_daily(
     Ok((collected, failures))
 }
 
-fn archive_history(raw: &RawDocument, output: &std::path::Path, latest_only: bool) -> Result<()> {
+async fn collect_company_history(
+    client: &YahooClient,
+    symbols: &YahooSymbolMap,
+    instrument: &Instrument,
+    output: &Path,
+    latest_only: bool,
+) -> Result<()> {
+    let symbol = symbols.symbol_for(instrument)?;
+    let raw = if latest_only {
+        client.fetch_recent_history(instrument, symbol).await?
+    } else {
+        client.fetch_history(instrument, symbol).await?
+    };
+    archive_history(&raw, output, latest_only)
+}
+
+fn archive_history(raw: &RawDocument, output: &Path, latest_only: bool) -> Result<()> {
     let archived = archive_raw(output, raw).context("archiving daily price response")?;
     let mut history = match parse_history_document(raw) {
         Ok(history) => history,
@@ -308,7 +326,7 @@ async fn collect(code: Option<&str>, output: PathBuf) -> Result<()> {
 async fn collect_instruments(
     client: &GpwClient,
     code: Option<&str>,
-    output: &std::path::Path,
+    output: &Path,
 ) -> Result<Vec<Instrument>> {
     let raw_portfolio = client
         .fetch_portfolio()
@@ -345,14 +363,12 @@ async fn collect_prices(code: Option<&str>, output: PathBuf) -> Result<()> {
 
     if code.is_none() || pair.is_some() {
         let client = TradingViewClient::new()?;
-        let pairs = pair.map_or_else(|| MarketPair::ALL.to_vec(), |pair| vec![pair]);
+        let pairs = match pair {
+            Some(pair) => vec![pair],
+            None => MarketPair::ALL.to_vec(),
+        };
         for pair in pairs {
-            let result = client
-                .fetch_price(pair)
-                .await
-                .map_err(anyhow::Error::from)
-                .and_then(|raw| archive_price(&raw, &output));
-            match result {
+            match collect_pair_price(&client, pair, &output).await {
                 Ok(()) => collected += 1,
                 Err(error) => {
                     failures += 1;
@@ -374,7 +390,16 @@ async fn collect_prices(code: Option<&str>, output: PathBuf) -> Result<()> {
     Ok(())
 }
 
-fn archive_price(raw: &RawDocument, output: &std::path::Path) -> Result<()> {
+async fn collect_pair_price(
+    client: &TradingViewClient,
+    pair: MarketPair,
+    output: &Path,
+) -> Result<()> {
+    let raw = client.fetch_price(pair).await?;
+    archive_price(&raw, output)
+}
+
+fn archive_price(raw: &RawDocument, output: &Path) -> Result<()> {
     let archived = archive_raw(output, raw).context("archiving price response")?;
     let snapshot = match parse_price_document(raw) {
         Ok(snapshot) => snapshot,
@@ -395,11 +420,7 @@ fn archive_price(raw: &RawDocument, output: &std::path::Path) -> Result<()> {
     Ok(())
 }
 
-async fn collect_one(
-    client: &GpwClient,
-    instrument: &Instrument,
-    output: &std::path::Path,
-) -> Result<()> {
+async fn collect_one(client: &GpwClient, instrument: &Instrument, output: &Path) -> Result<()> {
     let raw = client.fetch_fundamentals(instrument).await?;
     let archived = archive_raw(output, &raw).context("archiving raw response")?;
     let parsed = match parse_document(&raw) {

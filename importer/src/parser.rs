@@ -56,21 +56,23 @@ pub fn parse_fundamentals(html: &str) -> Result<Fundamentals, ParseError> {
     let tables = Selector::parse("table").expect("static selector");
     let rows = Selector::parse("tr").expect("static selector");
     let cells = Selector::parse("th, td").expect("static selector");
-    let candidates: Vec<_> = document
-        .select(&tables)
-        .filter(|table| {
-            table.select(&rows).any(|row| {
-                row.select(&cells)
-                    .next()
-                    .is_some_and(|cell| field_name(&text(cell)).is_some())
-            })
-        })
-        .collect();
-    let table = match candidates.as_slice() {
-        [] => return Err(ParseError::MissingTable),
-        [table] => table,
-        _ => return Err(ParseError::MultipleTables),
-    };
+    let mut financial_table = None;
+    for table in document.select(&tables) {
+        for row in table.select(&rows) {
+            let Some(first_cell) = row.select(&cells).next() else {
+                continue;
+            };
+            if field_name(&text(first_cell)).is_none() {
+                continue;
+            }
+            if financial_table.is_some() {
+                return Err(ParseError::MultipleTables);
+            }
+            financial_table = Some(table);
+            break;
+        }
+    }
+    let table = financial_table.ok_or(ParseError::MissingTable)?;
 
     let report_period = report_period(&document)?;
     let metadata = text(document.root_element());

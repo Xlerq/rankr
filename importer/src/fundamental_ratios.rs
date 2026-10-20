@@ -45,11 +45,12 @@ pub fn calculate(input: &FundamentalRatioInput) -> Result<FundamentalRatios, Rat
     let short_term = scale(input.short_term_liabilities, multiplier)?;
     let operating_cash_flow = scale(input.operating_cash_flow, multiplier)?;
     let liabilities = match (long_term, short_term) {
-        (Some(long_term), Some(short_term)) => Some(
-            long_term
+        (Some(long_term), Some(short_term)) => {
+            let total = long_term
                 .checked_add(short_term)
-                .ok_or(RatioError::Arithmetic)?,
-        ),
+                .ok_or(RatioError::Arithmetic)?;
+            Some(total)
+        }
         _ => None,
     };
 
@@ -63,9 +64,13 @@ pub fn calculate(input: &FundamentalRatioInput) -> Result<FundamentalRatios, Rat
 }
 
 fn scale(value: Option<Decimal>, multiplier: Decimal) -> Result<Option<Decimal>, RatioError> {
-    value
-        .map(|amount| amount.checked_mul(multiplier).ok_or(RatioError::Arithmetic))
-        .transpose()
+    let Some(amount) = value else {
+        return Ok(None);
+    };
+    let scaled = amount
+        .checked_mul(multiplier)
+        .ok_or(RatioError::Arithmetic)?;
+    Ok(Some(scaled))
 }
 
 fn divide(
@@ -78,8 +83,8 @@ fn divide(
     if denominator.is_zero() {
         return Ok(None);
     }
-    numerator
+    let ratio = numerator
         .checked_div(denominator)
-        .map(Some)
-        .ok_or(RatioError::Arithmetic)
+        .ok_or(RatioError::Arithmetic)?;
+    Ok(Some(ratio))
 }

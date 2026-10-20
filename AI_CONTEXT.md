@@ -102,7 +102,7 @@ separate momentum signal. This task does not implement the other families.
   +1 above SMA200 or -1 below it. Exactly ±3% is directional. Fewer than 200
   sessions gives `trend_points: 0`, with SMA200/d null.
 - JSON explanation: R (`r`), usable year count, latest session/close, SMA200,
-  d and available trend-session count. Preserve Decimal statistics as strings.
+  d and available trend-session count. Serialize Decimal statistics as exact JSON numbers.
   Reject duplicate past dates and nonpositive past closes explicitly.
 
 Seasonality belongs to `technical`, without a fourth family weight. Sector macro
@@ -135,8 +135,12 @@ and obtains the current WIG20 list from GPW Benchmark. CLI: `collect [CODE]`,
 - One package with a reusable library and a thin CLI; keep HTTP, pure parsing,
   serializable model types and JSON persistence in separate modules.
 - Persist raw JSON before parsing during collection; retain all financial fields.
-- Monetary values are Decimal in Rust and decimal strings in JSON, preserving
-  currency, unit scale and sign. Missing values are null, not zero.
+- Monetary values are Decimal in Rust and exact numbers in JSON, preserving
+  currency, unit scale and sign without conversion through f64. Accept legacy
+  quoted decimals on input. Missing values are null, not zero.
+- Archive directories use `YYYY-MM-DD_CODE_kind` (UTC fetch date), such as
+  `2026-10-18_KGHM_history`; repeat names add `_2`, `_3`, etc. Never overwrite
+  an existing observation. Older directory names remain readable.
 - Do not introduce parser-version metadata. It was explicitly excluded by the user.
 - The importer has no database connection. The scoring tables define the product
   contract; other collections retain their earlier design and are not the active
