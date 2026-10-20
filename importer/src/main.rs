@@ -9,6 +9,7 @@ use anyhow::{Context, Result, bail, ensure};
 use chrono::NaiveDate;
 use clap::{Parser, Subcommand};
 use rankr_import::{
+    fundamental_points_table,
     fundamental_table::build_table,
     history::{YahooSymbolMap, parse_history_document},
     model::{Instrument, MarketPair, RawDocument, Source},
@@ -34,6 +35,11 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Command {
+    /// Score archived fundamentals offline using fixed GICS template thresholds.
+    FundamentalPoints {
+        /// Directory containing archived fundamentals.json files.
+        directory: PathBuf,
+    },
     /// List raw fundamental ratios from the latest archived snapshot per company.
     FundamentalTable {
         /// Directory containing archived fundamentals.json files.
@@ -104,6 +110,7 @@ async fn main() -> ExitCode {
 
 async fn run(cli: Cli) -> Result<()> {
     match cli.command {
+        Command::FundamentalPoints { directory } => show_fundamental_points(&directory),
         Command::FundamentalTable { directory } => show_fundamental_table(&directory),
         Command::Technical { as_of, file } => show_technical(&file, as_of),
         Command::TechnicalTable { as_of, directory } => show_technical_table(&directory, as_of),
@@ -113,6 +120,35 @@ async fn run(cli: Cli) -> Result<()> {
         Command::Prices { code, output } => collect_prices(code.as_deref(), output).await,
         Command::History { code, output } => collect_history(code.as_deref(), output).await,
     }
+}
+
+fn show_fundamental_points(directory: &Path) -> Result<()> {
+    let table = fundamental_points_table::build_table(directory)
+        .with_context(|| format!("reading fundamentals under {}", directory.display()))?;
+    for skipped in &table.skipped {
+        eprintln!(
+            "Skipped {}: {}",
+            skipped.source_file.display(),
+            skipped.reason
+        );
+    }
+    let mut missing = 0;
+    for row in &table.rows {
+        if row.points.fundamental_score.is_none() {
+            missing += 1;
+        }
+    }
+    eprintln!(
+        "Scored {} companies; {missing} with null fundamental_score; skipped {} paths",
+        table.rows.len(),
+        table.skipped.len()
+    );
+    ensure!(
+        !table.rows.is_empty(),
+        "no valid companies found under {}",
+        directory.display()
+    );
+    print_json(&table.rows)
 }
 
 fn show_fundamental_table(directory: &Path) -> Result<()> {

@@ -36,8 +36,10 @@ does not provide investment advice.
 - basic charts and score history validation notes
 
 Seasonality belongs to `technical`, without a fourth family weight. Technical v1
-is implemented as seasonality points plus SMA200 trend points; the other score
-families remain planned. Sector macro and COT are optional extensions after MVP.
+is implemented as seasonality points plus SMA200 trend points. Fundamental points
+use fixed GICS template thresholds for the available financial ratios; valuation,
+year-over-year dynamics and sentiment remain planned. Sector macro and COT are
+optional extensions after MVP.
 
 ## Fundamentals importer
 
@@ -120,11 +122,50 @@ The pretty JSON array contains company/report metadata, `net_margin`,
 or currency conversion. Stderr reports skipped paths, the company count and
 missing values for each ratio; no valid companies means an error with empty stdout.
 
+Calculate fundamental points separately, offline:
+
+```bash
+rankr-import fundamental-points data/collected
+```
+
+This command reuses the same latest-snapshot selection and Decimal ratio
+calculations. `fundamental-table` continues to return raw ratios without points.
+GICS selects only the indicator template and fixed thresholds. The assignments
+in `data/raw/wig20_symbols.csv` and the thresholds below are a thesis convention,
+not fitted to WIG20 results. There are no quartiles, terciles or comparisons with
+other companies in a sector or industry group.
+
+| Template | Ratio | −1 | 0 (inclusive boundaries) | +1 |
+| --- | --- | --- | --- | --- |
+| Nonfinancial | `net_margin`, `operating_margin` | < −0.02 | −0.02 to 0.02 | > 0.02 |
+| Nonfinancial | `equity_ratio` | < 0.30 | 0.30 to 0.50 | > 0.50 |
+| Nonfinancial | `debt_to_equity` | > 1.50 | 0.50 to 1.50 | < 0.50 |
+| Nonfinancial | `ocf_to_net_income` | < 0 | 0 to 1 | > 1 |
+| Financials (GICS 40) | `equity_ratio` | < 0.08 | 0.08 to 0.10 | > 0.10 |
+
+The entire Financials sector, including Insurance and Financial Services, uses
+only `equity_ratio`. Its other four ratios and their points are `null` in this
+command's output. A missing ratio has `null` points. `fundamental_score` sums the
+available points; if none are available, it is `null`. An available neutral point
+counts as zero. The full nonfinancial range is −5 to +5; Financials uses −1 to +1.
+There is no rescaling or combination with technical/sentiment here. The planned
+three-family result still uses one set of weights for the entire basket.
+
+Stdout is a pretty JSON array containing `code`, `gics_sector`,
+`gics_industry_group`, the five ratios, their corresponding `*_points`,
+`fundamental_score` and `source_file`. Rows sort by score descending, with `null`
+last and company code A–Z as the tie-breaker. Stderr lists skipped paths and the
+company and null-score counts. Unknown GICS codes are skipped; zero valid
+companies means an error with empty stdout. The map is bundled into the binary,
+so rebuild/reinstall after changing it; no network or database is needed.
+
 ```text
 importer/src/
   model.rs    # serializable data types, independent of HTTP/files/database
   fundamental_ratios.rs # pure monetary scaling and raw ratio calculations
   fundamental_table.rs # offline fundamental snapshot selection and ratio table
+  fundamental_points.rs # pure fixed-threshold scoring for the GICS templates
+  fundamental_points_table.rs # offline GICS mapping and fundamental ranking
   source.rs   # HTTP client and current WIG20 composition
   parser.rs   # pure HTML/raw document -> typed fundamentals/snapshot
   prices.rs   # pure current-quote parsing
@@ -152,8 +193,8 @@ cargo clippy --workspace --all-targets --locked -- -D warnings
 
 Tests use small fixtures and local HTTP servers, without contacting GPW, Yahoo or
 TradingView. Old Python/Bash scripts and `data/raw/` samples remain as earlier
-research material. Detailed banking fundamentals, macro data and the other score
-families are later steps.
+research material. Detailed banking fundamentals, macro data, valuation,
+year-over-year dynamics and sentiment are later steps.
 
 ## Daily company prices and history
 

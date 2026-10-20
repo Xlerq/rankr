@@ -41,7 +41,9 @@ Po każdym etapie uzupełniamy odpowiadającą mu część `thesis/main.tex` i t
 
 ## Etap 3. Scoring potencjału wzrostu
 
-- [ ] Zaimplementować wynik najważniejszej rodziny `fundamental` dla pełnego WIG20, obejmującej kondycję finansową, wycenę i dynamikę wyników; dynamika obejmuje wzrost przychodów i zysku, nie sam poziom ROE.
+- [x] Zaimplementować punkty podstawowych wskaźników `fundamental`: `net_margin`, `operating_margin`, `equity_ratio`, `debt_to_equity`, `ocf_to_net_income`, ze stałymi progami jako konwencją pracy. GICS wybiera szablon i progi, bez rankingu wewnątrz grupy; cały Financials używa tylko `equity_ratio`. `fundamental-points` sumuje dostępne punkty −1/0/+1, a brak wszystkich oznacza `null`; `fundamental-table` pozostaje tabelą surowych wskaźników.
+- [ ] Dodać wycenę do rodziny `fundamental` po uzupełnieniu potrzebnych danych.
+- [ ] Dodać dynamikę rok do roku do rodziny `fundamental`: wzrost przychodów i zysku na podstawie porównywalnych raportów, nie sam poziom ROE.
 - [x] Zaimplementować `technical` v1: `technical_score = seasonality_points + trend_points`, bez wag wewnętrznych i osobnego sygnału momentum. Sezonowość używa wszystkich dostępnych zakończonych analogicznych miesięcy z lat ubiegłych (wystarczy jeden), z progami ±2%; trend to SMA200 z pasem 3%, a mniej niż 200 sesji daje trend 0. Liczyć z `close`, wyłącznie dla `date < as_of`; brak sezonowości i pełnego wyniku oznaczać jako `null`. Komendy offline: `technical` dla jednego pliku i `technical-table` dla rankingu spółek z najnowszych `history.json`.
 - [ ] Uwzględnić wynik `sentiment` jako trzecią rodzinę; źródło danych pozostaje nieustalone.
 - [ ] Obliczać potencjał wzrostu jako sumę ważoną wyników `fundamental`, `technical` i `sentiment`, bez normalizacji końcowej i mapowania na procent zwrotu. Stosować jeden zestaw wag dla całego WIG20, w tym banków, oraz prezentować wyniki rodzin i ich wagi.

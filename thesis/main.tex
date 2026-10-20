@@ -185,7 +185,7 @@ Celem pracy jest przygotowanie aplikacji webowej \textit{rankr} do rankingu spó
 
 Pierwsza wersja obejmuje pełny koszyk WIG20. Ograniczenie to pozwala przygotować i sprawdzić cały proces dla niewielkiej grupy instrumentów, bez zamykania możliwości późniejszego dodania innych akcji GPW. Planowanym widokiem głównym jest tabela spółek z wynikami rodzin \texttt{fundamental}, \texttt{technical} i \texttt{sentiment}, ich wagami oraz wynikiem końcowym. Rodzina fundamentalna ma mieć największe znaczenie, jednak wartości wag i reguły przyznawania punktów nie zostały jeszcze skalibrowane.
 
-W pracy przyjęto Rust jako język importera, obliczeń oraz planowanej aplikacji webowej. Do 18 października 2026 roku wykonano program konsolowy do zbierania danych, archiwum JSON, scoring techniczny oraz tabelę surowych wskaźników fundamentalnych. Te elementy działają bez backendu, frontendu i połączenia z bazą danych. Dalsze rozdziały opisują zarówno ich realizację, jak i granice obecnego rozwiązania. Części dotyczące aplikacji webowej oraz pełnego rankingu pozostają projektem dalszych prac.
+W pracy przyjęto Rust jako język importera, obliczeń oraz planowanej aplikacji webowej. Do 20 października 2026 roku wykonano program konsolowy do zbierania danych, archiwum JSON, scoring techniczny, tabelę surowych wskaźników fundamentalnych oraz ich punktację według stałych progów. Te elementy działają bez backendu, frontendu i połączenia z bazą danych. Dalsze rozdziały opisują zarówno ich realizację, jak i granice obecnego rozwiązania. Części dotyczące aplikacji webowej oraz pełnego rankingu pozostają projektem dalszych prac.
 
 Zakres pierwszej wersji nie obejmuje składania zleceń, integracji z brokerem, danych czasu rzeczywistego ani uczenia maszynowego. Aplikacja ma wspierać porównywanie danych i analizę przyjętych reguł, a nie wykonywać transakcje. Praca rozdziela sprawdzenie poprawności programu od oceny tego, czy ranking rzeczywiście pomaga wskazać spółki osiągające później lepsze zwroty.
 
@@ -302,7 +302,7 @@ Moduły mają niewielkie, określone zadania. Ich zestawienie przedstawiono w ta
 \caption{Podstawowe odpowiedzialności modułów importera}
 \label{tab:modules}
 \small
-\begin{tabularx}{\textwidth}{p{5.1cm}X}
+\begin{tabularx}{\textwidth}{p{5.4cm}X}
 \toprule
 Moduł & Zadanie \\
 \midrule
@@ -317,6 +317,8 @@ Moduł & Zadanie \\
 \texttt{technical\_table.rs} & Wybór plików spółek i sortowanie rankingu \\
 \texttt{fundamental\_ratios.rs} & Pięć wskaźników z pojedynczego raportu \\
 \texttt{fundamental\_table.rs} & Wybór snapshotów i tabela wskaźników \\
+\texttt{fundamental\_points.rs} & Punkty wskaźników według stałych progów \\
+\texttt{fundamental\_points\_table.rs} & Mapowanie GICS i sortowanie punktów fundamentów \\
 \bottomrule
 \end{tabularx}
 \end{table}
@@ -350,7 +352,7 @@ Planowana warstwa serwerowa ma używać Axum i Tokio, frontend ma powstać w Lep
 
 Docelowy backend powinien korzystać z istniejącej biblioteki, zamiast ponownie implementować wzory na potrzeby API. Adapter zapisu będzie odpowiadał za powiązanie instrumentu, obserwacji źródłowej i wyniku. Parser nadal powinien działać niezależnie od tego, czy wynik trafia do pliku, czy do bazy. Wymaga to przygotowania mapowania i testów integracyjnych, lecz pozwala zachować dotychczasowy kod obliczeń.
 
-Przed udostępnieniem głównego rankingu potrzebna jest jednak decyzja o punktach fundamentalnych i zasadach obsługi braków. Sam interfejs nie rozwiązuje problemu porównywalności wyników. Dlatego kolejny etap metodyki dotyczy punktacji, a nie prezentacji niepełnej sumy trzech rodzin jako gotowego wyniku końcowego.
+Przed udostępnieniem głównego rankingu potrzebne są jeszcze zasady łączenia rodzin, ich wagi oraz źródło sentymentu. Punkty podstawowych fundamentów są już obliczane, lecz sam interfejs nie rozwiązuje problemu porównywalności zakresów wyników. Niepełna suma rodzin nie jest jeszcze gotowym wynikiem końcowym.
 
 \cleardoublepage
 \chapter{Model danych}
@@ -410,7 +412,7 @@ Wartość opcjonalna w Rust jest reprezentowana przez \texttt{Option}. Jej brak 
 
 \section{Wyniki obliczeń i projekt bazy}
 
-Wiersz rankingu technicznego zawiera kod spółki, datę rankingu, dwa składniki punktowe, ich sumę, średni zwrot sezonowy, liczbę użytych lat i ścieżkę pliku źródłowego. W pojedynczym wyniku dostępne są dodatkowo ostatnia użyta sesja, cena zamknięcia, SMA200 i odległość od średniej. Tabela fundamentalna zawiera kod, dane opisujące raport, pięć wskaźników i ścieżkę źródła. Nie ma w niej pola punktacji fundamentalnej.
+Wiersz rankingu technicznego zawiera kod spółki, datę rankingu, dwa składniki punktowe, ich sumę, średni zwrot sezonowy, liczbę użytych lat i ścieżkę pliku źródłowego. W pojedynczym wyniku dostępne są dodatkowo ostatnia użyta sesja, cena zamknięcia, SMA200 i odległość od średniej. Komenda \texttt{fundamental-table} zawiera kod, dane opisujące raport, pięć wskaźników i ścieżkę źródła, bez punktów. Osobna komenda \texttt{fundamental-points} podaje kod, sektor i grupę branżową GICS, pięć wskaźników z ich punktami, sumę punktów oraz ścieżkę źródła.
 
 W katalogu \texttt{database/} znajduje się wcześniejszy projekt ośmiu tabel SurrealDB: \texttt{instrument}, \texttt{index\_membership}, \texttt{price\_daily}, \texttt{fundamental\_snapshot}, \texttt{macro\_observation}, \texttt{score\_config}, \texttt{score\_result} oraz \texttt{data\_source\_log}. Opisują one docelowe grupy danych i powiązania. Pliki schematu i przykładowych rekordów nie są jednak uruchamiane przez importer.
 
@@ -424,7 +426,7 @@ W projekcie bazy przewidziano też konfigurację wag i odwołanie wyniku do inst
 
 \section{Interpretacja i obecny zakres}
 
-Scoring ma porządkować spółki według przyjętych reguł. W przeciwieństwie do modelu prognozującego cenę nie zwraca oczekiwanego kursu ani procentowej stopy zwrotu. Na obecnym etapie działa tylko punktacja techniczna. Wskaźniki fundamentalne są obliczane, ale nie mają przypisanych punktów. Rodzina sentymentu pozostaje planowana, bez wybranego źródła.
+Scoring ma porządkować spółki według przyjętych reguł. W przeciwieństwie do modelu prognozującego cenę nie zwraca oczekiwanego kursu ani procentowej stopy zwrotu. Na obecnym etapie działa punktacja techniczna oraz punktacja podstawowych wskaźników fundamentalnych. Rodzina sentymentu pozostaje planowana, bez wybranego źródła.
 
 Podstawowym założeniem jest powtarzalność: ten sam plik wejściowy i ta sama data rankingu powinny dać ten sam wynik. Nie ma losowania, uczenia modelu ani automatycznego dopasowania progów do analizowanej spółki. Przejrzystość reguł pozwala sprawdzić poprawność obliczeń, lecz sama w sobie nie potwierdza ich skuteczności rynkowej.
 
@@ -537,19 +539,13 @@ Wskaźnik jest niedostępny, jeśli brakuje licznika, mianownika albo mianownik 
 
 Mnożnik jednostki skraca się w ilorazie, jeśli obie kwoty są podane w tej samej skali. Przykładowo 100 tysięcy zysku i 1000 tysięcy przychodów daje $0{,}1$, czyli $10\%$, tak samo jak po przeliczeniu obu kwot na złote. Jest to przykład rachunkowy. W JSON wskaźnik pozostaje ułamkiem \texttt{0.1}, a nie liczbą \texttt{10}. Jawne zastosowanie mnożnika zachowuje spójny sposób interpretacji kwot i pozwala wykryć przekroczenie zakresu typu.
 
-Ujemne wartości pozostają ujemne. Program nie przypisuje im automatycznie znaczenia inwestycyjnego. Dodatni iloraz przepływów i wyniku netto może powstać również wtedy, gdy obie kwoty są ujemne. Z kolei ujemny kapitał zmienia interpretację relacji zobowiązań do kapitału. Są to powody, dla których samo obliczenie wskaźników nie rozstrzyga jeszcze ich punktacji.
+Ujemne wartości pozostają ujemne. Komenda \texttt{fundamental-table} nie przypisuje im automatycznie znaczenia inwestycyjnego. Dodatni iloraz przepływów i wyniku netto może powstać również wtedy, gdy obie kwoty są ujemne. Z kolei ujemny kapitał zmienia interpretację relacji zobowiązań do kapitału. Są to ograniczenia interpretacji, których samo przypisanie punktów według stałych progów nie usuwa.
 
-\section{Decyzja o punktach fundamentalnych}
+\section{Stałe progi punktów fundamentalnych}
 
-Progu sezonowości nie można bezpośrednio przenieść do fundamentów. Sezonowość mierzy zwrot wokół zera, natomiast marża $10\%$ albo udział kapitału $0{,}40$ opisują inne relacje. Wspólny próg $2\%$ przypisywałby w takich przykładach dodatni punkt bez wystarczającego uzasadnienia. Dla zadłużenia trzeba dodatkowo rozważyć przeciwny kierunek oceny oraz przypadki ujemnego kapitału.
+W poleceniu \texttt{fundamental-points} przyjęto stałe progi jako konwencję pracy, bez dopasowania do wyników WIG20. Mapowanie GICS wybiera tylko szablon wskaźników i progi; nie służy do porównywania spółek wewnątrz grupy, wyznaczania kwartyli ani tercji. Poza sektorem Financials marże netto i operacyjna otrzymują $+1$ powyżej $0{,}02$ i $-1$ poniżej $-0{,}02$. Udział kapitału otrzymuje $+1$ powyżej $0{,}50$ i $-1$ poniżej $0{,}30$, zadłużenie do kapitału odpowiednio $+1$ poniżej $0{,}50$ i $-1$ powyżej $1{,}50$, a przepływy operacyjne do wyniku netto: $+1$ powyżej $1$ i $-1$ poniżej $0$. Cały sektor Financials, także ubezpieczyciele i usługi finansowe, używa wyłącznie udziału kapitału: $+1$ powyżej $0{,}10$ i $-1$ poniżej $0{,}08$. Pozostałe cztery wskaźniki i ich punkty są w tym szablonie \texttt{null}. Wartości pomiędzy progami, wraz z granicami, dają zero. Brak wskaźnika daje \texttt{null}, a wynik fundamentalny jest sumą dostępnych punktów; brak wszystkich oznacza \texttt{null}. Wzory surowych wskaźników oraz punktacja techniczna pozostają bez zmian.
 
-Rozpatrywane są dwie ścieżki. Pierwsza opiera się na porównaniu w obrębie koszyka: górna tercja otrzymuje $+1$, środkowa zero, dolna $-1$, z odwróconym kierunkiem dla zadłużenia i pominięciem brakujących wartości. Wymaga to jednak zasad rozstrzygania remisów, minimalnej liczby poprawnych obserwacji i oceny, czy porównywane spółki są dostatecznie podobne. Pozycja względna może zmienić się także przez zmianę pozostałych spółek, mimo niezmienionych danych danego podmiotu.
-
-Druga ścieżka polega na ustaleniu osobnych progów absolutnych dla każdego wskaźnika. Pozwala zachować znaczenie progu niezależnie od składu koszyka, ale wymaga uzasadnienia jego wartości i sposobu traktowania różnych branż. Żadna z tych ścieżek nie została jeszcze przyjęta jako działający algorytm fundamentalny.
-
-Osobnej decyzji wymaga brak pojedynczego wskaźnika: czy uniemożliwia obliczenie całej rodziny, czy wynik powstaje tylko z dostępnych składników. Drugi wariant prowadzi do porównywania sum o różnej liczbie składników. Pierwszy może istotnie ograniczyć liczbę spółek z pełnym wynikiem, szczególnie wśród banków. Brak wyniku nie powinien być bez wyjaśnienia zastępowany neutralnym zerem.
-
-Pozostaje również kwestia skali. Suma pięciu punktowanych wskaźników miałaby zakres od $-5$ do $+5$, podczas gdy wynik techniczny ma zakres od $-2$ do $+2$. Zwiększenie wagi fundamentów dodatkowo wzmacnia tę różnicę. Dlatego przed połączeniem rodzin należy ustalić, co ma oznaczać jeden punkt każdej z nich. Nie wymaga to końcowej skali 0--100, ale wymaga świadomego określenia zakresów i wag.
+Pozostaje kwestia skali. Suma pięciu punktowanych wskaźników ma zakres od $-5$ do $+5$, szablon Financials od $-1$ do $+1$, a wynik techniczny od $-2$ do $+2$. Braki danych mogą ograniczyć liczbę dostępnych składników. Przed połączeniem rodzin należy uwzględnić te różnice przy ustalaniu znaczenia jednego punktu i wag. GICS nie wprowadza osobnego zestawu wag trzech rodzin dla banków.
 
 Obecne dane nie pokrywają jeszcze całego planowanego zakresu fundamentów. Bez liczby akcji nie ma wyliczanych P/E i P/B, a bez poprzednich porównywalnych raportów nie ma dynamiki rok do roku. Pięć dostępnych wskaźników opisuje wybrane relacje finansowe; nie zastępuje ani wyceny, ani pełnej oceny sektora bankowego.
 
@@ -584,7 +580,7 @@ Komendy \texttt{collect}, \texttt{history} i \texttt{prices} przyjmują opcjonal
 \caption{Komendy działającej wersji programu}
 \label{tab:commands}
 \small
-\begin{tabularx}{\textwidth}{p{3.4cm}p{1.8cm}X}
+\begin{tabularx}{\textwidth}{p{3.6cm}p{1.8cm}X}
 \toprule
 Komenda & Sieć & Rezultat \\
 \midrule
@@ -596,6 +592,7 @@ Komenda & Sieć & Rezultat \\
 \texttt{technical} & Nie & Wynik techniczny jednej serii dla podanej daty \\
 \texttt{technical-table} & Nie & Posortowany ranking techniczny z katalogu historii \\
 \texttt{fundamental-table} & Nie & Tabela pięciu wskaźników z najnowszych snapshotów \\
+\texttt{fundamental-points} & Nie & Punkty fundamentów według stałych progów GICS \\
 \bottomrule
 \end{tabularx}
 \end{table}
@@ -603,6 +600,7 @@ Komenda & Sieć & Rezultat \\
 Dla analizy offline wystarczy istniejące archiwum:
 \begin{verbatim}
 rankr-import fundamental-table data/collected
+rankr-import fundamental-points data/collected
 rankr-import technical-table --as-of 2026-10-18 data/collected
 rankr-import technical --as-of 2026-10-18 /path/to/history.json
 \end{verbatim}
@@ -650,13 +648,13 @@ Zapis nie eliminuje powtarzających się treści raportu. Dwa identyczne pobrani
 
 \section{Budowanie tabel offline}
 
-Obie komendy tabelaryczne rekurencyjnie przeglądają katalog wejściowy. Szukają odpowiednio plików \texttt{history.json} i \texttt{fundamentals.json}, a pozostałe pliki archiwum ignorują. Odczytują kod spółki i moment pobrania, po czym wybierają najnowszy poprawnie odczytany dokument dla danego kodu. Daty porównywane są jako znaczniki czasu, z uwzględnieniem przesunięcia strefy.
+Komendy tabelaryczne rekurencyjnie przeglądają katalog wejściowy. Szukają odpowiednio plików \texttt{history.json} i \texttt{fundamentals.json}, a pozostałe pliki archiwum ignorują. Odczytują kod spółki i moment pobrania, po czym wybierają najnowszy poprawnie odczytany dokument dla danego kodu. Daty porównywane są jako znaczniki czasu, z uwzględnieniem przesunięcia strefy.
 
-Uszkodzony JSON, brak kodu lub błąd obliczeń są raportowane wraz ze ścieżką. Pojedynczy niepoprawny plik nie przerywa całej tabeli. Pusty katalog albo brak poprawnych spółek kończy się błędem i pustym standardowym wyjściem. Tabela techniczna podaje liczbę brakujących pełnych wyników, a fundamentalna liczbę braków osobno dla każdego wskaźnika.
+Uszkodzony JSON, brak kodu lub błąd obliczeń są raportowane wraz ze ścieżką. Pojedynczy niepoprawny plik nie przerywa całej tabeli. Pusty katalog albo brak poprawnych spółek kończy się błędem i pustym standardowym wyjściem. Tabele punktów podają liczbę brakujących wyników, a tabela surowych fundamentów liczbę braków osobno dla każdego wskaźnika. Brak kodu w mapie GICS powoduje pominięcie spółki w \texttt{fundamental-points}.
 
 Wybór najnowszego pliku ma praktyczne ograniczenie. Polecenia \texttt{history} i spółkowe \texttt{prices} zapisują ten sam typ pliku, ale drugie z nich zachowuje tylko ostatnią świecę. Nowszy jednoelementowy plik może więc zastąpić pełną serię przy budowie tabeli z tego samego katalogu. Program nie skleja historii automatycznie. Do rankingu należy wskazać katalog zawierający pobrania pełnej historii; osobny katalog można wybrać przez \texttt{--output}.
 
-Tabela fundamentalna jest sortowana według kodu, ponieważ jej liczby nie stanowią wspólnego wyniku punktowego. Najnowszy czas pobrania oznacza ostatni zapisany stan źródła, a nie automatycznie najnowszy okres sprawozdawczy. Reguła ta nie porównuje etykiet raportów ani dat ich publikacji.
+Tabela surowych wskaźników fundamentalnych jest sortowana według kodu. Tabela punktów fundamentów jest sortowana malejąco według sumy, z brakami na końcu i kodem A--Z przy remisie. Najnowszy czas pobrania oznacza ostatni zapisany stan źródła, a nie automatycznie najnowszy okres sprawozdawczy. Reguła ta nie porównuje etykiet raportów ani dat ich publikacji.
 
 \cleardoublepage
 \chapter{Testy i walidacja}
@@ -779,7 +777,7 @@ Do terminu ukończenia pracy w lutym 2027 roku możliwy będzie ograniczony okre
 
 Dotychczasowy etap pracy doprowadził do powstania działającego procesu od pobrania danych do lokalnego wyniku obliczeń. Importer Rust pobiera bieżący skład WIG20, podstawowe fundamenty, historię dziennych cen oraz wybrane kursy walut i złota. Zachowuje odpowiedzi źródłowe, odczytuje dane do jawnych struktur i zgłasza błędy bez usuwania poprawnych obserwacji.
 
-Zaimplementowano techniczny wzór v1 oparty na sezonowości miesiąca kalendarzowego i położeniu ceny względem SMA200. Ta sama funkcja służy do analizy jednej serii i budowy rankingu wielu spółek. Każdy wynik można powiązać z danymi wejściowymi i wartościami użytymi w obliczeniach. Osobno powstała tabela pięciu surowych wskaźników fundamentalnych, z zachowaniem braków danych i bez przypisywania im punktów.
+Zaimplementowano techniczny wzór v1 oparty na sezonowości miesiąca kalendarzowego i położeniu ceny względem SMA200. Ta sama funkcja służy do analizy jednej serii i budowy rankingu wielu spółek. Każdy wynik można powiązać z danymi wejściowymi i wartościami użytymi w obliczeniach. Osobno powstała tabela pięciu surowych wskaźników fundamentalnych oraz ich punktacja według stałych progów wybieranych przez szablon GICS, z zachowaniem braków danych.
 
 Testy potwierdziły działanie parserów, obsługę granic wzorów, precyzję zapisu oraz wybór najnowszych plików. Uruchomienie na lokalnym archiwum potwierdziło możliwość przetworzenia danych 20 spółek. Te rezultaty dotyczą poprawności programu. Nie oznaczają jeszcze, że uzyskana kolejność wskazuje przyszłych zwycięzców rynkowych.
 
@@ -795,7 +793,7 @@ Obszar & Stan \\
 Importer i archiwum JSON & Działają; uruchamiane ręcznie \\
 Scoring techniczny i tabela & Działają offline, ze stałymi regułami v1 \\
 Wskaźniki fundamentalne & Działają jako surowe relacje, bez punktów \\
-Punktacja fundamentalna & Wymaga decyzji o progach, skali i brakach \\
+Punktacja fundamentalna & Działa według stałych progów GICS; bez wyceny i dynamiki rok do roku \\
 Sentyment i wynik końcowy & Brak źródła sentymentu i pełnego algorytmu sumy rodzin \\
 SurrealDB & Wcześniejszy projekt schematu, bez połączenia z importerem \\
 Backend, frontend i wykresy & Planowane \\
@@ -804,7 +802,7 @@ Walidacja późniejszych zwrotów & Planowana; nie ma wyników skuteczności mod
 \end{tabularx}
 \end{table}
 
-Najbliższym zadaniem metodycznym jest ustalenie punktów fundamentalnych. Dopiero po tej decyzji można nadać znaczenie wagom rodzin i określić warunki powstania pełnego wyniku. Równolegle potrzebne jest regularne zbieranie obserwacji, aby przyszła ocena nie opierała się wyłącznie na jednorazowo pobranych danych. Integracja z bazą i interfejsem powinna wykorzystać istniejące parsery oraz funkcje obliczeniowe.
+Dalszym zadaniem metodycznym jest ocena przyjętej konwencji punktów fundamentalnych oraz ustalenie wag rodzin i warunków powstania pełnego wyniku. Równolegle potrzebne jest regularne zbieranie obserwacji, aby przyszła ocena nie opierała się wyłącznie na jednorazowo pobranych danych. Integracja z bazą i interfejsem powinna wykorzystać istniejące parsery oraz funkcje obliczeniowe.
 
 Główne ograniczenia są już widoczne: brak historii sprawozdań i ich dat publikacji, różna długość serii cenowych, niepełne dane banków, brak wyceny i dynamiki rok do roku oraz krótki okres możliwej obserwacji przyszłych zwrotów. Dalszy rozwój powinien odpowiadać na te konkretne braki. Rozszerzenie koszyka i dodatkowe źródła mają sens po sprawdzeniu pełnego przepływu dla obecnego zakresu.
 
@@ -875,7 +873,7 @@ Autorzy biblioteki serde\_json.
 \textbf{Słowa kluczowe:} GPW, WIG20, scoring, ranking, Rust, dane finansowe
 \\
 
-Praca przedstawia projekt aplikacji \textit{rankr} do rankingu spółek GPW według względnego potencjału wzrostu w horyzoncie 3--12 miesięcy oraz zrealizowany etap importu i analizy offline w języku Rust. Wykonano archiwizację danych źródłowych, odczyt podstawowych fundamentów i historii cen, punktację sezonowości i trendu SMA200 oraz tabelę pięciu surowych wskaźników fundamentalnych. Opisano reguły braków danych, testy i ograniczenia analiz historycznych. Pełny wynik ważony, integracja z bazą oraz interfejs webowy pozostają planowane. Skuteczność rankingu w ocenie przyszłych zwrotów wymaga dalszej walidacji.
+Praca przedstawia projekt aplikacji \textit{rankr} do rankingu spółek GPW według względnego potencjału wzrostu w horyzoncie 3--12 miesięcy oraz zrealizowany etap importu i analizy offline w języku Rust. Wykonano archiwizację danych źródłowych, odczyt podstawowych fundamentów i historii cen, punktację sezonowości i trendu SMA200 oraz tabelę wskaźników fundamentalnych i ich punktację według stałych progów. Opisano reguły braków danych, testy i ograniczenia analiz historycznych. Pełny wynik ważony, integracja z bazą oraz interfejs webowy pozostają planowane. Skuteczność rankingu w ocenie przyszłych zwrotów wymaga dalszej walidacji.
 
 \vfill
 \noindent\rule{\textwidth}{2pt}
@@ -893,7 +891,7 @@ Praca przedstawia projekt aplikacji \textit{rankr} do rankingu spółek GPW wed�
 \textbf{Key words:} Warsaw Stock Exchange, WIG20, scoring, ranking, Rust, financial data
 \\
 
-This thesis presents the design of \textit{rankr}, an application for ranking Warsaw Stock Exchange companies by relative growth potential over 3--12 months, and its implemented data collection and offline analysis in Rust. Completed components include source archiving, financial and price data parsing, calendar-month seasonality and SMA200 trend scoring, and a table of five raw financial ratios. The thesis describes missing-data rules, tests and limitations of historical analysis. The full weighted score, database integration and web interface remain planned. The ranking's ability to identify better subsequent returns requires further validation.
+This thesis presents the design of \textit{rankr}, an application for ranking Warsaw Stock Exchange companies by relative growth potential over 3--12 months, and its implemented data collection and offline analysis in Rust. Completed components include source archiving, financial and price data parsing, calendar-month seasonality and SMA200 trend scoring, and a table of financial ratios with separate fixed-threshold scoring. The thesis describes missing-data rules, tests and limitations of historical analysis. The full weighted score, database integration and web interface remain planned. The ranking's ability to identify better subsequent returns requires further validation.
 
 \vfill
 \clearpage

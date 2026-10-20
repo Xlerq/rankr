@@ -78,15 +78,17 @@ The v1 score families are exactly:
 - `technical`: SMA200 price trend and calendar-month seasonality from daily history,
 - `sentiment`: sentiment, with a schema field now and no data source specified.
 
-Each company has component scores (metrics/signals), each with an assigned, fixed weight. The final score is the sum (component score × weight), measures relative growth potential, and determines table sorting. Do not normalize the final score or map the sum to an expected percentage return. Explain the result through its component scores and their weights.
+Each company has three family scores, each with an assigned, fixed weight. The final score is the sum (family score × weight), measures relative growth potential, and determines table sorting. Do not normalize the final score or map the sum to an expected percentage return. Explain the result through its family scores and their weights.
 
-v1 uses one set of weights for the entire WIG20, including banks. Some bank fields may be empty. Do not introduce a separate banking model in v1.
+v1 uses one set of weights for the three families across the entire WIG20,
+including banks. Fundamental indicator templates and thresholds depend on GICS;
+this does not introduce sector-specific family weights.
 
 Technical v1 is implemented in the pure `importer/src/technical.rs` module and
 exposed through `rankr-import technical --as-of YYYY-MM-DD history.json`.
 Its formula is exactly `technical_score = seasonality_points + trend_points`.
 Both components are -1, 0 or +1, with no internal weights, 0–100 scaling or
-separate momentum signal. This task does not implement the other families.
+separate momentum signal.
 
 - Input: project only `candles[].date` and `candles[].close` from history JSON,
   including the Yahoo shape. Ignore provider metadata and `adjusted_close`.
@@ -104,6 +106,37 @@ separate momentum signal. This task does not implement the other families.
 - JSON explanation: R (`r`), usable year count, latest session/close, SMA200,
   d and available trend-session count. Serialize Decimal statistics as exact JSON numbers.
   Reject duplicate past dates and nonpositive past closes explicitly.
+
+Fundamental points are implemented in the pure `importer/src/fundamental_points.rs`
+module and exposed through `rankr-import fundamental-points DIRECTORY`.
+Keep `fundamental-table` as the separate raw-ratio command without points.
+
+- Reuse the existing five Decimal ratios, including monetary `unit_multiplier`
+  handling and `null` for missing inputs or zero denominators. Do not annualize,
+  convert currencies or substitute provider ROE/ROA.
+- GICS assignments in `data/raw/wig20_symbols.csv` and the fixed thresholds are
+  a thesis convention, not fitted to WIG20. Preserve the old `sector` column.
+  GICS selects only templates and thresholds, never a peer ranking. Do not use
+  quartiles, terciles or other companies' values.
+- Outside Financials: margins > 0.02 give +1 and < -0.02 give -1;
+  `equity_ratio` > 0.50 gives +1 and < 0.30 gives -1;
+  `debt_to_equity` < 0.50 gives +1 and > 1.50 gives -1;
+  `ocf_to_net_income` > 1 gives +1 and < 0 gives -1.
+  All other available values, including exact boundaries, give 0.
+- All of GICS sector 40 (Financials), including Banks, Insurance and Financial
+  Services, uses only `equity_ratio`: > 0.10 gives +1, < 0.08 gives -1,
+  otherwise 0. The other four ratios and their points are null in the points
+  table, even when the raw data is present. This is exclusion, not a penalty.
+- Missing ratios have null points. `fundamental_score` sums only available
+  points; no available points means null. An available zero yields score 0.
+  Do not normalize the sum or combine it with technical here.
+- Recursively select the latest `fundamentals.json` per code by `fetched_at`,
+  using the same selection as `fundamental-table`. Skip unknown GICS codes and
+  bad files with paths on stderr. Output pretty JSON sorted by score descending,
+  null last, then code A–Z. Report company and null-score counts on stderr.
+  Zero valid companies is an error with empty stdout. No network or database.
+- Valuation and year-over-year dynamics remain unimplemented. Sentiment still
+  has no source or points; the full weighted result remains planned.
 
 Seasonality belongs to `technical`, without a fourth family weight. Sector macro
 and COT are outside v1 and may only be optional extensions after MVP.
@@ -130,7 +163,9 @@ The Rust workspace currently contains the `rankr-import` package in `importer/`.
 It collects basic GPW/Notoria fundamentals, Yahoo daily company prices/history and TradingView FX/gold quotes,
 and obtains the current WIG20 list from GPW Benchmark. CLI: `collect [CODE]`,
 `prices [CODE]`, `history [CODE]`, `fetch CODE`, `parse FILE`,
-`technical --as-of YYYY-MM-DD history.json`.
+`technical --as-of YYYY-MM-DD history.json`,
+`technical-table --as-of YYYY-MM-DD DIRECTORY`,
+`fundamental-table DIRECTORY`, `fundamental-points DIRECTORY`.
 
 - One package with a reusable library and a thin CLI; keep HTTP, pure parsing,
   serializable model types and JSON persistence in separate modules.
