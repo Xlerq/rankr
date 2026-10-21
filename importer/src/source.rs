@@ -1,4 +1,4 @@
-//! GPW HTTP access and parsing of the current WIG20 constituents.
+//! Provider HTTP access and parsing of the current WIG20 constituents.
 //!
 //! Fetching returns the final response even for HTTP errors. The caller can save
 //! the response before checking its status or attempting to parse its contents.
@@ -21,6 +21,7 @@ const PORTFOLIO_ENDPOINT: &str = "https://gpwbenchmark.pl/ajaxindex.php";
 const FUNDAMENTALS_ENDPOINT: &str = "https://www.gpw.pl/ajaxindex.php";
 const TRADINGVIEW_ENDPOINT: &str = "https://scanner.tradingview.com/symbol";
 const YAHOO_CHART_ENDPOINT: &str = "https://query1.finance.yahoo.com/v8/finance/chart/";
+const KNF_ENDPOINT: &str = "https://rss.knf.gov.pl/rss_pub/JSON";
 
 #[derive(Debug, Error)]
 pub enum SourceError {
@@ -182,6 +183,47 @@ impl YahooClient {
             }
         })
         .await?)
+    }
+}
+
+/// The current register uses an undocumented endpoint of the public KNF website.
+pub struct KnfClient {
+    client: Client,
+}
+
+impl KnfClient {
+    pub fn new() -> Result<Self, SourceError> {
+        Ok(Self {
+            client: http::client()?,
+        })
+    }
+
+    pub async fn fetch_shorts(
+        &self,
+        instrument: &Instrument,
+        offset: usize,
+    ) -> Result<RawDocument, SourceError> {
+        Ok(http::fetch(Source::KnfShorts, Some(instrument), || {
+            self.request_shorts(&instrument.isin, offset)
+        })
+        .await?)
+    }
+
+    fn request_shorts(&self, isin: &str, offset: usize) -> RequestBuilder {
+        let request = serde_json::json!({
+            "cmd": "get",
+            "method": "Default",
+            "language": "pl",
+            "limit": 100,
+            "offset": offset,
+            "search": [{"field": "ISIN", "type": "text", "operator": "contains", "value": isin}],
+            "sort": [{"field": "HOLDER_FULL_NAME", "direction": "asc"}],
+            "searchLogic": "AND",
+            "searchValue": ""
+        });
+        self.client
+            .post(KNF_ENDPOINT)
+            .form(&[("request", request.to_string())])
     }
 }
 
@@ -348,6 +390,45 @@ mod tests {
         assert_eq!(extract_module_id("cmng_id=missing"), None);
         assert_eq!(extract_module_id("cmng_id="), None);
         assert_eq!(extract_module_id("<h1>Unexpected page</h1>"), None);
+    }
+
+    #[test]
+    fn knf_request_posts_a_form_for_the_current_register_and_requested_isin() {
+        let client = KnfClient::new().unwrap();
+        let request = client.request_shorts("PLBUDMX00013", 100).build().unwrap();
+        assert_eq!(request.method(), reqwest::Method::POST);
+        assert_eq!(
+            request.url().as_str(),
+            "https://rss.knf.gov.pl/rss_pub/JSON"
+        );
+        assert_eq!(
+            request.headers()[header::CONTENT_TYPE],
+            "application/x-www-form-urlencoded"
+        );
+        let body = std::str::from_utf8(request.body().unwrap().as_bytes().unwrap()).unwrap();
+        let mut encoded_form = reqwest::Url::parse("https://example.invalid").unwrap();
+        encoded_form.set_query(Some(body));
+        let fields: Vec<_> = encoded_form.query_pairs().collect();
+        assert_eq!(fields.len(), 1);
+        assert_eq!(fields[0].0, "request");
+        let json: serde_json::Value = serde_json::from_str(&fields[0].1).unwrap();
+        assert_eq!(json["cmd"], "get");
+        assert_eq!(json["method"], "Default");
+        assert_eq!(json["language"], "pl");
+        assert_eq!(json["limit"], 100);
+        assert_eq!(json["offset"], 100);
+        assert_eq!(
+            json["search"],
+            serde_json::json!([
+                {"field": "ISIN", "type": "text", "operator": "contains", "value": "PLBUDMX00013"}
+            ])
+        );
+        assert_eq!(
+            json["sort"],
+            serde_json::json!([
+                {"field": "HOLDER_FULL_NAME", "direction": "asc"}
+            ])
+        );
     }
 
     fn serve(responses: Vec<&'static str>) -> (String, thread::JoinHandle<()>) {

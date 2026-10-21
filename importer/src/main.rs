@@ -15,6 +15,7 @@ use rankr_import::{
     model::{Instrument, MarketPair, RawDocument, Source},
     parser::parse_document,
     prices::parse_price_document,
+    shorts_collect,
     source::{GpwClient, TradingViewClient, YahooClient, parse_portfolio},
     storage::{archive_raw, read_raw},
     technical::{TechnicalHistory, score},
@@ -26,7 +27,7 @@ use serde::Serialize;
 #[command(
     name = "rankr-import",
     version,
-    about = "Collect GPW fundamentals and Yahoo daily company prices/history as JSON"
+    about = "Collect GPW fundamentals, Yahoo daily prices/history and KNF short positions as JSON"
 )]
 struct Cli {
     #[command(subcommand)]
@@ -35,6 +36,12 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Command {
+    /// Archive current KNF short positions for every ISIN in the bundled WIG20 map.
+    Shorts {
+        /// Directory for immutable observations.
+        #[arg(short, long, default_value = "data/collected")]
+        output: PathBuf,
+    },
     /// Score archived fundamentals offline using fixed GICS template thresholds.
     FundamentalPoints {
         /// Directory containing archived fundamentals.json files.
@@ -110,6 +117,7 @@ async fn main() -> ExitCode {
 
 async fn run(cli: Cli) -> Result<()> {
     match cli.command {
+        Command::Shorts { output } => shorts_collect::collect(&output).await,
         Command::FundamentalPoints { directory } => show_fundamental_points(&directory),
         Command::FundamentalTable { directory } => show_fundamental_table(&directory),
         Command::Technical { as_of, file } => show_technical(&file, as_of),

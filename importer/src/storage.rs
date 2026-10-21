@@ -10,7 +10,9 @@ use serde::Serialize;
 use tempfile::NamedTempFile;
 use thiserror::Error;
 
-use crate::model::{DailyPriceHistory, FundamentalSnapshot, PriceSnapshot, RawDocument, Source};
+use crate::model::{
+    DailyPriceHistory, FundamentalSnapshot, PriceSnapshot, RawDocument, ShortsSnapshot, Source,
+};
 
 #[derive(Debug, Error)]
 pub enum StorageError {
@@ -49,6 +51,19 @@ impl ArchivedFetch {
         Ok(path)
     }
 
+    pub fn save_shorts(&self, snapshot: &ShortsSnapshot) -> Result<PathBuf, StorageError> {
+        let path = self.directory.join("shorts.json");
+        write_json(&path, snapshot)?;
+        Ok(path)
+    }
+
+    /// The first response is raw.json; subsequent pages are saved before parsing too.
+    pub fn save_raw_page(&self, page: usize, raw: &RawDocument) -> Result<PathBuf, StorageError> {
+        let path = self.directory.join(format!("raw_page_{page}.json"));
+        write_json(&path, raw)?;
+        Ok(path)
+    }
+
     pub fn save_error(&self, error: &str) -> Result<(), StorageError> {
         #[derive(Serialize)]
         struct Failure<'a> {
@@ -79,6 +94,7 @@ fn archive_name(raw: &RawDocument) -> String {
         Source::GpwPrices => "price",
         Source::TradingViewIdc => "prices",
         Source::YahooFinance | Source::Stooq => "history",
+        Source::KnfShorts => "shorts",
     };
     match &raw.instrument {
         Some(instrument) => {

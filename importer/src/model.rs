@@ -29,6 +29,7 @@ pub enum Source {
     GpwPrices,
     TradingViewIdc,
     YahooFinance,
+    KnfShorts,
     /// Retained for offline parsing of earlier archives.
     Stooq,
 }
@@ -51,6 +52,24 @@ pub struct FundamentalSnapshot {
     pub source_url: String,
     pub fetched_at: DateTime<Utc>,
     pub fundamentals: Fundamentals,
+}
+
+/// One observation of the public KNF register, including companies with no entries.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ShortsSnapshot {
+    pub code: String,
+    pub isin: String,
+    pub fetched_at: DateTime<Utc>,
+    pub positions: Vec<ShortPosition>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ShortPosition {
+    pub holder: String,
+    /// Percentage as published by KNF: 0.83 means 0.83%, not a fraction of 0.83.
+    pub net_short_position_percent: Decimal,
+    pub position_date: NaiveDate,
+    pub modify_date: NaiveDate,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

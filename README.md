@@ -28,7 +28,7 @@ does not provide investment advice.
   financial condition, valuation, and revenue/profit
   dynamics), `technical` (SMA200 price trend and monthly seasonality from
   multi-year daily history), and `sentiment` (a proposed proxy from the KNF public
-  net short-position register; collection and scoring are not implemented)
+  net short-position register; scoring is not implemented)
 - the planned final score is the sum of the three family scores, measures growth
   potential, and determines table sorting; no final-score normalization or
   conversion to an expected percentage return
@@ -273,6 +273,14 @@ active Stooq downloads or GPW company-price requests. The earlier Stooq samples
 and database seed retain their original source labels. FX/gold commands such as
 `prices USDPLN` use TradingView and write their existing `price.json` snapshots.
 
+## KNF short positions
+
+```bash
+rankr-import shorts
+```
+
+Sentiment points require two snapshots and are not implemented yet.
+
 ## Technical score v1
 
 Calculate one instrument's score offline from a local `history.json`:
@@ -344,7 +352,7 @@ narrower fundamental range of −1 to +1; the nonfinancial range remains −5 to
 Equal weights do not make those ranges equal.
 
 The standalone `fundamental-points` and `technical-table` commands remain
-available. There is currently no `rank` command or sentiment importer. The
+available. There is currently no `rank` command or sentiment scoring. The
 selected KNF source, its disclosure limits and a scoring proposal are documented
 in [AI_CONTEXT.md](AI_CONTEXT.md) and [ROADMAP.md](ROADMAP.md); the proposal is not
 implemented. A missing sentiment observation must not be invented as zero.

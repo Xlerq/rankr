@@ -11,7 +11,7 @@ chrono = { version = "0.4", features = ["serde"] }
 chrono-tz = "0.10"
 clap = { version = "4", features = ["derive"] }
 csv = "1.4"
-reqwest = { version = "0.13", default-features = false, features = ["rustls", "charset", "query"] }
+reqwest = { version = "0.13", default-features = false, features = ["rustls", "charset", "query", "form"] }
 # Both serde features are required: exact JSON numbers, without conversion through f64.
 rust_decimal = { version = "1.43", default-features = false, features = ["serde-float", "serde-arbitrary-precision", "std"] }
 scraper = "0.27"

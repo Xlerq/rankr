@@ -1,0 +1,42 @@
+{
+  "total": 4,
+  "records": [
+    {
+      "HOLDER_FULL_NAME": "Alpha Capital",
+      "POSITION_DATE": "2026-10-18",
+      "ISSUER_NAME": "BUDIMEX",
+      "MODIFY_DATE": "2026-10-20",
+      "ISIN": "PLBUDMX00013",
+      "recid": 1,
+      "NET_SHORT_POSITION_O": "0.63"
+    },
+    {
+      "HOLDER_FULL_NAME": "Beta &amp; Partners ",
+      "POSITION_DATE": "2026-10-17",
+      "ISSUER_NAME": "BUDIMEX",
+      "MODIFY_DATE": "2026-10-18",
+      "ISIN": "PLBUDMX00013",
+      "recid": 2,
+      "NET_SHORT_POSITION_O": "1.234567890123456789"
+    },
+    {
+      "HOLDER_FULL_NAME": " alpha   capital ",
+      "POSITION_DATE": "2026-10-01",
+      "ISSUER_NAME": "BUDIMEX",
+      "MODIFY_DATE": "2026-10-21",
+      "ISIN": "PLBUDMX00013",
+      "recid": 3,
+      "NET_SHORT_POSITION_O": "1.70"
+    },
+    {
+      "HOLDER_FULL_NAME": "ALPHA CAPITAL",
+      "POSITION_DATE": "2026-10-18",
+      "ISSUER_NAME": "BUDIMEX",
+      "MODIFY_DATE": "2026-10-19",
+      "ISIN": "PLBUDMX00013",
+      "recid": 4,
+      "NET_SHORT_POSITION_O": "0.71"
+    }
+  ],
+  "status": "success"
+}

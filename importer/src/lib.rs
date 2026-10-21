@@ -10,6 +10,8 @@ mod http;
 pub mod model;
 pub mod parser;
 pub mod prices;
+pub mod shorts;
+pub mod shorts_collect;
 pub mod source;
 pub mod storage;
 pub mod technical;
