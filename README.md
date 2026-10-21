@@ -24,23 +24,24 @@ does not provide investment advice.
   other GPW stocks are a later extension, so 20 companies are not a permanent limit
 - a company table as the main view, showing the three family scores,
   their assigned weights, and the final score
-- deterministic scoring from exactly three families: `fundamental` (the most
-  important family, covering financial condition, valuation, and revenue/profit
+- deterministic scoring from exactly three families: `fundamental` (covering
+  financial condition, valuation, and revenue/profit
   dynamics), `technical` (SMA200 price trend and monthly seasonality from
-  multi-year daily history), and `sentiment` (sentiment, with its data source
-  unspecified)
-- the final score is the weighted sum of the three family scores, measures growth
+  multi-year daily history), and `sentiment` (a proposed proxy from the KNF public
+  net short-position register; collection and scoring are not implemented)
+- the planned final score is the sum of the three family scores, measures growth
   potential, and determines table sorting; no final-score normalization or
   conversion to an expected percentage return
-- one set of fixed weights for the entire WIG20, including banks
+- equal family weights `1 / 1 / 1` for the entire WIG20, including banks;
+  this is a convention, not calibration
 - basic charts and score history validation notes
 
 Seasonality belongs to `technical`, without a fourth family weight. Technical v1
 is implemented as seasonality points plus SMA200 trend points. Fundamental points
 use fixed GICS template thresholds for the available financial ratios; valuation,
-year-over-year dynamics and sentiment remain planned. The offline `rank` command
-combines the two available families with fixed weights 3 and 1. Sector macro and
-COT are optional extensions after MVP.
+year-over-year dynamics and sentiment remain planned. The combined ranking is
+deferred until sentiment is implemented. Sector macro and COT are optional
+extensions after MVP.
 
 ## Fundamentals importer
 
@@ -150,7 +151,7 @@ command's output. A missing ratio has `null` points. `fundamental_score` sums th
 available points; if none are available, it is `null`. An available neutral point
 counts as zero. The full nonfinancial range is −5 to +5; Financials uses −1 to +1.
 There is no rescaling or combination with technical/sentiment here. The planned
-three-family result still uses one set of weights for the entire basket.
+three-family result uses equal weights of 1 for the entire basket.
 
 Stdout is a pretty JSON array containing `code`, `gics_sector`,
 `gics_industry_group`, the five ratios, their corresponding `*_points`,
@@ -174,7 +175,6 @@ importer/src/
   yahoo.rs    # pure Yahoo daily OHLCV JSON parsing and validation
   technical.rs # pure calendar-month seasonality + SMA200 trend scoring
   technical_table.rs # offline history selection and technical ranking
-  ranking.rs  # pair existing family results and calculate the weighted sum
   storage.rs  # raw and parsed JSON archive
   main.rs     # CLI and orchestration
 ```
@@ -335,37 +335,19 @@ with `null` scores last and company codes A–Z on ties. Each row contains `code
 `source_file`. Stderr lists skipped paths and reports the company count and the
 number with a `null` score. This command uses no network or database.
 
-## Offline combined ranking
+## Planned combined score
 
-```bash
-rankr-import rank --as-of 2026-10-21 data/collected
-```
-
-This is the first sum of two score families:
-`final_score = 3 * fundamental_score + 1 * technical_score`.
-The weights are a convention, not calibrated values. Financials keeps its
+All three family weights are 1. The planned formula is
+`final_score = fundamental_score + technical_score + sentiment_score`, without
+normalization or a larger multiplier for fundamentals. Financials keeps its
 narrower fundamental range of −1 to +1; the nonfinancial range remains −5 to +5.
-The same weights apply to every company, with no rescaling of either family.
+Equal weights do not make those ranges equal.
 
-The command pairs results by company code using the existing `fundamental-points`
-and `technical-table` logic. Each selects its own latest file by `fetched_at`,
-recursively from the directory. `--as-of` applies to technical candles only
-(`date < as_of`); fundamentals use the latest snapshot in the directory, without
-a historical publication-date cutoff. Equal timestamps and invalid files follow
-the existing tables' rules.
-
-A pair with a null fundamental or technical score remains in the output with
-`final_score: null`; there is no partial sum. `sentiment_score` is always `null`,
-and `sentiment_weight` is 0. Sentiment is not a term in the calculation.
-Companies without a usable pair and skipped file paths are reported on stderr.
-No paired companies means an error with empty stdout, while paired rows whose
-scores are all null are still valid output.
-
-Stdout is a pretty JSON array with `code`, `gics_sector`, `fundamental_score`,
-`technical_score`, `sentiment_score`, `fundamental_weight` (3),
-`technical_weight` (1), `sentiment_weight` (0), and `final_score`.
-Rows sort by `final_score` descending, null last, then code A–Z on ties.
-The command uses no network or database.
+The standalone `fundamental-points` and `technical-table` commands remain
+available. There is currently no `rank` command or sentiment importer. The
+selected KNF source, its disclosure limits and a scoring proposal are documented
+in [AI_CONTEXT.md](AI_CONTEXT.md) and [ROADMAP.md](ROADMAP.md); the proposal is not
+implemented. A missing sentiment observation must not be invented as zero.
 
 ## Planned Stack
 

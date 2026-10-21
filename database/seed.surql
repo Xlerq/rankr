@@ -164,10 +164,10 @@ CREATE macro_observation:gold_pln_2024_01_02_nbp SET
 
 CREATE score_config:default_growth_v1 SET
   name = "default_growth_v1",
-  description = "Relative growth-potential configuration shared by the entire WIG20, including banks. Fundamental has the largest weight; seed weights are illustrative and not calibrated.",
+  description = "Relative growth-potential configuration shared by the entire WIG20, including banks. All three family weights equal 1 by convention, not calibration.",
   scope = "global",
   sector = NONE,
-  fundamental_weight = 3,
+  fundamental_weight = 1,
   technical_weight = 1,
   sentiment_weight = 1,
   is_default = true,
@@ -183,9 +183,9 @@ CREATE score_result:bit11_2026_05_22_default_growth_v1 SET
   fundamental_score = 40,
   technical_score = 10,
   sentiment_score = -5,
-  final_score = 125,
+  final_score = 45,
   data_quality_score = 90.00,
-  explanation = "Record-shape placeholder with illustrative component scores; not a calibrated ranking or a percentage-return forecast. No sentiment data source is defined.";
+  explanation = "Record-shape placeholder with illustrative component scores and weights 1/1/1; not a calibrated ranking or a percentage-return forecast. Sentiment collection and scoring are not implemented.";
 
 CREATE data_source_log:stooq_kgh_sample_2024_01 SET
   source = "stooq",

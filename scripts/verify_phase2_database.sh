@@ -168,8 +168,8 @@ sentiment_weight="$(seed_value sentiment_weight)"
 awk -v fundamental="$fundamental_weight" \
     -v technical="$technical_weight" \
     -v sentiment="$sentiment_weight" \
-    'BEGIN { exit !(fundamental >= 0 && technical >= 0 && sentiment >= 0 && fundamental > technical && fundamental > sentiment) }' ||
-  die "default score_config weights must be nonnegative, with fundamental_weight strictly largest"
+    'BEGIN { exit !(fundamental == 1 && technical == 1 && sentiment == 1) }' ||
+  die "default score_config weights must all equal 1"
 
 for field in instrument config score_date fundamental_snapshot fundamental_score technical_score sentiment_score final_score data_quality_score explanation; do
   require_table_field score_result "$field"

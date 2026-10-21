@@ -15,7 +15,6 @@ use rankr_import::{
     model::{Instrument, MarketPair, RawDocument, Source},
     parser::parse_document,
     prices::parse_price_document,
-    ranking,
     source::{GpwClient, TradingViewClient, YahooClient, parse_portfolio},
     storage::{archive_raw, read_raw},
     technical::{TechnicalHistory, score},
@@ -36,14 +35,6 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Command {
-    /// Combine fundamental and technical scores offline with fixed weights 3 and 1.
-    Rank {
-        /// Technical ranking date; only candles strictly before this date are used.
-        #[arg(long)]
-        as_of: NaiveDate,
-        /// Directory containing archived fundamentals.json and history.json files.
-        directory: PathBuf,
-    },
     /// Score archived fundamentals offline using fixed GICS template thresholds.
     FundamentalPoints {
         /// Directory containing archived fundamentals.json files.
@@ -119,7 +110,6 @@ async fn main() -> ExitCode {
 
 async fn run(cli: Cli) -> Result<()> {
     match cli.command {
-        Command::Rank { as_of, directory } => show_ranking(&directory, as_of),
         Command::FundamentalPoints { directory } => show_fundamental_points(&directory),
         Command::FundamentalTable { directory } => show_fundamental_table(&directory),
         Command::Technical { as_of, file } => show_technical(&file, as_of),
@@ -130,24 +120,6 @@ async fn run(cli: Cli) -> Result<()> {
         Command::Prices { code, output } => collect_prices(code.as_deref(), output).await,
         Command::History { code, output } => collect_history(code.as_deref(), output).await,
     }
-}
-
-fn show_ranking(directory: &Path, as_of: NaiveDate) -> Result<()> {
-    let ranking = ranking::rank_directory(directory, as_of)
-        .with_context(|| format!("reading ranking inputs under {}", directory.display()))?;
-    for skipped in &ranking.skipped {
-        eprintln!(
-            "Skipped {}: {}",
-            skipped.source_file.display(),
-            skipped.reason
-        );
-    }
-    ensure!(
-        !ranking.rows.is_empty(),
-        "no paired companies found under {}",
-        directory.display()
-    );
-    print_json(&ranking.rows)
 }
 
 fn show_fundamental_points(directory: &Path) -> Result<()> {

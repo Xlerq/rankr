@@ -6,9 +6,9 @@ Lokalna aplikacja webowa do rankingu spółek GPW według względnego potencjał
 
 Koszyk MVP obejmuje pełne WIG20. Później możliwe będzie rozszerzenie na inne akcje GPW; 20 spółek nie jest stałym, ostatecznym wszechświatem. Projektowanie tego rozszerzenia pozostaje poza obecnym zakresem.
 
-Widokiem głównym jest tabela spółek. Dla każdej spółki liczone są wyniki trzech rodzin, każdy z ustaloną wagą. Wynik końcowy to suma ważona wyników tych trzech rodzin, będąca miarą potencjału wzrostu i podstawą sortowania. Suma nie podlega normalizacji końcowej ani mapowaniu na oczekiwany procent zwrotu.
+Widokiem głównym jest tabela spółek. Docelowo dla każdej spółki liczone będą wyniki trzech rodzin, każda z wagą 1. Wynik końcowy będzie sumą ich punktów, będącą miarą potencjału wzrostu i podstawą sortowania. Wagi 1/1/1 są konwencją, nie wynikiem kalibracji. Suma nie podlega normalizacji końcowej ani mapowaniu na oczekiwany procent zwrotu.
 
-Trzy rodziny wyników v1: `fundamental` — najważniejsza, obejmująca kondycję finansową, wycenę i dynamikę wyników (wzrost przychodów i zysku, nie sam poziom ROE); `technical` — sezonowość miesiąca kalendarzowego i trend SMA200 z dziennego `close`; `sentiment` — sentyment, bez ustalonego źródła danych. v1 używa jednego zestawu wag dla całego WIG20, w tym banków. Wzór `technical` v1 jest zaimplementowany: `technical_score = seasonality_points + trend_points`, każdy składnik to -1, 0 albo +1, bez wag wewnętrznych i osobnego sygnału momentum. Brak sezonowości oznacza `null`, także dla pełnego wyniku technicznego; sezonowość nie dodaje czwartej wagi rodziny.
+Trzy rodziny wyników v1: `fundamental` — kondycja finansowa, wycena i dynamika wyników (wzrost przychodów i zysku, nie sam poziom ROE); `technical` — sezonowość miesiąca kalendarzowego i trend SMA200 z dziennego `close`; `sentiment` — planowany sygnał z ujawnionych pozycji krótkich netto KNF dla emitenta, bez importera i punktacji. v1 używa wag 1/1/1 dla całego WIG20, w tym banków. Wzór `technical` v1 jest zaimplementowany: `technical_score = seasonality_points + trend_points`, każdy składnik to -1, 0 albo +1, bez wag wewnętrznych i osobnego sygnału momentum. Brak sezonowości oznacza `null`, także dla pełnego wyniku technicznego; sezonowość nie dodaje czwartej wagi rodziny. Szablony GICS i progi fundamentów pozostają bez zmian, także węższy zakres punktów Financials. Wspólny ranking czeka na wdrożenie sentymentu.
 
 Frontend, backend i silnik scoringu w pełni w Rust. Stos: Rust, Leptos/WASM, Axum/Tokio, SurrealDB, Plotters. Import, automatyzacja i analiza również w Rust.
 
@@ -23,6 +23,11 @@ Po każdym etapie uzupełniamy odpowiadającą mu część `thesis/main.tex` i t
 - [ ] Wybrać źródła bieżących cen, składu WIG20 i fundamentów dla banków, ubezpieczycieli oraz spółek niefinansowych.
 - [ ] Opcjonalnie po MVP: wybrać serie makro oraz rynki COT powiązane ze spółkami WIG20.
 - [ ] Sprawdzić dostępne pola, daty publikacji, częstotliwość aktualizacji i warunki wykorzystania danych.
+- [x] Wybrać publiczne źródło dla spółki: [Rejestr krótkiej sprzedaży KNF](https://rss.knf.gov.pl/rss_pub/). Sprawdzenie 21.10.2026: endpoint `https://rss.knf.gov.pl/rss_pub/JSON` zwraca JSON przez POST formularza z polem `request`, bez klucza API i konta. Obsługuje `limit`/`offset` i filtr ISIN; próba dla BUDIMEX zwróciła dwie pozycje. Pełna odpowiedź zawierała 20 pozycji i obejmowała 6 z 20 ISIN-ów mapy projektu. To interfejs strony, bez gwarancji niezmienności kontraktu. Szczegóły pól i żądania są w `AI_CONTEXT.md`.
+
+Wybrana liczba to suma bieżących, ujawnionych krótkich pozycji netto różnych posiadaczy dla jednego ISIN-u, w procentach wyemitowanego kapitału. Źródło podaje posiadacza, emitenta, ISIN, procent pozycji, datę obliczenia i ostatniej aktualizacji. Nie sumujemy kolejnych historycznych zgłoszeń tej samej pozycji. Według [opisu KNF](https://www.knf.gov.pl/podmioty/Rejestry_i_Ewidencje/rks?articleId=56674&p_id=18) próg publiczny wynosi 0,5% na posiadacza, z kolejnymi progami co 0,1 punktu procentowego; próg zgłoszenia do nadzorcy 0,1% nie oznacza publicznego dostępu do tych mniejszych pozycji. Rejestr nie mierzy opinii wszystkich inwestorów, pozycji długich ani całości krótkiej sprzedaży. Brak wpisu nie oznacza optymizmu tłumu, braku krótkich pozycji ani ich zamknięcia; dla sygnału pozostaje `null`.
+
+Propozycja punktów do uzgodnienia, bez implementacji: porównać dwa kompletne snapshoty oddalone o 30 dni kalendarzowych dla tego samego emitenta i tego samego niepustego zbioru posiadaczy, z każdą pozycją nadal co najmniej 0,5%. Wzrost sumy ujawnionych procentów → −1, spadek → +1, brak zmiany → 0. Brak porównania, zmiana zbioru posiadaczy, zniknięcie poniżej progu albo niepełna odpowiedź → `null`. Punkt dodatni oznacza tylko spadek ujawnionego zaangażowania krótkiego, nie potwierdzony optymizm. Reguła nie jest skalibrowana. Odrzucamy głosy dotyczące całego WIG20, ogólne pozycjonowanie detaliczne bez identyfikatora konkretnej spółki GPW oraz analizę newsów modelem. Na tym etapie nie powstaje importer sentymentu ani wspólny ranking.
 
 ## Etap 1. Podstawa projektu i baza danych
 
@@ -45,8 +50,8 @@ Po każdym etapie uzupełniamy odpowiadającą mu część `thesis/main.tex` i t
 - [ ] Dodać wycenę do rodziny `fundamental` po uzupełnieniu potrzebnych danych.
 - [ ] Dodać dynamikę rok do roku do rodziny `fundamental`: wzrost przychodów i zysku na podstawie porównywalnych raportów, nie sam poziom ROE.
 - [x] Zaimplementować `technical` v1: `technical_score = seasonality_points + trend_points`, bez wag wewnętrznych i osobnego sygnału momentum. Sezonowość używa wszystkich dostępnych zakończonych analogicznych miesięcy z lat ubiegłych (wystarczy jeden), z progami ±2%; trend to SMA200 z pasem 3%, a mniej niż 200 sesji daje trend 0. Liczyć z `close`, wyłącznie dla `date < as_of`; brak sezonowości i pełnego wyniku oznaczać jako `null`. Komendy offline: `technical` dla jednego pliku i `technical-table` dla rankingu spółek z najnowszych `history.json`.
-- [ ] Uwzględnić wynik `sentiment` jako trzecią rodzinę; źródło danych pozostaje nieustalone.
-- [ ] Obliczać potencjał wzrostu jako sumę ważoną wyników `fundamental`, `technical` i `sentiment`, bez normalizacji końcowej i mapowania na procent zwrotu. Stosować jeden zestaw wag dla całego WIG20, w tym banków, oraz prezentować wyniki rodzin i ich wagi.
+- [ ] Uzgodnić i zaimplementować `sentiment` z rejestru KNF według ograniczeń opisanych w Etapie 0; wybór źródła nie oznacza jeszcze gotowej punktacji.
+- [ ] Po wdrożeniu sentymentu obliczać `final_score = fundamental_score + technical_score + sentiment_score`, z wagami 1/1/1, bez normalizacji końcowej i mapowania na procent zwrotu. Stosować te same wagi dla całego WIG20, w tym banków, oraz prezentować wyniki rodzin i ich wagi. Nie zastępować braku sentymentu zerem.
 
 ## Etap 4. Makro sektorowe — opcjonalnie po MVP
 
@@ -66,13 +71,13 @@ Etap nie jest wymagany do ukończenia MVP ani przejścia do etapów 6–9.
 
 ## Etap 6. Backend i zapisywanie rankingów
 
-- [ ] Przeliczać i zapisywać ranking względnego potencjału wzrostu po aktualizacji danych jako sumę ważoną składowych, razem z wersją konfiguracji, składowymi wyniku i ich wagami; stosować jeden zestaw wag dla całego WIG20, w tym banków.
+- [ ] Przeliczać i zapisywać ranking względnego potencjału wzrostu po aktualizacji danych jako sumę punktów trzech rodzin, razem z wersją konfiguracji, składowymi wyniku i ich wagami 1/1/1; stosować ten sam zestaw dla całego WIG20, w tym banków.
 - [ ] Zapisywać wyniki modelu v1 (`fundamental`, `technical`, `sentiment`) oraz prostego momentum jako punktu odniesienia przed okresem pomiaru późniejszych zwrotów. Warianty z makro i COT pozostają opcjonalne po MVP.
 - [ ] Udostępnić przez Axum ranking, szczegóły spółki, zebrane serie danych i status aktualizacji.
 
 ## Etap 7. Frontend
 
-- [ ] Zbudować w Leptos główny widok tabeli pełnego WIG20, domyślnie sortowanej według sumy ważonej składowych potencjału wzrostu, z wyborem zapisanej daty i filtrowaniem sektorów.
+- [ ] Zbudować w Leptos główny widok tabeli pełnego WIG20, domyślnie sortowanej według sumy punktów trzech rodzin z wagami 1/1/1, z wyborem zapisanej daty i filtrowaniem sektorów.
 - [ ] Dodać kartę spółki ze składowymi wyniku, wskaźnikami, źródłami i datami danych.
 - [ ] Dodać wykresy Plotters dla cen i scoringu oraz obsługę braków danych i błędów aktualizacji; wykresy makro i COT są opcjonalne po MVP.
 

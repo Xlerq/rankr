@@ -74,13 +74,13 @@ The scoring must be deterministic and explainable.
 
 The v1 score families are exactly:
 
-- `fundamental`: the most important family, covering financial condition, valuation, and revenue/profit dynamics,
+- `fundamental`: financial condition, valuation, and revenue/profit dynamics,
 - `technical`: SMA200 price trend and calendar-month seasonality from daily history,
-- `sentiment`: sentiment, with a schema field now and no data source specified.
+- `sentiment`: a proposed proxy from the KNF public net short-position register, with no importer or scoring implementation.
 
-Each company has three family scores, each with an assigned, fixed weight. The final score is the sum (family score × weight), measures relative growth potential, and determines table sorting. Do not normalize the final score or map the sum to an expected percentage return. Explain the result through its family scores and their weights.
+Each company will have three family scores, each with weight 1. The planned final score is `fundamental_score + technical_score + sentiment_score`, measures relative growth potential, and determines table sorting. Do not normalize it or map the sum to an expected percentage return. The weights are a convention, not calibration.
 
-v1 uses one set of weights for the three families across the entire WIG20,
+v1 uses equal weights `1 / 1 / 1` for the three families across the entire WIG20,
 including banks. Fundamental indicator templates and thresholds depend on GICS;
 this does not introduce sector-specific family weights.
 
@@ -135,37 +135,60 @@ Keep `fundamental-table` as the separate raw-ratio command without points.
   bad files with paths on stderr. Output pretty JSON sorted by score descending,
   null last, then code A–Z. Report company and null-score counts on stderr.
   Zero valid companies is an error with empty stdout. No network or database.
-- Valuation and year-over-year dynamics remain unimplemented. Sentiment still
-  has no source or points; the full three-family result remains planned.
+- Valuation and year-over-year dynamics remain unimplemented. KNF is selected
+  below as a limited sentiment proxy; there is no sentiment importer or scoring.
+  The full three-family result remains planned.
 
-The first offline sum of two families is implemented in `importer/src/ranking.rs`
-and exposed through `rankr-import rank --as-of YYYY-MM-DD DIRECTORY`.
+There is currently no `rank` command. Keep the standalone family tables; defer
+their combination until sentiment is implemented. All three configured weights
+are 1, including the future sentiment weight. Missing sentiment is not zero.
+Financials keeps its narrower fundamental range (−1 to +1, versus −5 to +5
+outside Financials), without rescaling or changing GICS thresholds. Equal
+weights do not imply equal ranges or equal influence of the families.
 
-- Reuse `fundamental-points` and `technical-table` selection and scoring. Select
-  each company's latest `fundamentals.json` and `history.json` independently by
-  `fetched_at`. Join by company code; report and skip companies without a usable
-  pair on stderr, along with the underlying tables' skipped-file diagnostics.
-- `--as-of` controls technical candles (`date < as_of`), not fundamental snapshot
-  selection. The command does not reconstruct fundamentals known on that date.
-- Exactly `final_score = 3 * fundamental_score + 1 * technical_score`. Both
-  families must be non-null. Either missing means null, never a partial sum.
-  Paired rows with null scores remain in the output.
-- Always output `sentiment_score: null` and weights `fundamental_weight: 3`,
-  `technical_weight: 1`, `sentiment_weight: 0`. Sentiment is not a term in the
-  calculation; a zero weight does not replace any missing score with zero.
-- These fixed weights are a convention, not calibration. They are shared by
-  the entire basket. Financials keeps its narrower fundamental range (−1 to +1,
-  versus −5 to +5 outside Financials), without rescaling or changing thresholds.
-- Output pretty JSON rows with code, GICS sector, the three score fields, the
-  three weight fields and final_score. Sort final_score descending, null last,
-  then code A–Z. Zero paired rows is an error with empty stdout. No network or DB.
-- Do not change GICS, raw ratios or either family's formula when combining them.
-  Do not add sentiment, valuation or year-over-year dynamics to this command.
+### Selected sentiment source — proposal only
+
+- Source: [KNF public Short Selling Register](https://rss.knf.gov.pl/rss_pub/),
+  reached also through `https://rss.knf.gov.pl/`. Its public frontend reads JSON
+  from `https://rss.knf.gov.pl/rss_pub/JSON` using POST form field `request`
+  containing a JSON object: `cmd=get`, `method=Default`, `language=pl`,
+  `limit`/`offset`, `search` and `sort`. This is the site's unversioned endpoint,
+  not a guaranteed stable API contract. No API key or account was required in
+  the read-only check on 2026-10-21. Do not add download code in this task.
+- Verified response: HTTP 200, `application/json`, `status=success`, `total`
+  and `records`. An ISIN search for `PLBUDMX00013` returned BUDIMEX's two current
+  holder records. The full current response had 20 records, covering 6 of the
+  20 ISINs in the project's WIG20 map. These are dated coverage observations,
+  not guaranteed future counts or model-performance results.
+- Fields: `ISIN`, `ISSUER_NAME`, `HOLDER_FULL_NAME`, `NET_SHORT_POSITION_O`,
+  `POSITION_DATE` and `MODIFY_DATE`. The position is a decimal string in percent
+  of issued share capital, not the fraction of traders voting bearish or daily
+  short-sale turnover. Join to GPW codes by the existing ISIN, not a guessed name.
+  A proposed issuer measure is the sum of current disclosed net short-position
+  percentages across distinct holders. Use only the current register and the
+  latest record per holder/ISIN; do not sum historical disclosures as positions.
+- [KNF disclosure explanation](https://www.knf.gov.pl/podmioty/Rejestry_i_Ewidencje/rks?articleId=56674&p_id=18):
+  public disclosure starts at 0.5% for a holder, with further 0.1 percentage-point
+  thresholds. The 0.1% reporting threshold to KNF is not the public threshold.
+  Smaller positions, long positions and the opinions of all investors are not
+  covered. No entry does not mean no shorts, a closed position, or crowd optimism.
+  A missing entry gives no sentiment signal (`null`), not +1 or an invented zero.
+- Scoring proposal for later agreement, not implemented or calibrated: compare
+  two complete snapshots 30 calendar days apart for the same issuer and the same
+  nonempty set of disclosed holders, with each position still at least 0.5%.
+  An increase in their summed percentage gives −1, a decrease +1, and no change
+  0. A missing comparison, changed holder set, disappearance below the disclosure
+  threshold or incomplete response gives null. A positive point means only a
+  decline in disclosed short exposure, not measured crowd optimism. Retain both
+  source dates and fetch time; a later disclosure must not be backdated in tests
+  of predictive performance. No sentiment points or combined ranking are built now.
+- Rejected: votes about WIG20 as an index, generic forex-style retail positioning
+  without an identifiable GPW company, and model-based sentiment from news text.
 
 Seasonality belongs to `technical`, without a fourth family weight. Sector macro
 and COT are outside v1 and may only be optional extensions after MVP.
 
-Database contract: `score_config` and `score_result` in `database/schema.surql` define the product contract for the three families above. Each weight is a nonnegative number with no upper bound or required total. Component scores and `final_score` are unrestricted numbers, including negative values; `final_score` is the sum of the three component scores multiplied by their corresponding weights. Only `data_quality_score` retains its 0–100 range. `database/seed.surql` provides the illustrative `default_growth_v1` configuration with the largest weight on `fundamental` and a record-shape placeholder, not a calibrated ranking. This contract does not implement scoring or define component formulas.
+Database contract: `score_config` and `score_result` in `database/schema.surql` define the product contract for the three families above. The generic schema permits nonnegative weights; the v1 seed and verifier require exactly `1 / 1 / 1`. Component scores and `final_score` are unrestricted numbers, including negative values; with these weights the planned final score is the sum of the three family scores. Only `data_quality_score` retains its 0–100 range. `database/seed.surql` provides `default_growth_v1` and a record-shape placeholder: `40 + 10 - 5 = 45`, not a calibrated ranking or actual sentiment data. This contract does not implement scoring or define component formulas.
 
 ## Out of Scope for MVP
 
@@ -189,8 +212,7 @@ and obtains the current WIG20 list from GPW Benchmark. CLI: `collect [CODE]`,
 `prices [CODE]`, `history [CODE]`, `fetch CODE`, `parse FILE`,
 `technical --as-of YYYY-MM-DD history.json`,
 `technical-table --as-of YYYY-MM-DD DIRECTORY`,
-`fundamental-table DIRECTORY`, `fundamental-points DIRECTORY`,
-`rank --as-of YYYY-MM-DD DIRECTORY`.
+`fundamental-table DIRECTORY`, `fundamental-points DIRECTORY`.
 
 - One package with a reusable library and a thin CLI; keep HTTP, pure parsing,
   serializable model types and JSON persistence in separate modules.

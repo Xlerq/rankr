@@ -42,15 +42,15 @@ has no database connection.
 
 The v1 scoring contract has exactly three families:
 
-- `fundamental` — the most important family: financial condition, valuation, and revenue/profit dynamics.
-- `technical` — price trend/momentum and monthly seasonality from multi-year EOD history; the signal formulas remain unimplemented.
-- `sentiment` — sentiment, with its field present now and no data source specified.
+- `fundamental` — financial condition, valuation, and revenue/profit dynamics; the basic GICS ratio points are implemented offline.
+- `technical` — SMA200 trend and calendar-month seasonality, implemented offline without a separate momentum signal.
+- `sentiment` — a proposed proxy from the KNF public net short-position register; the field exists, but collection and scoring are not implemented.
 
-`score_config` stores `fundamental_weight`, `technical_weight`, and `sentiment_weight` as nonnegative numbers, without an upper bound or a required total. v1 uses one set of weights for the entire WIG20, including banks.
+`score_config` stores `fundamental_weight`, `technical_weight`, and `sentiment_weight` as nonnegative numbers, without an upper bound or a required total in the generic schema. The v1 configuration sets all three to 1 for the entire WIG20, including banks. The validator checks those exact default values. This is a convention, not calibration; GICS templates and their point ranges are unchanged.
 
 `score_result` stores `fundamental_score`, `technical_score`, `sentiment_score`, and `final_score` as unrestricted numbers, including negative values. The final score is the sum of each component score multiplied by its corresponding weight, with no final-score normalization or mapping to a percentage return. Only `data_quality_score` retains its 0–100 range. The unique key remains `(instrument, score_date, config)`; instrument, configuration, date, fundamental snapshot, and explanation are retained.
 
-The seed configuration is `default_growth_v1`, with `is_default = true` and illustrative weights `3 / 1 / 1`; the fundamental weight is strictly larger than either other weight. The placeholder for `instrument:bit11` uses component scores `40 / 10 / -5`, giving a final score of `125`. It demonstrates the record shape, not a calibrated ranking. The validator checks the scoring field contract and this arithmetic; scoring algorithms and component formulas remain unimplemented.
+The seed configuration is `default_growth_v1`, with `is_default = true` and equal weights `1 / 1 / 1`. The placeholder for `instrument:bit11` uses illustrative component scores `40 / 10 / -5`, giving a final score of `45`. These values demonstrate the record shape, not the current component formulas or a calibrated ranking. The validator checks the scoring field contract and this arithmetic. The combined three-family ranking and database integration remain unimplemented; with these weights the planned result is simply the sum of the three family scores.
 
 ## Planned API contract
 
@@ -68,7 +68,7 @@ These endpoints are not implemented yet. This is the planned response shape for 
       "name": "11 bit studios SA",
       "isin": "PL11BTS00015",
       "sector": "Gaming",
-      "final_score": 125,
+      "final_score": 45,
       "data_quality_score": 90.0,
       "component_scores": {
         "fundamental_score": 40,
@@ -139,9 +139,9 @@ include a separate `adjusted_close` field.
       "score_date": "2026-05-22",
       "config": "default_growth_v1",
       "fundamental_snapshot": "fundamental_snapshot:bit11_2025_iv_gpw_notoria",
-      "final_score": 125,
+      "final_score": 45,
       "data_quality_score": 90.0,
-      "explanation": "Record-shape placeholder with illustrative component scores; not a calibrated ranking or a percentage-return forecast. No sentiment data source is defined.",
+      "explanation": "Record-shape placeholder with illustrative component scores and weights 1/1/1; not a calibrated ranking or a percentage-return forecast. Sentiment collection and scoring are not implemented.",
       "component_scores": {
         "fundamental_score": 40,
         "technical_score": 10,

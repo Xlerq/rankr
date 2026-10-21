@@ -183,7 +183,7 @@ Porównanie spółek giełdowych wymaga zebrania informacji, które zwykle znajd
 
 Celem pracy jest przygotowanie aplikacji webowej \textit{rankr} do rankingu spółek Giełdy Papierów Wartościowych w Warszawie według względnego potencjału wzrostu w horyzoncie 3--12 miesięcy. Wyższy wynik ma wskazywać większą szansę na lepszy zwrot niż inne spółki z tego samego koszyka. Jest to założona interpretacja wyniku, której przydatność wymaga sprawdzenia na późniejszych danych. Wynik nie jest oceną ogólnej jakości spółki ani prognozą zwrotu w procentach.
 
-Pierwsza wersja obejmuje pełny koszyk WIG20. Ograniczenie to pozwala przygotować i sprawdzić cały proces dla niewielkiej grupy instrumentów, bez zamykania możliwości późniejszego dodania innych akcji GPW. Planowanym widokiem głównym jest tabela spółek z wynikami rodzin \texttt{fundamental}, \texttt{technical} i \texttt{sentiment}, ich wagami oraz wynikiem końcowym. Rodzina fundamentalna ma mieć największe znaczenie, jednak wartości wag i reguły przyznawania punktów nie zostały jeszcze skalibrowane.
+Pierwsza wersja obejmuje pełny koszyk WIG20. Ograniczenie to pozwala przygotować i sprawdzić cały proces dla niewielkiej grupy instrumentów, bez zamykania możliwości późniejszego dodania innych akcji GPW. Planowanym widokiem głównym jest tabela spółek z wynikami rodzin \texttt{fundamental}, \texttt{technical} i \texttt{sentiment}, ich wagami oraz wynikiem końcowym. Każdej rodzinie przypisano wagę 1. Jest to przyjęta konwencja, a nie wynik kalibracji na danych rynkowych.
 
 W pracy przyjęto Rust jako język importera, obliczeń oraz planowanej aplikacji webowej. Do 20 października 2026 roku wykonano program konsolowy do zbierania danych, archiwum JSON, scoring techniczny, tabelę surowych wskaźników fundamentalnych oraz ich punktację według stałych progów. Te elementy działają bez backendu, frontendu i połączenia z bazą danych. Dalsze rozdziały opisują zarówno ich realizację, jak i granice obecnego rozwiązania. Części dotyczące aplikacji webowej oraz pełnego rankingu pozostają projektem dalszych prac.
 
@@ -352,7 +352,7 @@ Planowana warstwa serwerowa ma używać Axum i Tokio, frontend ma powstać w Lep
 
 Docelowy backend powinien korzystać z istniejącej biblioteki, zamiast ponownie implementować wzory na potrzeby API. Adapter zapisu będzie odpowiadał za powiązanie instrumentu, obserwacji źródłowej i wyniku. Parser nadal powinien działać niezależnie od tego, czy wynik trafia do pliku, czy do bazy. Wymaga to przygotowania mapowania i testów integracyjnych, lecz pozwala zachować dotychczasowy kod obliczeń.
 
-Przed udostępnieniem głównego rankingu potrzebne są jeszcze zasady łączenia rodzin, ich wagi oraz źródło sentymentu. Punkty podstawowych fundamentów są już obliczane, lecz sam interfejs nie rozwiązuje problemu porównywalności zakresów wyników. Niepełna suma rodzin nie jest jeszcze gotowym wynikiem końcowym.
+Przed udostępnieniem głównego rankingu potrzebne jest jeszcze wdrożenie i sprawdzenie punktacji sentymentu. Dla trzech rodzin przyjęto równe wagi 1, a jako źródło do dalszych prac wybrano publiczny rejestr krótkiej sprzedaży KNF. Punkty podstawowych fundamentów są już obliczane, lecz równe wagi nie wyrównują zakresów wyników. Niepełna suma rodzin nie jest jeszcze gotowym wynikiem końcowym.
 
 \cleardoublepage
 \chapter{Model danych}
@@ -426,7 +426,7 @@ W projekcie bazy przewidziano też konfigurację wag i odwołanie wyniku do inst
 
 \section{Interpretacja i obecny zakres}
 
-Scoring ma porządkować spółki według przyjętych reguł. W przeciwieństwie do modelu prognozującego cenę nie zwraca oczekiwanego kursu ani procentowej stopy zwrotu. Na obecnym etapie działa punktacja techniczna oraz punktacja podstawowych wskaźników fundamentalnych. Rodzina sentymentu pozostaje planowana, bez wybranego źródła.
+Scoring ma porządkować spółki według przyjętych reguł. W przeciwieństwie do modelu prognozującego cenę nie zwraca oczekiwanego kursu ani procentowej stopy zwrotu. Na obecnym etapie działa punktacja techniczna oraz punktacja podstawowych wskaźników fundamentalnych. Rodzina sentymentu pozostaje planowana: wybrano rejestr KNF jako ograniczony sygnał pozycji krótkich, ale nie powstał jego importer ani punktacja.
 
 Podstawowym założeniem jest powtarzalność: ten sam plik wejściowy i ta sama data rankingu powinny dać ten sam wynik. Nie ma losowania, uczenia modelu ani automatycznego dopasowania progów do analizowanej spółki. Przejrzystość reguł pozwala sprawdzić poprawność obliczeń, lecz sama w sobie nie potwierdza ich skuteczności rynkowej.
 
@@ -545,7 +545,7 @@ Ujemne wartości pozostają ujemne. Komenda \texttt{fundamental-table} nie przyp
 
 W poleceniu \texttt{fundamental-points} przyjęto stałe progi jako konwencję pracy, bez dopasowania do wyników WIG20. Mapowanie GICS wybiera tylko szablon wskaźników i progi; nie służy do porównywania spółek wewnątrz grupy, wyznaczania kwartyli ani tercji. Poza sektorem Financials marże netto i operacyjna otrzymują $+1$ powyżej $0{,}02$ i $-1$ poniżej $-0{,}02$. Udział kapitału otrzymuje $+1$ powyżej $0{,}50$ i $-1$ poniżej $0{,}30$, zadłużenie do kapitału odpowiednio $+1$ poniżej $0{,}50$ i $-1$ powyżej $1{,}50$, a przepływy operacyjne do wyniku netto: $+1$ powyżej $1$ i $-1$ poniżej $0$. Cały sektor Financials, także ubezpieczyciele i usługi finansowe, używa wyłącznie udziału kapitału: $+1$ powyżej $0{,}10$ i $-1$ poniżej $0{,}08$. Pozostałe cztery wskaźniki i ich punkty są w tym szablonie \texttt{null}. Wartości pomiędzy progami, wraz z granicami, dają zero. Brak wskaźnika daje \texttt{null}, a wynik fundamentalny jest sumą dostępnych punktów; brak wszystkich oznacza \texttt{null}. Wzory surowych wskaźników oraz punktacja techniczna pozostają bez zmian.
 
-Pozostaje kwestia skali. Suma pięciu punktowanych wskaźników ma zakres od $-5$ do $+5$, szablon Financials od $-1$ do $+1$, a wynik techniczny od $-2$ do $+2$. Braki danych mogą ograniczyć liczbę dostępnych składników. Przed połączeniem rodzin należy uwzględnić te różnice przy ustalaniu znaczenia jednego punktu i wag. GICS nie wprowadza osobnego zestawu wag trzech rodzin dla banków.
+Pozostaje kwestia skali. Suma pięciu punktowanych wskaźników ma zakres od $-5$ do $+5$, szablon Financials od $-1$ do $+1$, a wynik techniczny od $-2$ do $+2$. Braki danych mogą ograniczyć liczbę dostępnych składników. Przyjęcie wag 1/1/1 nie usuwa tych różnic: równa waga nie oznacza równego zakresu wpływu na sumę. Szablony GICS i progi pozostają bez zmian, także dla Financials; nie stosuje się wyrównania ich skali.
 
 Obecne dane nie pokrywają jeszcze całego planowanego zakresu fundamentów. Bez liczby akcji nie ma wyliczanych P/E i P/B, a bez poprzednich porównywalnych raportów nie ma dynamiki rok do roku. Pięć dostępnych wskaźników opisuje wybrane relacje finansowe; nie zastępuje ani wyceny, ani pełnej oceny sektora bankowego.
 
@@ -553,11 +553,13 @@ Obecne dane nie pokrywają jeszcze całego planowanego zakresu fundamentów. Bez
 
 Docelowo trzy rodziny mają być łączone w postaci
 \begin{equation}
-    Q=w_F F+w_T T+w_S S_{\mathrm{sent}},
+    Q=F+T+S_{\mathrm{sent}},
 \end{equation}
-gdzie $F$ jest wynikiem fundamentalnym, $T$ wynikiem technicznym, a $S_{\mathrm{sent}}$ wynikiem sentymentu. Wagi mają być nieujemne i wspólne dla koszyka WIG20, również dla banków. Fundamenty mają być rodziną najważniejszą, ale liczbowe wartości wag pozostają decyzją do podjęcia po ustaleniu punktacji.
+gdzie $F$ jest wynikiem fundamentalnym, $T$ wynikiem technicznym, a $S_{\mathrm{sent}}$ wynikiem sentymentu. Wszystkie trzy wagi wynoszą 1 i są wspólne dla koszyka WIG20, również dla banków. Fundamenty nie otrzymują dodatkowego mnożnika. Wagi są konwencją projektu, nie wynikiem dopasowania do późniejszych zwrotów.
 
-Jest to zapis planu, a nie wzór wykonywany obecnie przez program. Nie istnieje jeszcze komplet trzech wyników ani obliczany \texttt{final\_score}. Sentyment pozostaje poza punktami do czasu wyboru źródła i zasad jego interpretacji. Przyszła suma nie ma być normalizowana do 0--100 ani przedstawiana jako procent oczekiwanego zwrotu.
+Jest to zapis planu, a nie wzór wykonywany obecnie przez program. Nie istnieje jeszcze komplet trzech wyników ani obliczany \texttt{final\_score}. Sentyment pozostaje poza punktami do czasu wdrożenia i sprawdzenia zasad jego interpretacji. Przyszła suma nie ma być normalizowana do 0--100 ani przedstawiana jako procent oczekiwanego zwrotu.
+
+Do dalszych prac nad sentymentem wybrano rejestr krótkiej sprzedaży KNF. Zawiera ujawnione pozycje krótkie netto posiadaczy dla konkretnych emitentów, w procentach wyemitowanego kapitału. Publiczny próg wynosi $0{,}5\%$ na posiadacza; niższy próg zgłoszenia do KNF nie oznacza udostępnienia tych danych publicznie \cite{knfshorts}. Sprawdzenie 21 października 2026 roku potwierdziło odczyt JSON bez konta i filtrowanie po ISIN. Wówczas wpisy obejmowały 6 z 20 spółek mapy projektu. Jest to ograniczony sygnał ujawnionych pozycji, a nie pomiar opinii wszystkich inwestorów. Brak wpisu nie dowodzi braku pozycji krótkich ani optymizmu tłumu i nie uzasadnia dodatniego punktu. Na tym etapie sprawdzono źródło, bez implementowania pobierania lub punktacji.
 
 \cleardoublepage
 \chapter{Implementacja}
@@ -794,7 +796,7 @@ Importer i archiwum JSON & Działają; uruchamiane ręcznie \\
 Scoring techniczny i tabela & Działają offline, ze stałymi regułami v1 \\
 Wskaźniki fundamentalne & Działają jako surowe relacje, bez punktów \\
 Punktacja fundamentalna & Działa według stałych progów GICS; bez wyceny i dynamiki rok do roku \\
-Sentyment i wynik końcowy & Brak źródła sentymentu i pełnego algorytmu sumy rodzin \\
+Sentyment i wynik końcowy & Wybrano rejestr KNF; brak importera, punktacji i pełnej sumy rodzin \\
 SurrealDB & Wcześniejszy projekt schematu, bez połączenia z importerem \\
 Backend, frontend i wykresy & Planowane \\
 Walidacja późniejszych zwrotów & Planowana; nie ma wyników skuteczności modelu \\
@@ -802,7 +804,7 @@ Walidacja późniejszych zwrotów & Planowana; nie ma wyników skuteczności mod
 \end{tabularx}
 \end{table}
 
-Dalszym zadaniem metodycznym jest ocena przyjętej konwencji punktów fundamentalnych oraz ustalenie wag rodzin i warunków powstania pełnego wyniku. Równolegle potrzebne jest regularne zbieranie obserwacji, aby przyszła ocena nie opierała się wyłącznie na jednorazowo pobranych danych. Integracja z bazą i interfejsem powinna wykorzystać istniejące parsery oraz funkcje obliczeniowe.
+Dalszym zadaniem metodycznym jest ocena przyjętej konwencji punktów fundamentalnych oraz ustalenie punktacji sentymentu i warunków powstania pełnego wyniku przy wagach 1/1/1. Równolegle potrzebne jest regularne zbieranie obserwacji, aby przyszła ocena nie opierała się wyłącznie na jednorazowo pobranych danych. Integracja z bazą i interfejsem powinna wykorzystać istniejące parsery oraz funkcje obliczeniowe.
 
 Główne ograniczenia są już widoczne: brak historii sprawozdań i ich dat publikacji, różna długość serii cenowych, niepełne dane banków, brak wyceny i dynamiki rok do roku oraz krótki okres możliwej obserwacji przyszłych zwrotów. Dalszy rozwój powinien odpowiadać na te konkretne braki. Rozszerzenie koszyka i dodatkowe źródła mają sens po sprawdzeniu pełnego przepływu dla obecnego zakresu.
 
@@ -846,6 +848,13 @@ Autorzy biblioteki serde\_json.
 \newblock \textit{Dokumentacja Serde JSON}.
 \newblock \url{https://docs.rs/serde_json/latest/serde_json/}.
 \newblock Dostęp: 18.10.2026.
+
+\bibitem{knfshorts}
+Komisja Nadzoru Finansowego.
+\newblock \textit{Rejestr krótkiej sprzedaży}.
+\newblock \url{https://www.knf.gov.pl/podmioty/Rejestry_i_Ewidencje/rks?articleId=56674&p_id=18}.
+\newblock Dane publiczne: \url{https://rss.knf.gov.pl/rss_pub/}.
+\newblock Dostęp: 21.10.2026.
 
 \end{thebibliography}
 
