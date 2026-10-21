@@ -136,7 +136,31 @@ Keep `fundamental-table` as the separate raw-ratio command without points.
   null last, then code A–Z. Report company and null-score counts on stderr.
   Zero valid companies is an error with empty stdout. No network or database.
 - Valuation and year-over-year dynamics remain unimplemented. Sentiment still
-  has no source or points; the full weighted result remains planned.
+  has no source or points; the full three-family result remains planned.
+
+The first offline sum of two families is implemented in `importer/src/ranking.rs`
+and exposed through `rankr-import rank --as-of YYYY-MM-DD DIRECTORY`.
+
+- Reuse `fundamental-points` and `technical-table` selection and scoring. Select
+  each company's latest `fundamentals.json` and `history.json` independently by
+  `fetched_at`. Join by company code; report and skip companies without a usable
+  pair on stderr, along with the underlying tables' skipped-file diagnostics.
+- `--as-of` controls technical candles (`date < as_of`), not fundamental snapshot
+  selection. The command does not reconstruct fundamentals known on that date.
+- Exactly `final_score = 3 * fundamental_score + 1 * technical_score`. Both
+  families must be non-null. Either missing means null, never a partial sum.
+  Paired rows with null scores remain in the output.
+- Always output `sentiment_score: null` and weights `fundamental_weight: 3`,
+  `technical_weight: 1`, `sentiment_weight: 0`. Sentiment is not a term in the
+  calculation; a zero weight does not replace any missing score with zero.
+- These fixed weights are a convention, not calibration. They are shared by
+  the entire basket. Financials keeps its narrower fundamental range (−1 to +1,
+  versus −5 to +5 outside Financials), without rescaling or changing thresholds.
+- Output pretty JSON rows with code, GICS sector, the three score fields, the
+  three weight fields and final_score. Sort final_score descending, null last,
+  then code A–Z. Zero paired rows is an error with empty stdout. No network or DB.
+- Do not change GICS, raw ratios or either family's formula when combining them.
+  Do not add sentiment, valuation or year-over-year dynamics to this command.
 
 Seasonality belongs to `technical`, without a fourth family weight. Sector macro
 and COT are outside v1 and may only be optional extensions after MVP.
@@ -165,7 +189,8 @@ and obtains the current WIG20 list from GPW Benchmark. CLI: `collect [CODE]`,
 `prices [CODE]`, `history [CODE]`, `fetch CODE`, `parse FILE`,
 `technical --as-of YYYY-MM-DD history.json`,
 `technical-table --as-of YYYY-MM-DD DIRECTORY`,
-`fundamental-table DIRECTORY`, `fundamental-points DIRECTORY`.
+`fundamental-table DIRECTORY`, `fundamental-points DIRECTORY`,
+`rank --as-of YYYY-MM-DD DIRECTORY`.
 
 - One package with a reusable library and a thin CLI; keep HTTP, pure parsing,
   serializable model types and JSON persistence in separate modules.

@@ -38,8 +38,9 @@ does not provide investment advice.
 Seasonality belongs to `technical`, without a fourth family weight. Technical v1
 is implemented as seasonality points plus SMA200 trend points. Fundamental points
 use fixed GICS template thresholds for the available financial ratios; valuation,
-year-over-year dynamics and sentiment remain planned. Sector macro and COT are
-optional extensions after MVP.
+year-over-year dynamics and sentiment remain planned. The offline `rank` command
+combines the two available families with fixed weights 3 and 1. Sector macro and
+COT are optional extensions after MVP.
 
 ## Fundamentals importer
 
@@ -173,6 +174,7 @@ importer/src/
   yahoo.rs    # pure Yahoo daily OHLCV JSON parsing and validation
   technical.rs # pure calendar-month seasonality + SMA200 trend scoring
   technical_table.rs # offline history selection and technical ranking
+  ranking.rs  # pair existing family results and calculate the weighted sum
   storage.rs  # raw and parsed JSON archive
   main.rs     # CLI and orchestration
 ```
@@ -332,6 +334,38 @@ with `null` scores last and company codes A–Z on ties. Each row contains `code
 `as_of`, `seasonality_points`, `trend_points`, `technical_score`, `r`, `years` and
 `source_file`. Stderr lists skipped paths and reports the company count and the
 number with a `null` score. This command uses no network or database.
+
+## Offline combined ranking
+
+```bash
+rankr-import rank --as-of 2026-10-21 data/collected
+```
+
+This is the first sum of two score families:
+`final_score = 3 * fundamental_score + 1 * technical_score`.
+The weights are a convention, not calibrated values. Financials keeps its
+narrower fundamental range of −1 to +1; the nonfinancial range remains −5 to +5.
+The same weights apply to every company, with no rescaling of either family.
+
+The command pairs results by company code using the existing `fundamental-points`
+and `technical-table` logic. Each selects its own latest file by `fetched_at`,
+recursively from the directory. `--as-of` applies to technical candles only
+(`date < as_of`); fundamentals use the latest snapshot in the directory, without
+a historical publication-date cutoff. Equal timestamps and invalid files follow
+the existing tables' rules.
+
+A pair with a null fundamental or technical score remains in the output with
+`final_score: null`; there is no partial sum. `sentiment_score` is always `null`,
+and `sentiment_weight` is 0. Sentiment is not a term in the calculation.
+Companies without a usable pair and skipped file paths are reported on stderr.
+No paired companies means an error with empty stdout, while paired rows whose
+scores are all null are still valid output.
+
+Stdout is a pretty JSON array with `code`, `gics_sector`, `fundamental_score`,
+`technical_score`, `sentiment_score`, `fundamental_weight` (3),
+`technical_weight` (1), `sentiment_weight` (0), and `final_score`.
+Rows sort by `final_score` descending, null last, then code A–Z on ties.
+The command uses no network or database.
 
 ## Planned Stack
 
