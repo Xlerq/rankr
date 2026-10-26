@@ -44,21 +44,23 @@ fn unchanged_total_scores_zero_even_when_positions_change_individually() {
 }
 
 #[test]
-fn compares_calendar_days_of_fetch_dates_instead_of_elapsed_hours_or_position_dates() {
+fn accepts_any_positive_fetch_gap_without_using_position_dates() {
     let (older, mut newer) = snapshots();
-    // The fixtures are 30 calendar days apart, but less than 30 * 24 hours.
-    assert!((newer.fetched_at - older.fetched_at).num_hours() < 30 * 24);
-    assert_eq!(score(Some(&older), Some(&newer)), Some(-1));
-
-    newer.fetched_at = "2026-09-30T23:59:59Z".parse().unwrap();
-    assert_eq!(score(Some(&older), Some(&newer)), None);
-    newer.fetched_at = "2026-10-02T00:00:00Z".parse().unwrap();
-    // Old position dates do not change the gap between observations.
+    // Position reporting dates do not limit the comparison of observations.
     for position in &mut newer.positions {
         position.position_date = "2020-01-01".parse().unwrap();
         position.modify_date = "2020-01-02".parse().unwrap();
     }
-    assert_eq!(score(Some(&older), Some(&newer)), Some(-1));
+    for fetched_at in [
+        "2026-09-01T23:30:00.000000001Z",
+        "2026-09-01T23:31:00Z",
+        "2026-09-02T00:00:00Z",
+        "2026-09-30T23:59:59Z",
+        "2026-10-02T00:00:00Z",
+    ] {
+        newer.fetched_at = fetched_at.parse().unwrap();
+        assert_eq!(score(Some(&older), Some(&newer)), Some(-1), "{fetched_at}");
+    }
     assert_eq!(score(Some(&newer), Some(&older)), None);
     assert_eq!(score(Some(&older), Some(&older)), None);
 }

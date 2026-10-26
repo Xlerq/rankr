@@ -93,13 +93,7 @@ pub fn rank_directory(directory: &Path, as_of: NaiveDate) -> Result<Ranking> {
             Some(newer) => {
                 let older = shorts.iter().find(|archived| {
                     let snapshot = &archived.snapshot;
-                    snapshot.isin == newer.isin
-                        && newer
-                            .fetched_at
-                            .date_naive()
-                            .signed_duration_since(snapshot.fetched_at.date_naive())
-                            .num_days()
-                            >= 30
+                    snapshot.isin == newer.isin && snapshot.fetched_at < newer.fetched_at
                 });
                 sentiment::score(older.map(|archived| &archived.snapshot), Some(newer))
             }

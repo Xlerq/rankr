@@ -7,7 +7,7 @@ use rust_decimal::Decimal;
 use crate::model::ShortsSnapshot;
 
 /// Compare an older and a newer observation of the same ISIN.
-/// The gap uses UTC calendar dates from fetched_at, not position reporting dates.
+/// Any positive gap between fetched_at timestamps is sufficient.
 /// Missing or incomparable observations return None (JSON null), never zero.
 pub fn score(older: Option<&ShortsSnapshot>, newer: Option<&ShortsSnapshot>) -> Option<i8> {
     let older = older?;
@@ -15,12 +15,7 @@ pub fn score(older: Option<&ShortsSnapshot>, newer: Option<&ShortsSnapshot>) -> 
     if older.isin.trim().is_empty() || older.isin != newer.isin {
         return None;
     }
-    let days = newer
-        .fetched_at
-        .date_naive()
-        .signed_duration_since(older.fetched_at.date_naive())
-        .num_days();
-    if days < 30 {
+    if older.fetched_at >= newer.fetched_at {
         return None;
     }
 

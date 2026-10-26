@@ -189,7 +189,7 @@ fn a_missing_family_yields_null_instead_of_a_partial_sum() {
 }
 
 #[test]
-fn a_single_shorts_snapshot_or_a_gap_of_only_29_days_has_null_sentiment() {
+fn a_single_shorts_snapshot_or_equal_fetch_timestamps_has_null_sentiment() {
     for single_snapshot in [true, false] {
         let directory = tempfile::tempdir().unwrap();
         let root = directory.path();
@@ -198,7 +198,7 @@ fn a_single_shorts_snapshot_or_a_gap_of_only_29_days_has_null_sentiment() {
             fs::remove_file(root.join("KGHM/old/shorts.json")).unwrap();
         } else {
             let mut input = shorts("KGHM", true);
-            input["fetched_at"] = json!("2026-09-02T00:00:00Z");
+            input["fetched_at"] = json!("2026-10-01T00:30:00Z");
             write_json(root, "KGHM/old/shorts.json", &input);
         }
         let result = rows(&run(root));
@@ -210,29 +210,46 @@ fn a_single_shorts_snapshot_or_a_gap_of_only_29_days_has_null_sentiment() {
 }
 
 #[test]
+fn shorts_less_than_a_month_apart_including_the_same_day_are_comparable() {
+    for fetched_at in ["2026-09-02T00:00:00Z", "2026-10-01T00:29:59Z"] {
+        let directory = tempfile::tempdir().unwrap();
+        let root = directory.path();
+        write_company(root, "KGHM");
+        let mut older = shorts("KGHM", true);
+        older["fetched_at"] = json!(fetched_at);
+        write_json(root, "KGHM/old/shorts.json", &older);
+        let result = rows(&run(root));
+        assert_eq!(result[0]["sentiment_score"], 0);
+        assert_eq!(result[0]["final_score"], 3);
+    }
+}
+
+#[test]
 fn chooses_the_latest_shorts_and_latest_eligible_older_snapshot_of_the_same_isin() {
     let directory = tempfile::tempdir().unwrap();
     let root = directory.path();
     write_company(root, "KGHM");
     let mut extra = shorts("KGHM", true);
-    // Much older observations would give -1 instead of the expected 0.
+    // A nearer older observation is selected regardless of the size of the gap.
     extra["fetched_at"] = json!("2026-08-01T00:00:00Z");
     extra["positions"][1]["net_short_position_percent"] = json!(0.5);
     write_json(root, "a-very-old/shorts.json", &extra);
     extra["fetched_at"] = json!("2026-09-02T00:00:00Z");
-    write_json(root, "a-too-recent/shorts.json", &extra);
-    extra["fetched_at"] = json!("2026-09-01T23:59:00Z");
+    write_json(root, "a-nearest/shorts.json", &extra);
+    extra["fetched_at"] = json!("2026-09-30T23:59:00Z");
     extra["isin"] = json!("different-isin");
     write_json(root, "a-wrong-isin/shorts.json", &extra);
     // Equal timestamps retain the first lexical path, as in the other tables.
     extra["isin"] = json!("fixture-KGHM");
-    extra["fetched_at"] = json!("2026-09-01T23:30:00Z");
+    extra["fetched_at"] = json!("2026-09-02T00:00:00Z");
+    extra["positions"][1]["net_short_position_percent"] = json!(0.7);
     write_json(root, "z-duplicate-old/shorts.json", &extra);
     extra["fetched_at"] = json!("2026-10-01T00:30:00Z");
+    extra["positions"][1]["net_short_position_percent"] = json!(0.5);
     write_json(root, "z-duplicate-new/shorts.json", &extra);
     let result = rows(&run(root));
-    assert_eq!(result[0]["sentiment_score"], 0);
-    assert_eq!(result[0]["final_score"], 3);
+    assert_eq!(result[0]["sentiment_score"], -1);
+    assert_eq!(result[0]["final_score"], 2);
 }
 
 #[test]

@@ -174,7 +174,7 @@ weights do not imply equal ranges or equal influence of the families.
   covered. No entry does not mean no shorts, a closed position, or crowd optimism.
   A missing entry gives no sentiment signal (`null`), not +1 or an invented zero.
 - Scoring proposal for later agreement, not implemented or calibrated: compare
-  two complete snapshots 30 calendar days apart for the same issuer and the same
+  two complete snapshots in fetch-time order for the same issuer and the same
   nonempty set of disclosed holders, with each position still at least 0.5%.
   An increase in their summed percentage gives −1, a decrease +1, and no change
   0. A missing comparison, changed holder set, disappearance below the disclosure

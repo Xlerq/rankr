@@ -278,7 +278,7 @@ and database seed retain their original source labels. FX/gold commands such as
 rankr-import shorts
 ```
 
-Sentiment points require two comparable snapshots at least 30 calendar days apart.
+Sentiment points require two comparable snapshots with different fetch times.
 
 ## Technical score v1
 
