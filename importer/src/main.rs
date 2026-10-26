@@ -15,7 +15,7 @@ use rankr_import::{
     model::{Instrument, MarketPair, RawDocument, Source},
     parser::parse_document,
     prices::parse_price_document,
-    shorts_collect,
+    ranking, shorts_collect,
     source::{GpwClient, TradingViewClient, YahooClient, parse_portfolio},
     storage::{archive_raw, read_raw},
     technical::{TechnicalHistory, score},
@@ -36,6 +36,14 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Command {
+    /// Rank companies offline by the sum of fundamental, technical and sentiment points.
+    Rank {
+        /// Ranking date; technical uses only candles strictly before this date.
+        #[arg(long)]
+        as_of: NaiveDate,
+        /// Directory containing archived fundamentals.json, history.json and shorts.json.
+        directory: PathBuf,
+    },
     /// Archive current KNF short positions for every ISIN in the bundled WIG20 map.
     Shorts {
         /// Directory for immutable observations.
@@ -117,6 +125,7 @@ async fn main() -> ExitCode {
 
 async fn run(cli: Cli) -> Result<()> {
     match cli.command {
+        Command::Rank { as_of, directory } => show_ranking(&directory, as_of),
         Command::Shorts { output } => shorts_collect::collect(&output).await,
         Command::FundamentalPoints { directory } => show_fundamental_points(&directory),
         Command::FundamentalTable { directory } => show_fundamental_table(&directory),
@@ -128,6 +137,33 @@ async fn run(cli: Cli) -> Result<()> {
         Command::Prices { code, output } => collect_prices(code.as_deref(), output).await,
         Command::History { code, output } => collect_history(code.as_deref(), output).await,
     }
+}
+
+fn show_ranking(directory: &Path, as_of: NaiveDate) -> Result<()> {
+    let ranking = ranking::rank_directory(directory, as_of)
+        .with_context(|| format!("ranking companies under {}", directory.display()))?;
+    for skipped in &ranking.skipped {
+        eprintln!(
+            "Skipped {}: {}",
+            skipped.source_file.display(),
+            skipped.reason
+        );
+    }
+    let missing = ranking
+        .rows
+        .iter()
+        .filter(|row| row.final_score.is_none())
+        .count();
+    eprintln!(
+        "Ranked {} companies; {missing} with null final_score",
+        ranking.rows.len()
+    );
+    ensure!(
+        !ranking.rows.is_empty(),
+        "no valid companies found under {}",
+        directory.display()
+    );
+    print_json(&ranking.rows)
 }
 
 fn show_fundamental_points(directory: &Path) -> Result<()> {

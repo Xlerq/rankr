@@ -30,10 +30,10 @@ pub struct FundamentalPointsTable {
 }
 
 #[derive(Deserialize)]
-struct GicsEntry {
+pub(crate) struct GicsEntry {
     gpw_code: String,
     gics_sector_code: u16,
-    gics_sector: String,
+    pub(crate) gics_sector: String,
     gics_industry_group: String,
 }
 
@@ -68,7 +68,7 @@ pub fn build_table(directory: &Path) -> Result<FundamentalPointsTable> {
     Ok(FundamentalPointsTable { rows, skipped })
 }
 
-fn gics_map() -> Result<BTreeMap<String, GicsEntry>> {
+pub(crate) fn gics_map() -> Result<BTreeMap<String, GicsEntry>> {
     let mut reader =
         csv::Reader::from_reader(include_str!("../../data/raw/wig20_symbols.csv").as_bytes());
     let mut entries = BTreeMap::new();

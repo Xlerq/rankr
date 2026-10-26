@@ -27,9 +27,9 @@ does not provide investment advice.
 - deterministic scoring from exactly three families: `fundamental` (covering
   financial condition, valuation, and revenue/profit
   dynamics), `technical` (SMA200 price trend and monthly seasonality from
-  multi-year daily history), and `sentiment` (a proposed proxy from the KNF public
-  net short-position register; scoring is not implemented)
-- the planned final score is the sum of the three family scores, measures growth
+  multi-year daily history), and `sentiment` (changes in the KNF public
+  net short-position register between comparable snapshots)
+- the final score is the sum of the three family scores, measures growth
   potential, and determines table sorting; no final-score normalization or
   conversion to an expected percentage return
 - equal family weights `1 / 1 / 1` for the entire WIG20, including banks;
@@ -38,10 +38,9 @@ does not provide investment advice.
 
 Seasonality belongs to `technical`, without a fourth family weight. Technical v1
 is implemented as seasonality points plus SMA200 trend points. Fundamental points
-use fixed GICS template thresholds for the available financial ratios; valuation,
-year-over-year dynamics and sentiment remain planned. The combined ranking is
-deferred until sentiment is implemented. Sector macro and COT are optional
-extensions after MVP.
+use fixed GICS template thresholds for the available financial ratios; valuation
+and year-over-year dynamics remain planned. The combined ranking of all three
+families runs offline. Sector macro and COT are optional extensions after MVP.
 
 ## Fundamentals importer
 
@@ -150,7 +149,7 @@ only `equity_ratio`. Its other four ratios and their points are `null` in this
 command's output. A missing ratio has `null` points. `fundamental_score` sums the
 available points; if none are available, it is `null`. An available neutral point
 counts as zero. The full nonfinancial range is −5 to +5; Financials uses −1 to +1.
-There is no rescaling or combination with technical/sentiment here. The planned
+There is no rescaling or combination with technical/sentiment here. The
 three-family result uses equal weights of 1 for the entire basket.
 
 Stdout is a pretty JSON array containing `code`, `gics_sector`,
@@ -195,8 +194,8 @@ cargo clippy --workspace --all-targets --locked -- -D warnings
 
 Tests use small fixtures and local HTTP servers, without contacting GPW, Yahoo or
 TradingView. Old Python/Bash scripts and `data/raw/` samples remain as earlier
-research material. Detailed banking fundamentals, macro data, valuation,
-year-over-year dynamics and sentiment are later steps.
+research material. Detailed banking fundamentals, macro data, valuation and
+year-over-year dynamics are later steps.
 
 ## Daily company prices and history
 
@@ -279,7 +278,7 @@ and database seed retain their original source labels. FX/gold commands such as
 rankr-import shorts
 ```
 
-Sentiment points require two snapshots and are not implemented yet.
+Sentiment points require two comparable snapshots at least 30 calendar days apart.
 
 ## Technical score v1
 
@@ -343,19 +342,23 @@ with `null` scores last and company codes A–Z on ties. Each row contains `code
 `source_file`. Stderr lists skipped paths and reports the company count and the
 number with a `null` score. This command uses no network or database.
 
-## Planned combined score
+## Offline combined ranking
 
-All three family weights are 1. The planned formula is
+```bash
+rankr-import rank --as-of 2026-09-19 data/collected
+```
+
+All three family weights are 1. The formula is
 `final_score = fundamental_score + technical_score + sentiment_score`, without
 normalization or a larger multiplier for fundamentals. Financials keeps its
 narrower fundamental range of −1 to +1; the nonfinancial range remains −5 to +5.
 Equal weights do not make those ranges equal.
 
-The standalone `fundamental-points` and `technical-table` commands remain
-available. There is currently no `rank` command or sentiment scoring. The
-selected KNF source, its disclosure limits and a scoring proposal are documented
-in [AI_CONTEXT.md](AI_CONTEXT.md) and [ROADMAP.md](ROADMAP.md); the proposal is not
-implemented. A missing sentiment observation must not be invented as zero.
+Every family must have a score: if any family is missing or incomparable,
+`final_score` is `null`. A missing family never enters the sum as zero. The command
+works offline; `--as-of` limits technical candles, while fundamentals and KNF use
+the latest archived snapshots. Rows sort by final score descending, with `null`
+last and company code A–Z as the tie-breaker.
 
 ## Planned Stack
 
