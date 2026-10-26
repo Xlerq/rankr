@@ -1,5 +1,5 @@
 //! Fetching, pure parsing, and JSON persistence are independent modules.
-//! A future database adapter can store the model types without invoking the CLI.
+//! The rankr program refreshes these data sources before starting its local page.
 
 pub mod data_collect;
 pub mod data_refresh;
@@ -12,7 +12,6 @@ mod http;
 pub mod model;
 pub mod page;
 pub mod parser;
-pub mod prices;
 pub mod ranking;
 pub mod sentiment;
 pub mod shorts;

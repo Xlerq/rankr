@@ -1,4 +1,4 @@
-use rankr_import::{
+use rankr::{
     model::Fundamentals,
     parser::{ParseError, parse_fundamentals},
 };

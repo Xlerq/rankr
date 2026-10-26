@@ -1,8 +1,12 @@
 use chrono::{TimeZone, Utc};
-use rankr_import::{
+use rankr::{
     model::{Instrument, RawDocument, Source},
-    storage::{archive_raw, read_raw},
+    storage::archive_raw,
 };
+
+fn read_raw(path: &std::path::Path) -> serde_json::Result<RawDocument> {
+    serde_json::from_slice(&std::fs::read(path).unwrap())
+}
 
 fn raw() -> RawDocument {
     RawDocument {
@@ -56,14 +60,6 @@ fn archive_names_identify_the_date_company_and_data_kind() {
     assert_eq!(
         history.raw_path(),
         root.path().join("2026-09-14_KGHM_history/raw.json")
-    );
-
-    document.source = Source::GpwBenchmark;
-    document.instrument = None;
-    let portfolio = archive_raw(root.path(), &document).unwrap();
-    assert_eq!(
-        portfolio.raw_path(),
-        root.path().join("2026-09-14_wig20/raw.json")
     );
 }
 

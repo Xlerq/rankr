@@ -1,5 +1,5 @@
 use chrono::{TimeZone, Utc};
-use rankr_import::{
+use rankr::{
     model::{Instrument, RawDocument, ShortsSnapshot, Source},
     shorts::{ShortsError, latest_positions, parse_page},
 };

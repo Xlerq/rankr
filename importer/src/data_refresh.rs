@@ -1,6 +1,10 @@
 //! Refresh each mapped company using UTC dates from the archive directory names.
 
-use std::{collections::BTreeMap, fs, path::Path};
+use std::{
+    collections::BTreeMap,
+    fs,
+    path::{Path, PathBuf},
+};
 
 use anyhow::Result;
 use chrono::{NaiveDate, Utc};
@@ -32,23 +36,23 @@ impl DataKind {
 const KINDS: [DataKind; 3] = [DataKind::Fundamentals, DataKind::History, DataKind::Shorts];
 
 fn needs_refresh(kind: DataKind, latest: Option<NaiveDate>, today: NaiveDate) -> bool {
-    let Some(latest) = latest else {
-        return true;
-    };
     match kind {
-        DataKind::Fundamentals | DataKind::Shorts => latest != today,
-        DataKind::History => !(0..=7).contains(&(today - latest).num_days()),
+        DataKind::Fundamentals | DataKind::Shorts => latest != Some(today),
+        DataKind::History => true,
     }
 }
 
 pub async fn refresh(directory: &Path) -> Result<()> {
+    fs::create_dir_all(directory)?;
     let symbols = YahooSymbolMap::bundled()?;
     let gpw = GpwClient::new()?;
     let yahoo = YahooClient::new()?;
     let knf = KnfClient::new()?;
     let today = Utc::now().date_naive();
-    let dates = latest_dates(directory, today);
-    let mut collected = 0;
+    let files = archive_files(directory);
+    let dates = latest_dates(&files, today);
+    let mut histories = data_collect::latest_histories(&files);
+    let mut refreshed = 0;
     let mut skipped = 0;
     let mut failed = 0;
 
@@ -73,13 +77,20 @@ pub async fn refresh(directory: &Path) -> Result<()> {
                 DataKind::History => {
                     // Keep the existing Yahoo collection pace.
                     tokio::time::sleep(std::time::Duration::from_millis(500)).await;
-                    data_collect::collect_history(&yahoo, &symbols, &instrument, directory, false)
-                        .await
+                    data_collect::collect_history(
+                        &yahoo,
+                        &symbols,
+                        &instrument,
+                        directory,
+                        histories.remove(&instrument.code),
+                        Utc::now(),
+                    )
+                    .await
                 }
                 DataKind::Shorts => shorts_collect::collect_one(&knf, &instrument, directory).await,
             };
             match result {
-                Ok(()) => collected += 1,
+                Ok(()) => refreshed += 1,
                 Err(error) => {
                     failed += 1;
                     eprintln!("{}: {}: {error:#}", instrument.code, kind.filename());
@@ -87,12 +98,12 @@ pub async fn refresh(directory: &Path) -> Result<()> {
             }
         }
     }
-    eprintln!("Refresh finished: {collected} collected, {skipped} current, {failed} failed");
+    eprintln!("Refresh finished: {refreshed} refreshed, {skipped} current, {failed} failed");
     Ok(())
 }
 
-fn latest_dates(directory: &Path, today: NaiveDate) -> BTreeMap<(String, DataKind), NaiveDate> {
-    let mut dates = BTreeMap::new();
+fn archive_files(directory: &Path) -> Vec<PathBuf> {
+    let mut files = Vec::new();
     let mut directories = vec![directory.to_path_buf()];
     while let Some(directory) = directories.pop() {
         let entries = match fs::read_dir(&directory) {
@@ -127,19 +138,28 @@ fn latest_dates(directory: &Path, today: NaiveDate) -> BTreeMap<(String, DataKin
             if !file_type.is_file() {
                 continue;
             }
-            let Some(kind) = KINDS
-                .into_iter()
-                .find(|kind| entry.file_name() == kind.filename())
-            else {
-                continue;
-            };
-            let Some((date, code)) = observation_date_and_code(&directory) else {
-                continue;
-            };
-            if date <= today {
-                let latest = dates.entry((code.to_owned(), kind)).or_insert(date);
-                *latest = (*latest).max(date);
-            }
+            files.push(path);
+        }
+    }
+    files.sort();
+    files
+}
+
+fn latest_dates(files: &[PathBuf], today: NaiveDate) -> BTreeMap<(String, DataKind), NaiveDate> {
+    let mut dates = BTreeMap::new();
+    for path in files {
+        let Some(kind) = [DataKind::Fundamentals, DataKind::Shorts]
+            .into_iter()
+            .find(|kind| path.file_name().is_some_and(|name| name == kind.filename()))
+        else {
+            continue;
+        };
+        let Some((date, code)) = path.parent().and_then(observation_date_and_code) else {
+            continue;
+        };
+        if date <= today {
+            let latest = dates.entry((code.to_owned(), kind)).or_insert(date);
+            *latest = (*latest).max(date);
         }
     }
     dates
@@ -161,24 +181,11 @@ mod tests {
     use chrono::Days;
 
     #[test]
-    fn refresh_decision_uses_daily_and_weekly_windows() {
+    fn skips_todays_fundamentals_and_shorts_but_not_yesterdays() {
         let today = NaiveDate::from_ymd_opt(2026, 10, 26).unwrap();
         for kind in [DataKind::Fundamentals, DataKind::Shorts] {
             assert!(!needs_refresh(kind, Some(today), today));
             assert!(needs_refresh(kind, Some(today - Days::new(1)), today));
-        }
-        assert!(!needs_refresh(
-            DataKind::History,
-            Some(today - Days::new(7)),
-            today
-        ));
-        assert!(needs_refresh(
-            DataKind::History,
-            Some(today - Days::new(8)),
-            today
-        ));
-        for kind in KINDS {
-            assert!(needs_refresh(kind, None, today));
         }
     }
 }

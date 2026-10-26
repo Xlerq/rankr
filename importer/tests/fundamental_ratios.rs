@@ -1,6 +1,4 @@
-use rankr_import::fundamental_ratios::{
-    FundamentalRatioInput, FundamentalRatios, RatioError, calculate,
-};
+use rankr::fundamental_ratios::{FundamentalRatioInput, FundamentalRatios, RatioError, calculate};
 use rust_decimal::Decimal;
 use serde_json::{Value, json};
 

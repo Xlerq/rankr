@@ -1,38 +1,23 @@
-//! GPW/Yahoo identifiers and daily history parsing, including legacy Stooq archives.
+//! Bundled GPW/Yahoo identifiers and daily history parsing.
 
 use std::collections::HashSet;
 
 use chrono::NaiveDate;
-use rust_decimal::Decimal;
 use serde::Deserialize;
 use thiserror::Error;
 
-use crate::model::{DailyCandle, DailyPriceHistory, Instrument, RawDocument, Source};
+use crate::model::{DailyPriceHistory, Instrument, RawDocument, Source};
 
 #[derive(Debug, Error)]
 pub enum HistoryError {
     #[error("HTTP {0}; response does not contain successful daily history")]
     HttpStatus(u16),
-    #[error("expected a Yahoo daily history response or a legacy Stooq archive")]
+    #[error("expected a Yahoo daily history response")]
     InvalidSource,
-    #[error("raw daily history is missing its instrument or daily source symbol")]
+    #[error("raw daily history is missing its instrument")]
     MissingInstrument,
-    #[error("legacy Stooq archive contains Access denied instead of daily CSV")]
-    AccessDenied,
-    #[error(
-        "legacy Stooq archive contains a JavaScript browser verification page instead of daily CSV"
-    )]
-    BrowserVerificationRequired,
-    #[error("unexpected Stooq CSV header; inspect the raw response body")]
-    InvalidHeader,
-    #[error("legacy Stooq archive contains no daily candles")]
-    EmptyHistory,
     #[error("invalid CSV: {0}")]
     Csv(#[from] csv::Error),
-    #[error("invalid {field} in CSV row {row}")]
-    InvalidField { row: usize, field: &'static str },
-    #[error("invalid OHLC range in CSV row {0}")]
-    InvalidRange(usize),
     #[error("duplicate daily candle for {0}")]
     DuplicateDate(NaiveDate),
     #[error("invalid Yahoo history: {0}")]
@@ -41,13 +26,9 @@ pub enum HistoryError {
     Json(#[from] serde_json::Error),
     #[error("empty or ambiguous GPW/Yahoo symbol mapping")]
     InvalidSymbolMap,
-    #[error(
-        "unknown GPW code {0:?}; use a gpw_code from data/raw/wig20_symbols.csv, not a Yahoo ticker"
-    )]
+    #[error("unknown GPW code {0:?} in data/raw/wig20_symbols.csv")]
     UnknownCode(String),
-    #[error(
-        "no matching Yahoo mapping for GPW code {code} and ISIN {isin}; update data/raw/wig20_symbols.csv and rebuild"
-    )]
+    #[error("no Yahoo mapping for GPW code {code} and ISIN {isin}")]
     MissingMapping { code: String, isin: String },
 }
 
@@ -139,122 +120,8 @@ impl YahooSymbolMap {
 }
 
 pub fn parse_history_document(raw: &RawDocument) -> Result<DailyPriceHistory, HistoryError> {
-    if raw.source == Source::YahooFinance {
-        return crate::yahoo::parse_history(raw);
-    }
-    if !(200..300).contains(&raw.http_status) {
-        return Err(HistoryError::HttpStatus(raw.http_status));
-    }
-    if raw.source != Source::Stooq {
+    if raw.source != Source::YahooFinance {
         return Err(HistoryError::InvalidSource);
     }
-    let instrument = raw
-        .instrument
-        .clone()
-        .ok_or(HistoryError::MissingInstrument)?;
-    let url = reqwest::Url::parse(&raw.url).map_err(|_| HistoryError::MissingInstrument)?;
-    let symbols: Vec<_> = url
-        .query_pairs()
-        .filter(|(key, _)| key == "s")
-        .map(|(_, value)| value.into_owned())
-        .collect();
-    let intervals: Vec<_> = url
-        .query_pairs()
-        .filter(|(key, _)| key == "i")
-        .map(|(_, value)| value.into_owned())
-        .collect();
-    let [symbol] = symbols.as_slice() else {
-        return Err(HistoryError::MissingInstrument);
-    };
-    if symbol.is_empty() || intervals != ["d"] {
-        return Err(HistoryError::MissingInstrument);
-    }
-
-    Ok(DailyPriceHistory {
-        instrument,
-        symbol: symbol.clone(),
-        currency: "PLN".into(),
-        source: raw.source,
-        source_url: raw.url.clone(),
-        fetched_at: raw.fetched_at,
-        candles: parse_daily_csv(&raw.body)?,
-        skipped_candles: Vec::new(),
-    })
-}
-
-/// Preserve source decimals and adjustments. Sort dates without filling gaps.
-pub fn parse_daily_csv(body: &str) -> Result<Vec<DailyCandle>, HistoryError> {
-    // Stooq can return an access error or browser challenge with HTTP 200.
-    // Diagnose it before CSV parsing, without echoing response data or secrets.
-    let response = body.trim().trim_start_matches('\u{feff}').trim_start();
-    if response.eq_ignore_ascii_case("Access denied") {
-        return Err(HistoryError::AccessDenied);
-    }
-    if response.starts_with('<')
-        && (response.contains("/__verify")
-            || response.contains("JavaScript to verify your browser")
-            || response.contains("JavaScriptu do weryfikacji przeglądarki"))
-    {
-        return Err(HistoryError::BrowserVerificationRequired);
-    }
-
-    let mut reader = csv::ReaderBuilder::new()
-        .trim(csv::Trim::All)
-        .from_reader(body.as_bytes());
-    let headers = reader.headers()?;
-    let english = ["Date", "Open", "High", "Low", "Close", "Volume"];
-    let polish = [
-        "Data",
-        "Otwarcie",
-        "Najwyzszy",
-        "Najnizszy",
-        "Zamkniecie",
-        "Wolumen",
-    ];
-    if !headers.iter().eq(english) && !headers.iter().eq(polish) {
-        return Err(HistoryError::InvalidHeader);
-    }
-
-    let mut candles = Vec::new();
-    for (index, record) in reader.records().enumerate() {
-        let record = record?;
-        let row = index + 2;
-        let invalid = |field| HistoryError::InvalidField { row, field };
-        let date =
-            NaiveDate::parse_from_str(&record[0], "%Y-%m-%d").map_err(|_| invalid("date"))?;
-        let number = |column: usize, field| {
-            Decimal::from_str_exact(&record[column])
-                .ok()
-                .filter(|value| *value >= Decimal::ZERO)
-                .ok_or_else(|| invalid(field))
-        };
-        let candle = DailyCandle {
-            date,
-            open: number(1, "open")?,
-            high: number(2, "high")?,
-            low: number(3, "low")?,
-            close: number(4, "close")?,
-            adjusted_close: None,
-            volume: number(5, "volume")?,
-        };
-        if candle.high < candle.low
-            || candle.open < candle.low
-            || candle.open > candle.high
-            || candle.close < candle.low
-            || candle.close > candle.high
-        {
-            return Err(HistoryError::InvalidRange(row));
-        }
-        candles.push(candle);
-    }
-    if candles.is_empty() {
-        return Err(HistoryError::EmptyHistory);
-    }
-    candles.sort_unstable_by_key(|candle| candle.date);
-    for pair in candles.windows(2) {
-        if pair[0].date == pair[1].date {
-            return Err(HistoryError::DuplicateDate(pair[0].date));
-        }
-    }
-    Ok(candles)
+    crate::yahoo::parse_history(raw, false)
 }

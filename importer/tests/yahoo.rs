@@ -1,5 +1,5 @@
 use chrono::{TimeZone, Utc};
-use rankr_import::{
+use rankr::{
     history::{HistoryError, YahooSymbolMap, parse_history_document},
     model::{RawDocument, SkippedCandleReason, Source},
 };
@@ -40,7 +40,7 @@ fn preserves_daily_ohlcv_and_adjusted_close_without_recomputing_dividends() {
         "112.234567890123"
     );
     assert_eq!(candle.volume.to_string(), "475373");
-    let saved: rankr_import::model::DailyPriceHistory =
+    let saved: rankr::model::DailyPriceHistory =
         serde_json::from_str(&serde_json::to_string(&history).unwrap()).unwrap();
     assert_eq!(saved, history);
 }

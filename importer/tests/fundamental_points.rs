@@ -1,4 +1,4 @@
-use rankr_import::{fundamental_points::score, fundamental_ratios::FundamentalRatios};
+use rankr::{fundamental_points::score, fundamental_ratios::FundamentalRatios};
 use rust_decimal::Decimal;
 
 fn value(text: &str) -> Option<Decimal> {

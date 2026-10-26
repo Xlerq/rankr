@@ -37,29 +37,6 @@ pub struct FundamentalTable {
     pub skipped: Vec<SkippedFile>,
 }
 
-#[derive(Debug, Default)]
-pub struct RatioNullCounts {
-    pub net_margin: usize,
-    pub operating_margin: usize,
-    pub equity_ratio: usize,
-    pub debt_to_equity: usize,
-    pub ocf_to_net_income: usize,
-}
-
-impl FundamentalTable {
-    pub fn null_counts(&self) -> RatioNullCounts {
-        let mut counts = RatioNullCounts::default();
-        for row in &self.rows {
-            counts.net_margin += usize::from(row.ratios.net_margin.is_none());
-            counts.operating_margin += usize::from(row.ratios.operating_margin.is_none());
-            counts.equity_ratio += usize::from(row.ratios.equity_ratio.is_none());
-            counts.debt_to_equity += usize::from(row.ratios.debt_to_equity.is_none());
-            counts.ocf_to_net_income += usize::from(row.ratios.ocf_to_net_income.is_none());
-        }
-        counts
-    }
-}
-
 #[derive(Deserialize)]
 struct Company {
     code: String,

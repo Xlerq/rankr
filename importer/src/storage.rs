@@ -1,8 +1,8 @@
-//! Local JSON archive. HTTP and HTML parsing do not depend on this module.
+//! Local JSON snapshots and atomic replacement of the growing price history.
 
 use std::{
-    fs::{self, File},
-    io::{self, BufReader, Write},
+    fs,
+    io::{self, Write},
     path::{Path, PathBuf},
 };
 
@@ -10,9 +10,7 @@ use serde::Serialize;
 use tempfile::NamedTempFile;
 use thiserror::Error;
 
-use crate::model::{
-    DailyPriceHistory, FundamentalSnapshot, PriceSnapshot, RawDocument, ShortsSnapshot, Source,
-};
+use crate::model::{DailyPriceHistory, FundamentalSnapshot, RawDocument, ShortsSnapshot, Source};
 
 #[derive(Debug, Error)]
 pub enum StorageError {
@@ -35,12 +33,6 @@ impl ArchivedFetch {
     /// A failed parse leaves raw.json available for offline recovery.
     pub fn save_snapshot(&self, snapshot: &FundamentalSnapshot) -> Result<PathBuf, StorageError> {
         let path = self.directory.join("fundamentals.json");
-        write_json(&path, snapshot)?;
-        Ok(path)
-    }
-
-    pub fn save_price(&self, snapshot: &PriceSnapshot) -> Result<PathBuf, StorageError> {
-        let path = self.directory.join("price.json");
         write_json(&path, snapshot)?;
         Ok(path)
     }
@@ -90,10 +82,7 @@ fn archive_name(raw: &RawDocument) -> String {
     let date = raw.fetched_at.format("%Y-%m-%d");
     let kind = match raw.source {
         Source::GpwNotoria => "fundamentals",
-        Source::GpwBenchmark => "wig20",
-        Source::GpwPrices => "price",
-        Source::TradingViewIdc => "prices",
-        Source::YahooFinance | Source::Stooq => "history",
+        Source::YahooFinance => "history",
         Source::KnfShorts => "shorts",
     };
     match &raw.instrument {
@@ -127,19 +116,27 @@ fn create_archive_directory(root: &Path, name: &str) -> io::Result<PathBuf> {
     }
 }
 
-pub fn read_raw(path: &Path) -> Result<RawDocument, StorageError> {
-    Ok(serde_json::from_reader(BufReader::new(File::open(path)?))?)
-}
-
 /// Publish a complete file and refuse to overwrite an existing observation.
 fn write_json(path: &Path, value: &impl Serialize) -> Result<(), StorageError> {
+    json_file(path, value)?
+        .persist_noclobber(path)
+        .map_err(|error| error.error)?;
+    Ok(())
+}
+
+/// Replace only the growing history; a failed write leaves the old file intact.
+pub fn replace_history(path: &Path, history: &DailyPriceHistory) -> Result<(), StorageError> {
+    json_file(path, history)?
+        .persist(path)
+        .map_err(|error| error.error)?;
+    Ok(())
+}
+
+fn json_file(path: &Path, value: &impl Serialize) -> Result<NamedTempFile, StorageError> {
     let parent = path.parent().unwrap_or_else(|| Path::new("."));
     let mut temporary = NamedTempFile::new_in(parent)?;
     serde_json::to_writer_pretty(&mut temporary, value)?;
     temporary.write_all(b"\n")?;
     temporary.as_file().sync_all()?;
-    temporary
-        .persist_noclobber(path)
-        .map_err(|error| error.error)?;
-    Ok(())
+    Ok(temporary)
 }

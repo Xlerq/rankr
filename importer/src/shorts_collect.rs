@@ -1,12 +1,8 @@
 //! KNF collection workflow: archive every response before parsing any of its rows.
 
-use std::{
-    collections::HashSet,
-    path::{Path, PathBuf},
-};
+use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result, ensure};
-use serde::Deserialize;
 
 use crate::{
     model::{Instrument, RawDocument, ShortsSnapshot},
@@ -15,89 +11,12 @@ use crate::{
     storage::archive_raw,
 };
 
-pub async fn collect(output: &Path) -> Result<()> {
-    let instruments = instruments()?;
-    let client = KnfClient::new()?;
-    collect_with(&instruments, output, async |instrument, offset| {
-        Ok(client.fetch_shorts(instrument, offset).await?)
-    })
-    .await
-}
-
 pub async fn collect_one(client: &KnfClient, instrument: &Instrument, output: &Path) -> Result<()> {
     let path = collect_company(instrument, output, &mut async |instrument, offset| {
         Ok(client.fetch_shorts(instrument, offset).await?)
     })
     .await?;
     eprintln!("{}: {}", instrument.code, path.display());
-    Ok(())
-}
-
-fn instruments() -> Result<Vec<Instrument>> {
-    #[derive(Deserialize)]
-    struct Mapping {
-        gpw_code: String,
-        isin: String,
-        name: String,
-    }
-
-    let csv = include_str!("../../data/raw/wig20_symbols.csv");
-    let mut reader = csv::ReaderBuilder::new()
-        .trim(csv::Trim::All)
-        .from_reader(csv.as_bytes());
-    let mut instruments = Vec::new();
-    let mut codes = HashSet::new();
-    let mut isins = HashSet::new();
-    for row in reader.deserialize::<Mapping>() {
-        let row = row.context("reading WIG20 ISIN map")?;
-        ensure!(
-            !row.gpw_code.is_empty() && !row.isin.is_empty(),
-            "missing code or ISIN in WIG20 map"
-        );
-        ensure!(
-            codes.insert(row.gpw_code.clone()) && isins.insert(row.isin.clone()),
-            "duplicate code or ISIN in WIG20 map: {}",
-            row.gpw_code
-        );
-        instruments.push(Instrument {
-            code: row.gpw_code,
-            isin: row.isin,
-            name: row.name,
-        });
-    }
-    ensure!(!instruments.is_empty(), "empty WIG20 ISIN map");
-    Ok(instruments)
-}
-
-// The fetch function also lets fixture tests exercise collection without HTTP.
-async fn collect_with(
-    instruments: &[Instrument],
-    output: &Path,
-    mut fetch: impl AsyncFnMut(&Instrument, usize) -> Result<RawDocument>,
-) -> Result<()> {
-    let mut collected = 0;
-    let mut failures = 0;
-    for instrument in instruments {
-        match collect_company(instrument, output, &mut fetch).await {
-            Ok(path) => {
-                collected += 1;
-                eprintln!("{}: {}", instrument.code, path.display());
-            }
-            Err(error) => {
-                failures += 1;
-                eprintln!("{}: {error:#}", instrument.code);
-            }
-        }
-    }
-    eprintln!(
-        "Collected {collected}/{} KNF snapshots; output: {}",
-        instruments.len(),
-        output.display()
-    );
-    ensure!(
-        failures == 0,
-        "{failures} companies failed; successful observations were preserved"
-    );
     Ok(())
 }
 
@@ -160,10 +79,14 @@ mod tests {
     use serde_json::Value;
 
     use super::*;
-    use crate::{model::Source, storage::read_raw};
+    use crate::model::Source;
 
     const POSITIONS: &str = include_str!("../tests/fixtures/knf_shorts.json");
     const EMPTY: &str = include_str!("../tests/fixtures/knf_empty.json");
+
+    fn read_raw(path: &Path) -> serde_json::Result<RawDocument> {
+        serde_json::from_slice(&fs::read(path).unwrap())
+    }
 
     fn raw(instrument: &Instrument, body: &str) -> RawDocument {
         RawDocument {
@@ -177,10 +100,9 @@ mod tests {
     }
 
     fn budimex() -> Instrument {
-        instruments()
+        crate::history::YahooSymbolMap::bundled()
             .unwrap()
-            .into_iter()
-            .find(|company| company.code == "BUDIMEX")
+            .instrument("BUDIMEX")
             .unwrap()
     }
 
@@ -193,85 +115,6 @@ mod tests {
         let records = json["records"].as_array().unwrap();
         json["records"] = Value::Array(records[offset..offset + 2].to_vec());
         json.to_string()
-    }
-
-    #[tokio::test]
-    async fn collects_every_mapped_isin_and_archives_empty_observations() {
-        let root = tempfile::tempdir().unwrap();
-        let companies = instruments().unwrap();
-        assert_eq!(companies.len(), 20);
-        let mut requested = Vec::new();
-        collect_with(&companies, root.path(), async |company, offset| {
-            assert_eq!(offset, 0);
-            requested.push(company.isin.clone());
-            Ok(raw(company, EMPTY))
-        })
-        .await
-        .unwrap();
-
-        assert_eq!(
-            requested,
-            companies
-                .iter()
-                .map(|company| company.isin.clone())
-                .collect::<Vec<_>>()
-        );
-        assert_eq!(fs::read_dir(root.path()).unwrap().count(), 20);
-        for company in &companies {
-            let directory = root
-                .path()
-                .join(format!("2026-10-21_{}_shorts", company.code));
-            assert_eq!(
-                read_raw(&directory.join("raw.json")).unwrap(),
-                raw(company, EMPTY)
-            );
-            let snapshot = snapshot(&directory);
-            assert_eq!(snapshot.code, company.code);
-            assert_eq!(snapshot.isin, company.isin);
-            assert_eq!(snapshot.fetched_at, raw(company, EMPTY).fetched_at);
-            assert!(snapshot.positions.is_empty());
-        }
-    }
-
-    #[tokio::test]
-    async fn an_http_failure_keeps_earlier_successes_and_continues_with_later_companies() {
-        let root = tempfile::tempdir().unwrap();
-        let companies = instruments().unwrap();
-        let companies = &companies[..3];
-        let result = collect_with(companies, root.path(), async |company, _| {
-            let mut response = raw(company, EMPTY);
-            if company.code == companies[1].code {
-                response.http_status = 503;
-                response.body = "Service unavailable".into();
-            }
-            Ok(response)
-        })
-        .await;
-        assert!(
-            result
-                .unwrap_err()
-                .to_string()
-                .contains("1 companies failed")
-        );
-
-        for (index, company) in companies.iter().enumerate() {
-            let directory = root
-                .path()
-                .join(format!("2026-10-21_{}_shorts", company.code));
-            let saved = read_raw(&directory.join("raw.json")).unwrap();
-            if index == 1 {
-                assert_eq!(saved.http_status, 503);
-                assert_eq!(saved.body, "Service unavailable");
-                assert!(
-                    fs::read_to_string(directory.join("error.json"))
-                        .unwrap()
-                        .contains("HTTP 503")
-                );
-                assert!(!directory.join("shorts.json").exists());
-            } else {
-                assert_eq!(snapshot(&directory).code, company.code);
-            }
-        }
     }
 
     #[tokio::test]

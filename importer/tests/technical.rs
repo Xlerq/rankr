@@ -1,5 +1,5 @@
 use chrono::{Datelike, NaiveDate};
-use rankr_import::technical::{CloseCandle, TechnicalError, TechnicalHistory, score};
+use rankr::technical::{CloseCandle, TechnicalError, TechnicalHistory, score};
 use rust_decimal::Decimal;
 
 const HISTORY: &str = include_str!("fixtures/technical_history.json");

@@ -1,8 +1,4 @@
-use std::{
-    fs,
-    path::Path,
-    process::{Command, Output},
-};
+use std::{fs, path::Path};
 
 use serde_json::{Value, json};
 
@@ -69,34 +65,19 @@ fn write_company(root: &Path, code: &str) {
     );
 }
 
-fn run(root: &Path) -> Output {
-    Command::new(env!("CARGO_BIN_EXE_rankr-import"))
-        .args(["rank", "--as-of", AS_OF])
-        .arg(root)
-        .env("HTTP_PROXY", "http://127.0.0.1:1")
-        .env("HTTPS_PROXY", "http://127.0.0.1:1")
-        .env("ALL_PROXY", "http://127.0.0.1:1")
-        .output()
-        .unwrap()
-}
-
-fn rows(output: &Output) -> Vec<Value> {
-    assert!(
-        output.status.success(),
-        "{}",
-        String::from_utf8_lossy(&output.stderr)
-    );
-    assert!(output.stdout.starts_with(b"[\n"));
-    serde_json::from_slice(&output.stdout).unwrap()
+fn rank(root: &Path) -> Vec<Value> {
+    let date = chrono::NaiveDate::parse_from_str(AS_OF, "%Y-%m-%d").unwrap();
+    let ranking = rankr::ranking::rank_directory(root, date).unwrap();
+    serde_json::from_value(serde_json::to_value(ranking.rows).unwrap()).unwrap()
 }
 
 #[test]
-fn sums_two_plus_one_plus_zero_as_three_and_emits_only_the_six_requested_fields() {
+fn sums_two_plus_one_plus_zero_as_three() {
     let directory = tempfile::tempdir().unwrap();
     write_company(directory.path(), "KGHM");
-    let output = run(directory.path());
+    let output = rank(directory.path());
     assert_eq!(
-        rows(&output),
+        output,
         [json!({
             "code": "KGHM",
             "gics_sector": "Materials",
@@ -106,11 +87,6 @@ fn sums_two_plus_one_plus_zero_as_three_and_emits_only_the_six_requested_fields(
             "final_score": 3
         })]
     );
-    assert!(
-        String::from_utf8_lossy(&output.stderr)
-            .contains("Ranked 1 companies; 0 with null final_score")
-    );
-    assert!(!directory.path().join("data").exists());
 }
 
 #[test]
@@ -147,8 +123,7 @@ fn a_missing_family_yields_null_instead_of_a_partial_sum() {
             }
             _ => unreachable!(),
         }
-        let output = run(root);
-        let result = rows(&output);
+        let result = rank(root);
         assert_eq!(result.len(), 1);
         assert!(result[0][missing].is_null(), "{missing}");
         assert!(result[0]["final_score"].is_null(), "{missing}");
@@ -161,10 +136,6 @@ fn a_missing_family_yields_null_instead_of_a_partial_sum() {
                 assert_eq!(result[0][field], expected, "{missing}: {field}");
             }
         }
-        assert!(
-            String::from_utf8_lossy(&output.stderr)
-                .contains("Ranked 1 companies; 1 with null final_score")
-        );
     }
 }
 
@@ -184,8 +155,7 @@ fn sorts_descending_then_by_code_with_null_after_negative_scores() {
     let mut input = history("PGE");
     input["candles"][1]["close"] = json!(97);
     write_json(root, "PGE/history.json", &input);
-    let output = run(root);
-    let result = rows(&output);
+    let result = rank(root);
     let codes: Vec<_> = result
         .iter()
         .map(|row| row["code"].as_str().unwrap())
@@ -193,8 +163,4 @@ fn sorts_descending_then_by_code_with_null_after_negative_scores() {
     assert_eq!(codes, ["KETY", "KGHM", "PGE", "ALLEGRO"]);
     assert_eq!(result[2]["final_score"], -3);
     assert!(result[3]["final_score"].is_null());
-    assert!(
-        String::from_utf8_lossy(&output.stderr)
-            .contains("Ranked 4 companies; 1 with null final_score")
-    );
 }

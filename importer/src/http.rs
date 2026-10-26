@@ -17,7 +17,7 @@ pub(crate) fn client() -> Result<Client, reqwest::Error> {
         header::HeaderValue::from_static("pl,en;q=0.8"),
     );
     Client::builder()
-        .user_agent(concat!("rankr-import/", env!("CARGO_PKG_VERSION")))
+        .user_agent(concat!("rankr/", env!("CARGO_PKG_VERSION")))
         .default_headers(headers)
         .https_only(true)
         .connect_timeout(Duration::from_secs(10))

@@ -62,12 +62,14 @@ struct TradingPeriod {
 
 #[derive(Deserialize)]
 struct Indicators {
+    #[serde(default)]
     quote: Vec<Quotes>,
     #[serde(default)]
     adjclose: Vec<AdjustedClose>,
 }
 
-#[derive(Deserialize)]
+#[derive(Default, Deserialize)]
+#[serde(default)]
 struct Quotes {
     open: Vec<Option<Number>>,
     high: Vec<Option<Number>>,
@@ -85,7 +87,10 @@ fn invalid(reason: impl Into<String>) -> HistoryError {
     HistoryError::Yahoo(reason.into())
 }
 
-pub(crate) fn parse_history(raw: &RawDocument) -> Result<DailyPriceHistory, HistoryError> {
+pub(crate) fn parse_history(
+    raw: &RawDocument,
+    allow_empty: bool,
+) -> Result<DailyPriceHistory, HistoryError> {
     if !(200..300).contains(&raw.http_status) {
         return Err(HistoryError::HttpStatus(raw.http_status));
     }
@@ -132,10 +137,24 @@ pub(crate) fn parse_history(raw: &RawDocument) -> Result<DailyPriceHistory, Hist
             "chart metadata does not match a daily GPW equity in PLN",
         ));
     }
-    let timestamps = series
-        .timestamp
-        .as_ref()
-        .ok_or_else(|| invalid("missing daily timestamps"))?;
+    let mut history = DailyPriceHistory {
+        instrument: instrument.clone(),
+        symbol: symbol.into(),
+        currency: meta.currency.clone(),
+        source: raw.source,
+        source_url: raw.url.clone(),
+        fetched_at: raw.fetched_at,
+        candles: Vec::new(),
+        skipped_candles: Vec::new(),
+    };
+    let timestamps = series.timestamp.as_deref().unwrap_or_default();
+    if timestamps.is_empty() {
+        return if allow_empty {
+            Ok(history)
+        } else {
+            Err(invalid("missing daily timestamps"))
+        };
+    }
     let [quote] = series.indicators.quote.as_slice() else {
         return Err(invalid("expected exactly one OHLCV series"));
     };
@@ -223,7 +242,7 @@ pub(crate) fn parse_history(raw: &RawDocument) -> Result<DailyPriceHistory, Hist
             volume,
         });
     }
-    if candles.is_empty() {
+    if candles.is_empty() && !allow_empty {
         return Err(invalid(format!(
             "no complete, finished daily candles ({} omitted rows)",
             skipped_candles.len()
@@ -231,16 +250,9 @@ pub(crate) fn parse_history(raw: &RawDocument) -> Result<DailyPriceHistory, Hist
     }
     candles.sort_unstable_by_key(|candle| candle.date);
     skipped_candles.sort_unstable_by_key(|candle| candle.date);
-    Ok(DailyPriceHistory {
-        instrument: instrument.clone(),
-        symbol: symbol.into(),
-        currency: meta.currency.clone(),
-        source: raw.source,
-        source_url: raw.url.clone(),
-        fetched_at: raw.fetched_at,
-        candles,
-        skipped_candles,
-    })
+    history.candles = candles;
+    history.skipped_candles = skipped_candles;
+    Ok(history)
 }
 
 fn session_finished(meta: &Metadata, fetched_at: DateTime<Utc>) -> bool {

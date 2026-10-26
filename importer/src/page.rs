@@ -3,20 +3,8 @@
 use std::{fmt::Display, path::PathBuf};
 
 use crate::ranking::{RankingRow, rank_directory};
-use axum::{
-    Router,
-    extract::{Query, State},
-    http::StatusCode,
-    response::Html,
-    routing::get,
-};
+use axum::{Router, extract::State, http::StatusCode, response::Html, routing::get};
 use chrono::{NaiveDate, Utc};
-use serde::Deserialize;
-
-#[derive(Deserialize)]
-struct RankingQuery {
-    as_of: Option<NaiveDate>,
-}
 
 pub async fn serve(directory: PathBuf) -> std::io::Result<()> {
     let app = Router::new().route("/", get(index)).with_state(directory);
@@ -28,9 +16,8 @@ pub async fn serve(directory: PathBuf) -> std::io::Result<()> {
 
 async fn index(
     State(directory): State<PathBuf>,
-    Query(query): Query<RankingQuery>,
 ) -> Result<Html<String>, (StatusCode, &'static str)> {
-    let as_of = query.as_of.unwrap_or_else(|| Utc::now().date_naive());
+    let as_of = Utc::now().date_naive();
     // Reading and scoring JSON archives is synchronous work.
     let ranking = tokio::task::spawn_blocking(move || rank_directory(&directory, as_of))
         .await

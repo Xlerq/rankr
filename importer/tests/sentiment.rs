@@ -1,4 +1,4 @@
-use rankr_import::{model::ShortsSnapshot, sentiment::score};
+use rankr::{model::ShortsSnapshot, sentiment::score};
 use rust_decimal::Decimal;
 
 fn snapshots() -> (ShortsSnapshot, ShortsSnapshot) {
