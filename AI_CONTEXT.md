@@ -172,16 +172,16 @@ weights do not imply equal ranges or equal influence of the families.
   thresholds. The 0.1% reporting threshold to KNF is not the public threshold.
   Smaller positions, long positions and the opinions of all investors are not
   covered. No entry does not mean no shorts, a closed position, or crowd optimism.
-  A missing entry gives no sentiment signal (`null`), not +1 or an invented zero.
-- Scoring proposal for later agreement, not implemented or calibrated: compare
-  two complete snapshots in fetch-time order for the same issuer and the same
-  nonempty set of disclosed holders, with each position still at least 0.5%.
-  An increase in their summed percentage gives −1, a decrease +1, and no change
-  0. A missing comparison, changed holder set, disappearance below the disclosure
-  threshold or incomplete response gives null. A positive point means only a
+  Points depend on comparing snapshots, not on interpreting a single missing entry.
+- Scoring rule (a convention, not calibration): compare the summed position
+  percentages of two snapshots with the same ISIN and a strictly newer `fetched_at`.
+  An increase gives −1, a decrease +1, and no change 0, including when the holder
+  list changes. There is no 0.5% filter in scoring and no minimum time gap.
+  One empty list contributes a total of zero; two empty lists or a missing pair
+  give `null`. A positive point means only a
   decline in disclosed short exposure, not measured crowd optimism. Retain both
   source dates and fetch time; a later disclosure must not be backdated in tests
-  of predictive performance. No sentiment points or combined ranking are built now.
+  of predictive performance.
 - Rejected: votes about WIG20 as an index, generic forex-style retail positioning
   without an identifiable GPW company, and model-based sentiment from news text.
 
