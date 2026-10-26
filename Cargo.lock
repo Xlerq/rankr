@@ -1420,10 +1420,7 @@ dependencies = [
 name = "rankr-backend"
 version = "0.1.0"
 dependencies = [
- "axum",
- "chrono",
  "rankr-import",
- "serde",
  "tokio",
 ]
 
@@ -1432,6 +1429,7 @@ name = "rankr-import"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "axum",
  "chrono",
  "chrono-tz",
  "clap",

@@ -59,7 +59,7 @@ struct SymbolMapping {
     yahoo_symbol: String,
 }
 
-/// Bundled identifiers survive `cargo install`; constituent selection remains live.
+/// Identifiers from the WIG20 map are bundled so they survive `cargo install`.
 pub struct YahooSymbolMap {
     entries: Vec<SymbolMapping>,
 }
@@ -110,6 +110,17 @@ impl YahooSymbolMap {
             isin: entry.isin.clone(),
             name: entry.name.clone(),
         })
+    }
+
+    pub fn instruments(&self) -> Vec<Instrument> {
+        self.entries
+            .iter()
+            .map(|entry| Instrument {
+                code: entry.gpw_code.clone(),
+                isin: entry.isin.clone(),
+                name: entry.name.clone(),
+            })
+            .collect()
     }
 
     pub fn symbol_for(&self, instrument: &Instrument) -> Result<&str, HistoryError> {

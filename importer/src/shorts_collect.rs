@@ -24,6 +24,15 @@ pub async fn collect(output: &Path) -> Result<()> {
     .await
 }
 
+pub async fn collect_one(client: &KnfClient, instrument: &Instrument, output: &Path) -> Result<()> {
+    let path = collect_company(instrument, output, &mut async |instrument, offset| {
+        Ok(client.fetch_shorts(instrument, offset).await?)
+    })
+    .await?;
+    eprintln!("{}: {}", instrument.code, path.display());
+    Ok(())
+}
+
 fn instruments() -> Result<Vec<Instrument>> {
     #[derive(Deserialize)]
     struct Mapping {

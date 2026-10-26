@@ -6,8 +6,5 @@ license.workspace = true
 description = "Local HTML page for the three-family rankr ranking"
 
 [dependencies]
-axum = { version = "0.8", default-features = false, features = ["http1", "query", "tokio"] }
-chrono = { version = "0.4", features = ["serde"] }
 rankr-import = { path = "../importer" }
-serde = { version = "1", features = ["derive"] }
-tokio = { version = "1", features = ["macros", "rt-multi-thread", "net"] }
+tokio = { version = "1", features = ["macros", "rt-multi-thread"] }

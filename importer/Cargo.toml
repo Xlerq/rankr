@@ -4,9 +4,11 @@ version = "0.1.0"
 edition.workspace = true
 license.workspace = true
 description = "GPW fundamentals, Yahoo daily company prices and history collector"
+default-run = "rankr-import"
 
 [dependencies]
 anyhow = "1"
+axum = { version = "0.8", default-features = false, features = ["http1", "query", "tokio"] }
 chrono = { version = "0.4", features = ["serde"] }
 chrono-tz = "0.10"
 clap = { version = "4", features = ["derive"] }
@@ -19,4 +21,4 @@ serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1", features = ["arbitrary_precision"] }
 tempfile = "3"
 thiserror = "2"
-tokio = { version = "1", features = ["macros", "rt-multi-thread", "time"] }
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "time", "net"] }

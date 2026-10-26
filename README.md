@@ -54,6 +54,8 @@ Install once from the repository root:
 cargo install --path importer --locked
 ```
 
+This installs both `rankr` (refresh data and start the local page) and `rankr-import`.
+
 Collect the current WIG20, or one company:
 
 ```bash
@@ -362,17 +364,29 @@ last and company code A–Z as the tie-breaker.
 
 ## Local ranking page
 
-Run from the repository root:
+After installing, run from the repository root or another working directory:
 
 ```bash
-cargo run -p rankr-backend
+rankr
 ```
 
-Open `http://127.0.0.1:3000/?as_of=YYYY-MM-DD`, replacing `YYYY-MM-DD` with the
-ranking date. Without `as_of`, the page uses today's UTC date. The data directory
-comes from the first argument (`cargo run -p rankr-backend -- /path/to/archive`),
-then `RANKR_DATA`, and defaults to `data/collected`. Empty cells mean `null`;
-an actual score of zero is displayed as `0`.
+It refreshes `data/collected` relative to the working directory, using the bundled
+`data/raw/wig20_symbols.csv` map. Each company and file kind is checked separately,
+using the UTC date prefix `YYYY-MM-DD` of its observation directories:
+
+- Fundamentals: skip a company only when it already has today's `fundamentals.json`.
+- Shorts: skip a company only when it already has today's `shorts.json`.
+- Price history: skip a company when its latest `history.json` is from today or
+  up to 7 UTC calendar days ago, inclusive; 8 days old or missing means download.
+
+An error for one company is printed to stderr; the other downloads and page still
+run. Only after all downloads finish does Axum start at
+`http://127.0.0.1:3000/`. The page calculates the existing ranking for today's UTC
+date. Empty cells mean `null`; an actual score of zero is displayed as `0`.
+
+Sentiment appears only after two shorts downloads with different timestamps for
+the same ISIN (two empty position lists still give `null`). The existing
+`rankr-import` commands remain available for manual collection and offline work.
 
 ## Planned Stack
 
