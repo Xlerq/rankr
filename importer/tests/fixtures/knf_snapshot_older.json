@@ -1,0 +1,19 @@
+{
+  "code": "BUDIMEX",
+  "isin": "PLBUDMX00013",
+  "fetched_at": "2026-09-01T23:30:00Z",
+  "positions": [
+    {
+      "holder": "Alpha Capital",
+      "net_short_position_percent": 0.5,
+      "position_date": "2026-08-27",
+      "modify_date": "2026-08-28"
+    },
+    {
+      "holder": "Beta & Partners",
+      "net_short_position_percent": 0.7,
+      "position_date": "2026-08-26",
+      "modify_date": "2026-08-27"
+    }
+  ]
+}
