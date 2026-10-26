@@ -1,5 +1,5 @@
 [workspace]
-members = ["importer"]
+members = ["importer", "backend"]
 resolver = "3"
 
 [workspace.package]

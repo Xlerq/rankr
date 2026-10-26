@@ -360,6 +360,20 @@ works offline; `--as-of` limits technical candles, while fundamentals and KNF us
 the latest archived snapshots. Rows sort by final score descending, with `null`
 last and company code A–Z as the tie-breaker.
 
+## Local ranking page
+
+Run from the repository root:
+
+```bash
+cargo run -p rankr-backend
+```
+
+Open `http://127.0.0.1:3000/?as_of=YYYY-MM-DD`, replacing `YYYY-MM-DD` with the
+ranking date. Without `as_of`, the page uses today's UTC date. The data directory
+comes from the first argument (`cargo run -p rankr-backend -- /path/to/archive`),
+then `RANKR_DATA`, and defaults to `data/collected`. Empty cells mean `null`;
+an actual score of zero is displayed as `0`.
+
 ## Planned Stack
 
 - Frontend: Rust, Leptos, WebAssembly
@@ -376,8 +390,8 @@ last and company code A–Z as the tie-breaker.
 - brokerage integration
 - machine learning
 
-The fundamentals, current-quote and daily-history imports are implemented; the
-application backend and frontend are planned.
+The imports, offline scoring and local Axum ranking page are implemented. The
+Leptos frontend and database integration are planned.
 
 ## Thesis
 
