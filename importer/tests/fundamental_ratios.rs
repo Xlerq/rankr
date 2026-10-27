@@ -97,6 +97,16 @@ fn zero_denominators_yield_null_in_all_five_ratios() {
 }
 
 #[test]
+fn ocf_to_net_income_requires_positive_net_income() {
+    for (income, expected) in [("-100", None), ("0", None), ("100", Some(decimal("-3")))] {
+        let mut input = fixture();
+        input.net_income_parent = Some(decimal(income));
+        input.operating_cash_flow = Some(decimal("-300"));
+        assert_eq!(calculate(&input).unwrap().ocf_to_net_income, expected);
+    }
+}
+
+#[test]
 fn multiplying_monetary_amounts_checks_decimal_range() {
     let mut input = fixture();
     input.assets = Some(Decimal::MAX);

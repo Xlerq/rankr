@@ -59,7 +59,10 @@ pub fn calculate(input: &FundamentalRatioInput) -> Result<FundamentalRatios, Rat
         operating_margin: divide(operating_profit, revenue)?,
         equity_ratio: divide(equity, assets)?,
         debt_to_equity: divide(liabilities, equity)?,
-        ocf_to_net_income: divide(operating_cash_flow, net_income)?,
+        ocf_to_net_income: divide(
+            operating_cash_flow,
+            net_income.filter(|income| *income > Decimal::ZERO),
+        )?,
     })
 }
 
