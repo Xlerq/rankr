@@ -208,7 +208,7 @@ fn fewer_than_200_sessions_produces_neutral_trend() {
     let mut history = fixture();
     history
         .candles
-        .retain(|candle| candle.date < date("2025-12-15"));
+        .retain(|candle| candle.date < date("2025-12-15") || candle.date == date("2026-09-18"));
     let result = score(&history.candles, date("2026-09-19")).unwrap();
     assert_eq!(result.trend_points, 0);
     assert_eq!(result.explanation.sma200, None);
@@ -224,6 +224,19 @@ fn fewer_than_200_sessions_produces_neutral_trend() {
     assert_eq!(result.explanation.trend_sessions, 199);
     assert_eq!(result.trend_points, 0);
     assert_eq!(result.explanation.sma200, None);
+}
+
+#[test]
+fn technical_score_is_missing_after_ten_days_without_a_candle() {
+    let mut history = fixture();
+    history
+        .candles
+        .retain(|candle| candle.date <= date("2026-09-18"));
+    let fresh = score(&history.candles, date("2026-09-28")).unwrap();
+    assert_eq!(fresh.technical_score, Some(1));
+    let stale = score(&history.candles, date("2026-09-29")).unwrap();
+    assert_eq!(stale.explanation.last_session, Some(date("2026-09-18")));
+    assert_eq!(stale.technical_score, None);
 }
 
 #[test]

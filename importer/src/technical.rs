@@ -9,6 +9,7 @@ use serde::{Deserialize, Deserializer, Serialize, de};
 use thiserror::Error;
 
 const SMA_SESSIONS: usize = 200;
+const MAX_CANDLE_AGE_DAYS: i64 = 10;
 
 /// Projection of history.json. Provider metadata and adjusted_close are ignored.
 #[derive(Debug, Deserialize)]
@@ -118,11 +119,16 @@ pub fn score(candles: &[CloseCandle], as_of: NaiveDate) -> Result<TechnicalScore
         d = Some(distance);
     }
 
+    let mut technical_score = seasonality_points.map(|points| points + trend_points);
+    if last.is_some_and(|candle| (as_of - candle.date).num_days() > MAX_CANDLE_AGE_DAYS) {
+        technical_score = None;
+    }
+
     Ok(TechnicalScore {
         as_of,
         seasonality_points,
         trend_points,
-        technical_score: seasonality_points.map(|points| points + trend_points),
+        technical_score,
         explanation: TechnicalExplanation {
             r,
             years,
