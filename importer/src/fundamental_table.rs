@@ -2,7 +2,7 @@
 
 use std::{
     collections::BTreeMap,
-    fs::{self, File},
+    fs::File,
     io::{self, BufReader},
     path::{Path, PathBuf},
 };
@@ -11,7 +11,10 @@ use anyhow::{Context, Result, ensure};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
-use crate::fundamental_ratios::{FundamentalRatioInput, FundamentalRatios, calculate};
+use crate::{
+    archive::{SkippedFile, find_files},
+    fundamental_ratios::{FundamentalRatioInput, FundamentalRatios, calculate},
+};
 
 #[derive(Debug, Serialize)]
 pub struct FundamentalRow {
@@ -23,12 +26,6 @@ pub struct FundamentalRow {
     #[serde(flatten)]
     pub ratios: FundamentalRatios,
     pub source_file: PathBuf,
-}
-
-#[derive(Debug)]
-pub struct SkippedFile {
-    pub source_file: PathBuf,
-    pub reason: String,
 }
 
 #[derive(Debug)]
@@ -66,9 +63,8 @@ struct SelectedSnapshot {
 /// Read archived snapshots, keeping only the latest fetched_at for each code.
 /// Empty results retain their diagnostics so the CLI can report them before failing.
 pub fn build_table(directory: &Path) -> io::Result<FundamentalTable> {
-    let mut files = Vec::new();
     let mut skipped = Vec::new();
-    find_fundamental_files(directory, &mut files, &mut skipped)?;
+    let mut files = find_files(directory, "fundamentals.json", &mut skipped)?;
     // As in technical-table, equal timestamps keep the first lexical path.
     files.sort();
 
@@ -137,45 +133,4 @@ fn read_snapshot(path: &Path) -> Result<SnapshotInput> {
         "missing company code in instrument"
     );
     Ok(input)
-}
-
-fn find_fundamental_files(
-    directory: &Path,
-    files: &mut Vec<PathBuf>,
-    skipped: &mut Vec<SkippedFile>,
-) -> io::Result<()> {
-    for entry in fs::read_dir(directory)? {
-        let entry = match entry {
-            Ok(entry) => entry,
-            Err(error) => {
-                skipped.push(SkippedFile {
-                    source_file: directory.to_path_buf(),
-                    reason: error.to_string(),
-                });
-                continue;
-            }
-        };
-        let path = entry.path();
-        let file_type = match entry.file_type() {
-            Ok(file_type) => file_type,
-            Err(error) => {
-                skipped.push(SkippedFile {
-                    source_file: path,
-                    reason: error.to_string(),
-                });
-                continue;
-            }
-        };
-        if file_type.is_dir() {
-            if let Err(error) = find_fundamental_files(&path, files, skipped) {
-                skipped.push(SkippedFile {
-                    source_file: path,
-                    reason: error.to_string(),
-                });
-            }
-        } else if file_type.is_file() && entry.file_name() == "fundamentals.json" {
-            files.push(path);
-        }
-    }
-    Ok(())
 }

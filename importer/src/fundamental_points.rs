@@ -19,21 +19,20 @@ pub struct FundamentalPoints {
 
 /// Score one company's ratios without access to other companies or external data.
 pub fn score(mut ratios: FundamentalRatios, gics_sector_code: u16) -> FundamentalPoints {
-    let equity_ratio_points;
-    if gics_sector_code == 40 {
+    let equity_ratio_points = if gics_sector_code == 40 {
         // The entire Financials sector uses only equity, including insurers and KRUK.
         ratios.net_margin = None;
         ratios.operating_margin = None;
         ratios.debt_to_equity = None;
         ratios.ocf_to_net_income = None;
-        equity_ratio_points = points(ratios.equity_ratio, Decimal::new(8, 2), Decimal::new(10, 2));
+        points(ratios.equity_ratio, Decimal::new(8, 2), Decimal::new(10, 2))
     } else {
-        equity_ratio_points = points(
+        points(
             ratios.equity_ratio,
             Decimal::new(30, 2),
             Decimal::new(50, 2),
-        );
-    }
+        )
+    };
 
     let net_margin_points = points(ratios.net_margin, Decimal::new(-2, 2), Decimal::new(2, 2));
     let operating_margin_points = points(
