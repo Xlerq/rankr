@@ -11,7 +11,6 @@ use thiserror::Error;
 const SMA_SESSIONS: usize = 200;
 const MAX_CANDLE_AGE_DAYS: i64 = 10;
 
-/// Projection of history.json. Provider metadata and adjusted_close are ignored.
 #[derive(Debug, Deserialize)]
 pub struct TechnicalHistory {
     pub candles: Vec<CloseCandle>,

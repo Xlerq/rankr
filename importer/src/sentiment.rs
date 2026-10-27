@@ -6,7 +6,6 @@ use crate::model::ShortsSnapshot;
 
 /// Compare an older and a newer observation of the same ISIN.
 /// Any positive gap between fetched_at timestamps is sufficient.
-/// Missing pairs and two empty lists return None (JSON null).
 pub fn score(older: Option<&ShortsSnapshot>, newer: Option<&ShortsSnapshot>) -> Option<i8> {
     let older = older?;
     let newer = newer?;
