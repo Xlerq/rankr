@@ -141,9 +141,9 @@ fn a_missing_family_yields_null_instead_of_a_partial_sum() {
 }
 
 #[test]
-fn sentiment_requires_a_day_gap_and_uses_latest_eligible_snapshot() {
-    let newer_at: DateTime<Utc> = "2026-10-02T17:00:00Z".parse().unwrap();
-    for (hours, expected) in [(1, None), (24, Some(-1)), (48, Some(-1))] {
+fn sentiment_uses_latest_snapshot_from_an_earlier_utc_day() {
+    let newer_at: DateTime<Utc> = "2026-10-28T07:00:00Z".parse().unwrap();
+    for (hours, expected) in [(1, None), (13, Some(-1)), (24, Some(-1)), (48, Some(-1))] {
         let directory = tempfile::tempdir().unwrap();
         let root = directory.path();
         write_company(root, "KGHM");
@@ -154,7 +154,7 @@ fn sentiment_requires_a_day_gap_and_uses_latest_eligible_snapshot() {
         older["fetched_at"] = json!(newer_at - Duration::hours(hours));
         write_json(root, "KGHM/new/shorts.json", &newer);
         write_json(root, "KGHM/old/shorts.json", &older);
-        if hours >= 24 {
+        if expected.is_some() {
             let mut recent = newer.clone();
             recent["fetched_at"] = json!(newer_at - Duration::hours(1));
             write_json(root, "KGHM/recent/shorts.json", &recent);
