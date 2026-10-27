@@ -4,7 +4,7 @@ use rankr::{
 };
 use rust_decimal::Decimal;
 
-const ELEVEN_BIT: &str = include_str!("../../data/raw/11bit_gpw_notoria_sample.html");
+const ELEVEN_BIT: &str = include_str!("fixtures/11bit_gpw_notoria_sample.html");
 const KGHM: &str = include_str!("fixtures/kghm.html");
 
 fn number(value: &str) -> Option<Decimal> {
