@@ -9,8 +9,9 @@ use anyhow::{Context, Result, ensure};
 use serde::{Deserialize, Serialize};
 
 use crate::{
+    archive::SkippedFile,
     fundamental_points::{FundamentalPoints, score},
-    fundamental_table::{self, SkippedFile},
+    fundamental_table,
 };
 
 #[derive(Debug, Serialize)]

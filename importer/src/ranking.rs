@@ -2,7 +2,7 @@
 
 use std::{
     collections::{BTreeMap, BTreeSet},
-    fs::{self, File},
+    fs::File,
     io::{self, BufReader},
     path::{Path, PathBuf},
 };
@@ -12,8 +12,10 @@ use chrono::NaiveDate;
 use serde::Serialize;
 
 use crate::{
-    fundamental_points_table, fundamental_table::SkippedFile, model::ShortsSnapshot, sentiment,
-    technical_table,
+    archive::{SkippedFile, find_files},
+    fundamental_points_table,
+    model::ShortsSnapshot,
+    sentiment, technical_table,
 };
 
 #[derive(Debug, Serialize)]
@@ -47,12 +49,7 @@ pub fn rank_directory(directory: &Path, as_of: NaiveDate) -> Result<Ranking> {
     let classifications = fundamental_points_table::gics_map()?;
 
     let mut skipped = fundamentals.skipped;
-    for file in technical.skipped {
-        skipped.push(SkippedFile {
-            source_file: file.source_file,
-            reason: file.reason,
-        });
-    }
+    skipped.extend(technical.skipped);
     let shorts = read_shorts(directory, &mut skipped)?;
     let mut latest_shorts = BTreeMap::new();
     // read_shorts orders newest first and resolves timestamp ties by lexical path.
@@ -127,8 +124,7 @@ fn read_shorts(
     directory: &Path,
     skipped: &mut Vec<SkippedFile>,
 ) -> io::Result<Vec<ArchivedShorts>> {
-    let mut files = Vec::new();
-    find_shorts_files(directory, &mut files, skipped)?;
+    let files = find_files(directory, "shorts.json", skipped)?;
     let mut snapshots = Vec::new();
     for source_file in files {
         match read_snapshot(&source_file) {
@@ -161,45 +157,4 @@ fn read_snapshot(path: &Path) -> Result<ShortsSnapshot> {
         "missing company code or ISIN in shorts snapshot"
     );
     Ok(snapshot)
-}
-
-fn find_shorts_files(
-    directory: &Path,
-    files: &mut Vec<PathBuf>,
-    skipped: &mut Vec<SkippedFile>,
-) -> io::Result<()> {
-    for entry in fs::read_dir(directory)? {
-        let entry = match entry {
-            Ok(entry) => entry,
-            Err(error) => {
-                skipped.push(SkippedFile {
-                    source_file: directory.to_path_buf(),
-                    reason: error.to_string(),
-                });
-                continue;
-            }
-        };
-        let path = entry.path();
-        let file_type = match entry.file_type() {
-            Ok(file_type) => file_type,
-            Err(error) => {
-                skipped.push(SkippedFile {
-                    source_file: path,
-                    reason: error.to_string(),
-                });
-                continue;
-            }
-        };
-        if file_type.is_dir() {
-            if let Err(error) = find_shorts_files(&path, files, skipped) {
-                skipped.push(SkippedFile {
-                    source_file: path,
-                    reason: error.to_string(),
-                });
-            }
-        } else if file_type.is_file() && entry.file_name() == "shorts.json" {
-            files.push(path);
-        }
-    }
-    Ok(())
 }

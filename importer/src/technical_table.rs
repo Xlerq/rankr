@@ -2,7 +2,7 @@
 
 use std::{
     collections::BTreeMap,
-    fs::{self, File},
+    fs::File,
     io::{self, BufReader},
     path::{Path, PathBuf},
 };
@@ -12,7 +12,10 @@ use chrono::{DateTime, NaiveDate, Utc};
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 
-use crate::technical::{CloseCandle, score};
+use crate::{
+    archive::{SkippedFile, find_files},
+    technical::{CloseCandle, score},
+};
 
 #[derive(Debug, Serialize)]
 pub struct TechnicalRow {
@@ -24,12 +27,6 @@ pub struct TechnicalRow {
     pub r: Option<Decimal>,
     pub years: usize,
     pub source_file: PathBuf,
-}
-
-#[derive(Debug)]
-pub struct SkippedFile {
-    pub source_file: PathBuf,
-    pub reason: String,
 }
 
 #[derive(Debug)]
@@ -59,9 +56,8 @@ struct SelectedHistory {
 /// Select the latest fetch per company, then score and sort the usable histories.
 /// An empty result is returned with its diagnostics for the CLI to report.
 pub fn rank_directory(directory: &Path, as_of: NaiveDate) -> io::Result<TechnicalTable> {
-    let mut files = Vec::new();
     let mut skipped = Vec::new();
-    find_history_files(directory, &mut files, &mut skipped)?;
+    let mut files = find_files(directory, "history.json", &mut skipped)?;
     // Equal fetch timestamps keep the first path in lexical order.
     files.sort();
 
@@ -134,45 +130,4 @@ fn read_history(path: &Path) -> Result<HistoryInput> {
         "missing company code in instrument"
     );
     Ok(input)
-}
-
-fn find_history_files(
-    directory: &Path,
-    files: &mut Vec<PathBuf>,
-    skipped: &mut Vec<SkippedFile>,
-) -> io::Result<()> {
-    for entry in fs::read_dir(directory)? {
-        let entry = match entry {
-            Ok(entry) => entry,
-            Err(error) => {
-                skipped.push(SkippedFile {
-                    source_file: directory.to_path_buf(),
-                    reason: error.to_string(),
-                });
-                continue;
-            }
-        };
-        let path = entry.path();
-        let file_type = match entry.file_type() {
-            Ok(file_type) => file_type,
-            Err(error) => {
-                skipped.push(SkippedFile {
-                    source_file: path,
-                    reason: error.to_string(),
-                });
-                continue;
-            }
-        };
-        if file_type.is_dir() {
-            if let Err(error) = find_history_files(&path, files, skipped) {
-                skipped.push(SkippedFile {
-                    source_file: path,
-                    reason: error.to_string(),
-                });
-            }
-        } else if file_type.is_file() && entry.file_name() == "history.json" {
-            files.push(path);
-        }
-    }
-    Ok(())
 }
