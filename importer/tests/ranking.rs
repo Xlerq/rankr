@@ -1,5 +1,6 @@
 use std::{fs, path::Path};
 
+use chrono::{DateTime, Duration, Utc};
 use serde_json::{Value, json};
 
 const AS_OF: &str = "2026-09-19";
@@ -136,6 +137,37 @@ fn a_missing_family_yields_null_instead_of_a_partial_sum() {
                 assert_eq!(result[0][field], expected, "{missing}: {field}");
             }
         }
+    }
+}
+
+#[test]
+fn sentiment_requires_a_day_gap_and_uses_latest_eligible_snapshot() {
+    let newer_at: DateTime<Utc> = "2026-10-02T17:00:00Z".parse().unwrap();
+    for (hours, expected) in [(1, None), (24, Some(-1)), (48, Some(-1))] {
+        let directory = tempfile::tempdir().unwrap();
+        let root = directory.path();
+        write_company(root, "KGHM");
+        let mut newer = shorts("KGHM", false);
+        newer["fetched_at"] = json!(newer_at);
+        newer["positions"][0]["net_short_position_percent"] = json!(0.8);
+        let mut older = shorts("KGHM", true);
+        older["fetched_at"] = json!(newer_at - Duration::hours(hours));
+        write_json(root, "KGHM/new/shorts.json", &newer);
+        write_json(root, "KGHM/old/shorts.json", &older);
+        if hours >= 24 {
+            let mut recent = newer.clone();
+            recent["fetched_at"] = json!(newer_at - Duration::hours(1));
+            write_json(root, "KGHM/recent/shorts.json", &recent);
+            older["fetched_at"] = json!(newer_at - Duration::days(3));
+            older["positions"][0]["net_short_position_percent"] = json!(5);
+            write_json(root, "KGHM/earliest/shorts.json", &older);
+        }
+        let rows = rank(root);
+        assert_eq!(rows[0]["sentiment_score"], json!(expected));
+        assert_eq!(
+            rows[0]["final_score"],
+            json!(expected.map(|points| 3 + points))
+        );
     }
 }
 

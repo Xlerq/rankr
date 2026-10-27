@@ -8,7 +8,7 @@ use std::{
 };
 
 use anyhow::{Context, Result, ensure};
-use chrono::NaiveDate;
+use chrono::{Duration, NaiveDate};
 use serde::Serialize;
 
 use crate::{
@@ -90,7 +90,9 @@ pub fn rank_directory(directory: &Path, as_of: NaiveDate) -> Result<Ranking> {
             Some(newer) => {
                 let older = shorts.iter().find(|archived| {
                     let snapshot = &archived.snapshot;
-                    snapshot.isin == newer.isin && snapshot.fetched_at < newer.fetched_at
+                    snapshot.isin == newer.isin
+                        && newer.fetched_at.signed_duration_since(snapshot.fetched_at)
+                            >= Duration::days(1)
                 });
                 sentiment::score(older.map(|archived| &archived.snapshot), Some(newer))
             }
