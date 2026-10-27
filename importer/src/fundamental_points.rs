@@ -41,12 +41,10 @@ pub fn score(mut ratios: FundamentalRatios, gics_sector_code: u16) -> Fundamenta
         Decimal::new(2, 2),
     );
     // Lower debt is positive, so reverse the direction of the common threshold rule.
-    let debt_to_equity_points = points(
-        ratios.debt_to_equity,
-        Decimal::new(50, 2),
-        Decimal::new(150, 2),
-    )
-    .map(|value| -value);
+    let debt_to_equity_points = match ratios.debt_to_equity {
+        Some(ratio) if ratio < Decimal::ZERO => Some(-1),
+        ratio => points(ratio, Decimal::new(50, 2), Decimal::new(150, 2)).map(|value| -value),
+    };
     let ocf_to_net_income_points = points(ratios.ocf_to_net_income, Decimal::ZERO, Decimal::ONE);
 
     let mut fundamental_score = None;

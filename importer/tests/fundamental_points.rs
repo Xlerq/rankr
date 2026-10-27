@@ -78,6 +78,15 @@ fn values_just_outside_the_bands_follow_each_metrics_direction() {
 }
 
 #[test]
+fn negative_debt_to_equity_scores_minus_one() {
+    let mut ratios = empty();
+    ratios.debt_to_equity = value("-0.75");
+    let result = score(ratios, 15);
+    assert_eq!(result.debt_to_equity_points, Some(-1));
+    assert_eq!(result.fundamental_score, Some(-1));
+}
+
+#[test]
 fn financials_only_scores_equity_with_inclusive_neutral_boundaries() {
     for (equity, expected) in [
         ("0.079999999", -1),
