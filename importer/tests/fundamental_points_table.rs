@@ -203,7 +203,7 @@ fn latest_snapshot_wins_and_scores_sort_descending_with_null_last() {
             ["KETY", "PGE", "KGHM", "ALIOR"]
         );
         assert_eq!(scored[0]["fundamental_score"], 3);
-        assert_eq!(scored[2]["fundamental_score"], -3);
+        assert_eq!(scored[2]["fundamental_score"], -2);
         assert_eq!(scored[2]["source_file"], json!(new));
         assert!(scored[3]["equity_ratio_points"].is_null());
         assert!(scored[3]["fundamental_score"].is_null());

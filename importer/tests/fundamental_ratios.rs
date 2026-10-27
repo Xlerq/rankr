@@ -107,3 +107,11 @@ fn multiplying_monetary_amounts_checks_decimal_range() {
     input.unit_multiplier = 1;
     assert!(calculate(&input).is_ok());
 }
+
+#[test]
+fn cash_conversion_is_not_defined_for_a_loss() {
+    let mut input = fixture();
+    input.net_income_parent = Some(decimal("-100"));
+    input.operating_cash_flow = Some(decimal("-300"));
+    assert_eq!(calculate(&input).unwrap().ocf_to_net_income, None);
+}

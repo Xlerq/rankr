@@ -358,7 +358,11 @@ fn archive_history(raw: &RawDocument, output: &Path, latest_only: bool) -> Resul
         history.candles.clear();
         history.candles.push(last);
     }
-    let path = archived.save_history(&history)?;
+    let path = if latest_only {
+        archived.save_latest_candle(&history)?
+    } else {
+        archived.save_history(&history)?
+    };
     if !history.skipped_candles.is_empty() {
         eprintln!(
             "{}: omitted {} candles; dates and reasons are recorded in skipped_candles in {}",
@@ -584,7 +588,9 @@ mod tests {
 
     #[test]
     fn company_prices_and_history_archive_the_same_daily_model() {
-        for (latest_only, count) in [(true, 1), (false, 3)] {
+        for (latest_only, count, file) in
+            [(true, 1, "latest_candle.json"), (false, 3, "history.json")]
+        {
             let directory = tempfile::tempdir().unwrap();
             let raw = yahoo_raw();
             archive_history(&raw, directory.path(), latest_only).unwrap();
@@ -596,9 +602,9 @@ mod tests {
                 .path();
             assert_eq!(read_raw(&observation.join("raw.json")).unwrap(), raw);
             let history: rankr_import::model::DailyPriceHistory =
-                serde_json::from_slice(&std::fs::read(observation.join("history.json")).unwrap())
-                    .unwrap();
+                serde_json::from_slice(&std::fs::read(observation.join(file)).unwrap()).unwrap();
             assert_eq!(history.candles.len(), count);
+            assert_eq!(observation.join("history.json").exists(), !latest_only);
             assert_eq!(history.source, Source::YahooFinance);
             assert_eq!(
                 history.candles.last().unwrap().date.to_string(),

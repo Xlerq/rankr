@@ -115,6 +115,10 @@ company, found recursively in an archive directory:
 rankr-import fundamental-table data/collected
 ```
 
+`ocf_to_net_income` is `null` unless net income is positive, because the ratio of two
+negative amounts or a loss with positive cash flow would mislead. A negative
+`debt_to_equity` means negative equity and scores −1.
+
 The pretty JSON array contains company/report metadata, `net_margin`,
 `operating_margin`, `equity_ratio`, `debt_to_equity`, `ocf_to_net_income` and
 `source_file`, sorted by company code A–Z. Monetary amounts are multiplied by
@@ -140,7 +144,7 @@ other companies in a sector or industry group.
 | --- | --- | --- | --- | --- |
 | Nonfinancial | `net_margin`, `operating_margin` | < −0.02 | −0.02 to 0.02 | > 0.02 |
 | Nonfinancial | `equity_ratio` | < 0.30 | 0.30 to 0.50 | > 0.50 |
-| Nonfinancial | `debt_to_equity` | > 1.50 | 0.50 to 1.50 | < 0.50 |
+| Nonfinancial | `debt_to_equity` | > 1.50 or negative | 0.50 to 1.50 | 0 to 0.50 |
 | Nonfinancial | `ocf_to_net_income` | < 0 | 0 to 1 | > 1 |
 | Financials (GICS 40) | `equity_ratio` | < 0.08 | 0.08 to 0.10 | > 0.10 |
 
@@ -174,6 +178,7 @@ importer/src/
   yahoo.rs    # pure Yahoo daily OHLCV JSON parsing and validation
   technical.rs # pure calendar-month seasonality + SMA200 trend scoring
   technical_table.rs # offline history selection and technical ranking
+  archive.rs  # recursive lookup of archived JSON files for the offline tables
   storage.rs  # raw and parsed JSON archive
   main.rs     # CLI and orchestration
 ```
@@ -216,8 +221,9 @@ After changing the source, run the checkout with
 `history` requests `interval=1d`, `period1=0`, and the current timestamp as `period2`.
 It avoids `range=max`, which can aggregate long histories. `prices` requests the
 last month of daily candles and archives the latest complete, finished candle.
-Both company commands write the same `history.json` structure; company `prices`
-no longer writes an intraday `price.json` snapshot.
+`history` writes `history.json`. Company `prices` writes the same structure with the
+single newest candle to `latest_candle.json`, so it never replaces a full history in the
+offline tables; it does not write an intraday `price.json` snapshot.
 
 Without CODE, GPW Benchmark supplies the current company list. The bundled
 `data/raw/wig20_symbols.csv` maps GPW code and ISIN to an explicit `yahoo_symbol`

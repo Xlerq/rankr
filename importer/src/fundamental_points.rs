@@ -19,21 +19,20 @@ pub struct FundamentalPoints {
 
 /// Score one company's ratios without access to other companies or external data.
 pub fn score(mut ratios: FundamentalRatios, gics_sector_code: u16) -> FundamentalPoints {
-    let equity_ratio_points;
-    if gics_sector_code == 40 {
+    let is_financial = gics_sector_code == 40;
+    if is_financial {
         // The entire Financials sector uses only equity, including insurers and KRUK.
         ratios.net_margin = None;
         ratios.operating_margin = None;
         ratios.debt_to_equity = None;
         ratios.ocf_to_net_income = None;
-        equity_ratio_points = points(ratios.equity_ratio, Decimal::new(8, 2), Decimal::new(10, 2));
-    } else {
-        equity_ratio_points = points(
-            ratios.equity_ratio,
-            Decimal::new(30, 2),
-            Decimal::new(50, 2),
-        );
     }
+    let (equity_low, equity_high) = if is_financial {
+        (Decimal::new(8, 2), Decimal::new(10, 2))
+    } else {
+        (Decimal::new(30, 2), Decimal::new(50, 2))
+    };
+    let equity_ratio_points = points(ratios.equity_ratio, equity_low, equity_high);
 
     let net_margin_points = points(ratios.net_margin, Decimal::new(-2, 2), Decimal::new(2, 2));
     let operating_margin_points = points(
@@ -42,12 +41,11 @@ pub fn score(mut ratios: FundamentalRatios, gics_sector_code: u16) -> Fundamenta
         Decimal::new(2, 2),
     );
     // Lower debt is positive, so reverse the direction of the common threshold rule.
-    let debt_to_equity_points = points(
-        ratios.debt_to_equity,
-        Decimal::new(50, 2),
-        Decimal::new(150, 2),
-    )
-    .map(|value| -value);
+    // A negative ratio means negative equity, which must never look like low debt.
+    let debt_to_equity_points = match ratios.debt_to_equity {
+        Some(ratio) if ratio < Decimal::ZERO => Some(-1),
+        ratio => points(ratio, Decimal::new(50, 2), Decimal::new(150, 2)).map(|value| -value),
+    };
     let ocf_to_net_income_points = points(ratios.ocf_to_net_income, Decimal::ZERO, Decimal::ONE);
 
     let mut fundamental_score = None;

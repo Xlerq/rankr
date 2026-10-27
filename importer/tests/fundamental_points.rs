@@ -133,3 +133,12 @@ fn missing_points_are_excluded_and_an_available_zero_is_a_real_score() {
     ratios.net_margin = value("0.5");
     assert_eq!(score(ratios, 40).fundamental_score, None);
 }
+
+#[test]
+fn negative_equity_scores_minus_one_instead_of_low_debt() {
+    let mut ratios = empty();
+    ratios.debt_to_equity = value("-3");
+    let result = score(ratios, 15);
+    assert_eq!(result.debt_to_equity_points, Some(-1));
+    assert_eq!(result.fundamental_score, Some(-1));
+}

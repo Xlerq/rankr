@@ -51,6 +51,14 @@ impl ArchivedFetch {
         Ok(path)
     }
 
+    /// The newest daily candle is kept apart from history.json, so a later
+    /// `prices` run cannot replace a full history in the offline tables.
+    pub fn save_latest_candle(&self, history: &DailyPriceHistory) -> Result<PathBuf, StorageError> {
+        let path = self.directory.join("latest_candle.json");
+        write_json(&path, history)?;
+        Ok(path)
+    }
+
     pub fn save_shorts(&self, snapshot: &ShortsSnapshot) -> Result<PathBuf, StorageError> {
         let path = self.directory.join("shorts.json");
         write_json(&path, snapshot)?;
