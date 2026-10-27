@@ -31,7 +31,12 @@ pub(crate) async fn fetch(
     instrument: Option<&Instrument>,
     request: impl Fn() -> RequestBuilder,
 ) -> Result<RawDocument, reqwest::Error> {
-    for attempt in 1..=MAX_ATTEMPTS {
+    let max_attempts = if source == Source::KnfShorts {
+        1
+    } else {
+        MAX_ATTEMPTS
+    };
+    for attempt in 1..=max_attempts {
         let result = async {
             let response = request().send().await?;
             let status = response.status();
@@ -43,7 +48,7 @@ pub(crate) async fn fetch(
 
         match result {
             Ok((status, _, _))
-                if attempt < MAX_ATTEMPTS
+                if attempt < max_attempts
                     && (status == StatusCode::TOO_MANY_REQUESTS || status.is_server_error()) => {}
             Ok((status, url, body)) => {
                 return Ok(RawDocument {
@@ -56,7 +61,7 @@ pub(crate) async fn fetch(
                 });
             }
             Err(error)
-                if attempt < MAX_ATTEMPTS
+                if attempt < max_attempts
                     && (error.is_timeout()
                         || error.is_connect()
                         || error.is_request()

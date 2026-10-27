@@ -55,6 +55,7 @@ pub async fn refresh(directory: &Path) -> Result<()> {
     let mut refreshed = 0;
     let mut skipped = 0;
     let mut failed = 0;
+    let mut shorts = Vec::new();
 
     for instrument in symbols.instruments() {
         for kind in KINDS {
@@ -69,7 +70,9 @@ pub async fn refresh(directory: &Path) -> Result<()> {
                 continue;
             }
 
-            eprintln!("{}: downloading {}", instrument.code, kind.filename());
+            if kind != DataKind::Shorts {
+                eprintln!("{}: downloading {}", instrument.code, kind.filename());
+            }
             let result = match kind {
                 DataKind::Fundamentals => {
                     data_collect::collect_fundamentals(&gpw, &instrument, directory).await
@@ -87,7 +90,10 @@ pub async fn refresh(directory: &Path) -> Result<()> {
                     )
                     .await
                 }
-                DataKind::Shorts => shorts_collect::collect_one(&knf, &instrument, directory).await,
+                DataKind::Shorts => {
+                    shorts.push(instrument.clone());
+                    continue;
+                }
             };
             match result {
                 Ok(()) => refreshed += 1,
@@ -97,6 +103,15 @@ pub async fn refresh(directory: &Path) -> Result<()> {
                 }
             }
         }
+    }
+    if !shorts.is_empty() {
+        eprintln!(
+            "KNF: downloading the current register for {} companies",
+            shorts.len()
+        );
+        let saved = shorts_collect::collect(&knf, &shorts, directory).await;
+        refreshed += saved;
+        failed += shorts.len() - saved;
     }
     eprintln!("Refresh finished: {refreshed} refreshed, {skipped} current, {failed} failed");
     Ok(())

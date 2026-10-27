@@ -1,6 +1,9 @@
 //! KNF collection workflow: archive every response before parsing any of its rows.
 
-use std::path::{Path, PathBuf};
+use std::{
+    collections::BTreeMap,
+    path::{Path, PathBuf},
+};
 
 use anyhow::{Context, Result, ensure};
 
@@ -11,13 +14,51 @@ use crate::{
     storage::archive_raw,
 };
 
-pub async fn collect_one(client: &KnfClient, instrument: &Instrument, output: &Path) -> Result<()> {
-    let path = collect_company(instrument, output, &mut async |instrument, offset| {
-        Ok(client.fetch_shorts(instrument, offset).await?)
+pub async fn collect(client: &KnfClient, instruments: &[Instrument], output: &Path) -> usize {
+    collect_with(instruments, output, async |offset| {
+        Ok(client.fetch_shorts(offset).await?)
     })
-    .await?;
-    eprintln!("{}: {}", instrument.code, path.display());
-    Ok(())
+    .await
+}
+
+async fn collect_with(
+    instruments: &[Instrument],
+    output: &Path,
+    mut fetch: impl AsyncFnMut(usize) -> Result<RawDocument>,
+) -> usize {
+    let mut pages: BTreeMap<usize, RawDocument> = BTreeMap::new();
+    let mut failure: Option<String> = None;
+    let mut fetch_cached = async |instrument: &Instrument, offset| {
+        if let Some(error) = &failure {
+            anyhow::bail!("{error}");
+        }
+        let mut raw = match pages.get(&offset) {
+            Some(raw) => raw.clone(),
+            None => match fetch(offset).await {
+                Ok(raw) => {
+                    pages.insert(offset, raw.clone());
+                    raw
+                }
+                Err(error) => {
+                    failure = Some(format!("{error:#}"));
+                    return Err(error);
+                }
+            },
+        };
+        raw.instrument = Some(instrument.clone());
+        Ok(raw)
+    };
+    let mut saved = 0;
+    for instrument in instruments {
+        match collect_company(instrument, output, &mut fetch_cached).await {
+            Ok(path) => {
+                saved += 1;
+                eprintln!("{}: {}", instrument.code, path.display());
+            }
+            Err(error) => eprintln!("{}: {error:#}", instrument.code),
+        }
+    }
+    saved
 }
 
 async fn collect_company(
@@ -33,12 +74,13 @@ async fn collect_company(
     let result: Result<PathBuf> = async {
         let first = parse_page(&raw)?;
         let total = first.total;
+        let mut offset = first.records_count;
         let mut positions = first.positions;
         let mut fetched_at = raw.fetched_at;
         let mut page_number = 2;
-        while positions.len() < total {
+        while offset < total {
             // Offset counts source rows, not deduplicated holders.
-            let next = fetch(instrument, positions.len()).await?;
+            let next = fetch(instrument, offset).await?;
             archived.save_raw_page(page_number, &next)?;
             let page = parse_page(&next)?;
             ensure!(
@@ -46,9 +88,10 @@ async fn collect_company(
                 "KNF total changed during pagination; retry collection"
             );
             ensure!(
-                page.positions.len() <= total - positions.len(),
+                page.records_count <= total - offset,
                 "KNF returned more rows than its total"
             );
+            offset += page.records_count;
             positions.extend(page.positions);
             fetched_at = fetched_at.max(next.fetched_at);
             page_number += 1;
@@ -115,6 +158,72 @@ mod tests {
         let records = json["records"].as_array().unwrap();
         json["records"] = Value::Array(records[offset..offset + 2].to_vec());
         json.to_string()
+    }
+
+    #[tokio::test]
+    async fn fetches_each_register_page_once_and_filters_companies_locally() {
+        let root = tempfile::tempdir().unwrap();
+        let companies = [
+            crate::history::YahooSymbolMap::bundled()
+                .unwrap()
+                .instrument("KGHM")
+                .unwrap(),
+            budimex(),
+        ];
+        let mut offsets = Vec::new();
+        let saved = collect_with(&companies, root.path(), async |offset| {
+            offsets.push(offset);
+            let mut response = raw(&companies[1], &page(offset));
+            response.instrument = None;
+            Ok(response)
+        })
+        .await;
+        assert_eq!(saved, 2);
+        assert_eq!(offsets, [0, 2]);
+        let kghm = root.path().join("2026-10-21_KGHM_shorts");
+        let budimex = root.path().join("2026-10-21_BUDIMEX_shorts");
+        assert!(snapshot(&kghm).positions.is_empty());
+        assert_eq!(snapshot(&budimex).positions.len(), 2);
+        assert_eq!(read_raw(&kghm.join("raw.json")).unwrap().body, page(0));
+        assert_eq!(
+            read_raw(&budimex.join("raw_page_2.json")).unwrap().body,
+            page(2)
+        );
+    }
+
+    #[tokio::test]
+    async fn a_shared_network_failure_is_not_repeated_and_preserves_existing_snapshots() {
+        let root = tempfile::tempdir().unwrap();
+        let company = budimex();
+        let mut previous = raw(&company, EMPTY);
+        previous.fetched_at -= chrono::Duration::days(1);
+        let archived = archive_raw(root.path(), &previous).unwrap();
+        let old_path = archived
+            .save_shorts(&ShortsSnapshot {
+                code: company.code.clone(),
+                isin: company.isin.clone(),
+                fetched_at: previous.fetched_at,
+                positions: Vec::new(),
+            })
+            .unwrap();
+        let before = fs::read(&old_path).unwrap();
+        let mut requests = 0;
+        let companies = [
+            company,
+            crate::history::YahooSymbolMap::bundled()
+                .unwrap()
+                .instrument("KGHM")
+                .unwrap(),
+        ];
+        let saved = collect_with(&companies, root.path(), async |_| {
+            requests += 1;
+            anyhow::bail!("KNF request timed out");
+        })
+        .await;
+        assert_eq!(saved, 0);
+        assert_eq!(requests, 1);
+        assert_eq!(fs::read(old_path).unwrap(), before);
+        assert_eq!(fs::read_dir(root.path()).unwrap().count(), 1);
     }
 
     #[tokio::test]

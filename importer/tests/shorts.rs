@@ -108,10 +108,14 @@ fn errors_and_incomplete_responses_do_not_become_empty_positions() {
 }
 
 #[test]
-fn rejects_wrong_issuer_missing_fields_and_invalid_values() {
+fn filters_other_issuers_and_rejects_missing_fields_and_invalid_values() {
     let fixture: Value = serde_json::from_str(include_str!("fixtures/knf_shorts.json")).unwrap();
+    let mut input = fixture.clone();
+    input["records"][0]["ISIN"] = json!("PLKGHM000017");
+    let page = parse_page(&raw(&input.to_string())).unwrap();
+    assert_eq!(page.records_count, 4);
+    assert_eq!(page.positions.len(), 3);
     for (field, value) in [
-        ("ISIN", json!("PLKGHM000017")),
         ("HOLDER_FULL_NAME", json!(" \t ")),
         ("NET_SHORT_POSITION_O", json!("-0.5")),
         ("NET_SHORT_POSITION_O", Value::Null),

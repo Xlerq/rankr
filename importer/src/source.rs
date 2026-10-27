@@ -108,31 +108,25 @@ impl KnfClient {
         })
     }
 
-    pub async fn fetch_shorts(
-        &self,
-        instrument: &Instrument,
-        offset: usize,
-    ) -> Result<RawDocument, reqwest::Error> {
-        http::fetch(Source::KnfShorts, Some(instrument), || {
-            self.request_shorts(&instrument.isin, offset)
-        })
-        .await
+    pub async fn fetch_shorts(&self, offset: usize) -> Result<RawDocument, reqwest::Error> {
+        http::fetch(Source::KnfShorts, None, || self.request_shorts(offset)).await
     }
 
-    fn request_shorts(&self, isin: &str, offset: usize) -> RequestBuilder {
+    fn request_shorts(&self, offset: usize) -> RequestBuilder {
         let request = serde_json::json!({
             "cmd": "get",
             "method": "Default",
             "language": "pl",
             "limit": 100,
             "offset": offset,
-            "search": [{"field": "ISIN", "type": "text", "operator": "contains", "value": isin}],
+            "search": [],
             "sort": [{"field": "HOLDER_FULL_NAME", "direction": "asc"}],
             "searchLogic": "AND",
             "searchValue": ""
         });
         self.client
             .post(KNF_ENDPOINT)
+            .timeout(std::time::Duration::from_secs(10))
             .form(&[("request", request.to_string())])
     }
 }
@@ -149,9 +143,9 @@ mod tests {
     };
 
     #[test]
-    fn knf_request_posts_a_form_for_the_current_register_and_requested_isin() {
+    fn knf_request_posts_a_form_for_the_complete_current_register() {
         let client = KnfClient::new().unwrap();
-        let request = client.request_shorts("PLBUDMX00013", 100).build().unwrap();
+        let request = client.request_shorts(100).build().unwrap();
         assert_eq!(request.method(), reqwest::Method::POST);
         assert_eq!(
             request.url().as_str(),
@@ -173,12 +167,7 @@ mod tests {
         assert_eq!(json["language"], "pl");
         assert_eq!(json["limit"], 100);
         assert_eq!(json["offset"], 100);
-        assert_eq!(
-            json["search"],
-            serde_json::json!([
-                {"field": "ISIN", "type": "text", "operator": "contains", "value": "PLBUDMX00013"}
-            ])
-        );
+        assert_eq!(json["search"], serde_json::json!([]));
         assert_eq!(
             json["sort"],
             serde_json::json!([
@@ -226,6 +215,20 @@ mod tests {
         assert_eq!(raw.http_status, 404);
         assert_eq!(raw.body, "missing");
         assert_eq!(raw.url, url);
+    }
+
+    #[tokio::test]
+    async fn knf_does_not_retry_an_unavailable_register() {
+        let (url, server) = serve(vec![
+            "HTTP/1.1 503 Service Unavailable\r\nContent-Length: 4\r\nConnection: close\r\n\r\nbusy",
+        ]);
+        let client = Client::builder().no_proxy().build().unwrap();
+        let raw = http::fetch(Source::KnfShorts, None, || client.get(&url))
+            .await
+            .unwrap();
+        server.join().unwrap();
+        assert_eq!(raw.http_status, 503);
+        assert_eq!(raw.body, "busy");
     }
 
     #[tokio::test]

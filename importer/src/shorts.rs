@@ -22,13 +22,12 @@ pub enum ShortsError {
     Json(#[from] serde_json::Error),
     #[error("invalid KNF response: {0}")]
     InvalidResponse(&'static str),
-    #[error("KNF returned a different ISIN: {0}")]
-    WrongIsin(String),
 }
 
 #[derive(Debug)]
 pub struct ShortsPage {
     pub total: usize,
+    pub records_count: usize,
     pub positions: Vec<ShortPosition>,
 }
 
@@ -78,11 +77,11 @@ pub fn parse_page(raw: &RawDocument) -> Result<ShortsPage, ShortsError> {
         ));
     }
 
+    let records_count = response.records.len();
     let mut positions = Vec::new();
     for record in response.records {
-        // The endpoint uses a contains filter; require an exact ISIN match here.
         if record.isin.trim() != instrument.isin {
-            return Err(ShortsError::WrongIsin(record.isin));
+            continue;
         }
         // KNF returns HTML entities such as &amp; in holder names.
         let holder = Html::parse_fragment(&record.holder)
@@ -106,6 +105,7 @@ pub fn parse_page(raw: &RawDocument) -> Result<ShortsPage, ShortsError> {
     }
     Ok(ShortsPage {
         total: response.total,
+        records_count,
         positions,
     })
 }
