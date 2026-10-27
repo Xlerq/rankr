@@ -34,10 +34,12 @@ fn unchanged_total_scores_zero() {
 }
 
 #[test]
-fn missing_pair_or_two_empty_lists_yields_null() {
+fn missing_pair_yields_null_and_two_empty_lists_score_zero() {
     let (mut older, mut newer) = snapshots();
     assert_eq!(score(Some(&older), None), None);
+    assert_eq!(score(None, Some(&newer)), None);
+    assert_eq!(score(None, None), None);
     older.positions.clear();
     newer.positions.clear();
-    assert_eq!(score(Some(&older), Some(&newer)), None);
+    assert_eq!(score(Some(&older), Some(&newer)), Some(0));
 }

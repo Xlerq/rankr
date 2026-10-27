@@ -17,10 +17,6 @@ pub fn score(older: Option<&ShortsSnapshot>, newer: Option<&ShortsSnapshot>) -> 
         return None;
     }
 
-    if older.positions.is_empty() && newer.positions.is_empty() {
-        return None;
-    }
-
     let older_total = total(older);
     let newer_total = total(newer);
     if newer_total > older_total {
