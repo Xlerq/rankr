@@ -5,7 +5,11 @@ use rust_decimal::Decimal;
 const HISTORY: &str = include_str!("fixtures/technical_history.json");
 
 fn fixture() -> TechnicalHistory {
-    serde_json::from_str(HISTORY).unwrap()
+    let mut history: TechnicalHistory = serde_json::from_str(HISTORY).unwrap();
+    for candle in &mut history.candles {
+        candle.adjusted_close = None;
+    }
+    history
 }
 
 fn date(value: &str) -> NaiveDate {
@@ -59,10 +63,12 @@ fn excludes_as_of_and_future_candles_before_validation_and_scoring() {
     history.candles.push(CloseCandle {
         date: as_of,
         close: Decimal::ZERO,
+        adjusted_close: None,
     });
     history.candles.push(CloseCandle {
         date: date("2027-09-30"),
         close: decimal("-10"),
+        adjusted_close: None,
     });
     assert_eq!(score(&history.candles, as_of).unwrap(), expected);
     assert_eq!(expected.explanation.last_session, Some(date("2026-09-18")));
@@ -119,13 +125,60 @@ fn one_completed_seasonal_month_is_enough() {
 
 #[test]
 fn january_uses_december_of_the_previous_year() {
-    let history: TechnicalHistory =
+    let mut history: TechnicalHistory =
         serde_json::from_str(include_str!("fixtures/technical_january.json")).unwrap();
+    for candle in &mut history.candles {
+        candle.adjusted_close = None;
+    }
     let result = score(&history.candles, date("2025-01-19")).unwrap();
     assert_eq!(result.explanation.r, Some(decimal("0.03")));
     assert_eq!(result.explanation.years, 1);
     assert_eq!(result.seasonality_points, Some(1));
     assert_eq!(result.trend_points, 0);
+}
+
+#[test]
+fn adjusted_close_removes_dividend_drop_from_seasonality_without_changing_trend() {
+    let mut history = fixture();
+    set_close(&mut history, "2024-09-30", "95");
+    set_close(&mut history, "2025-09-30", "190");
+    set_close(&mut history, "2026-09-17", "96");
+    set_close(&mut history, "2026-09-18", "104");
+    let raw = score(&history.candles, date("2026-09-19")).unwrap();
+    assert_eq!(raw.explanation.r, Some(decimal("-0.05")));
+    assert_eq!(raw.seasonality_points, Some(-1));
+
+    for candle in &mut history.candles {
+        candle.adjusted_close = Some(match candle.date.year() {
+            2024 => decimal("95"),
+            2025 => decimal("190"),
+            _ => Decimal::ONE,
+        });
+    }
+    let adjusted = score(&history.candles, date("2026-09-19")).unwrap();
+    assert_eq!(adjusted.explanation.r, Some(Decimal::ZERO));
+    assert_eq!(adjusted.seasonality_points, Some(0));
+    assert_eq!(adjusted.explanation.close, raw.explanation.close);
+    assert_eq!(adjusted.explanation.sma200, Some(decimal("100")));
+    assert_eq!(adjusted.explanation.d, raw.explanation.d);
+    assert_eq!(adjusted.trend_points, 1);
+}
+
+#[test]
+fn adjusted_close_decodes_exact_numbers_strings_and_missing_values() {
+    for adjusted in ["9007199254740993.01", "\"9007199254740993.01\""] {
+        let input =
+            format!("{{\"date\":\"2026-09-18\",\"close\":100,\"adjusted_close\":{adjusted}}}");
+        let candle: CloseCandle = serde_json::from_str(&input).unwrap();
+        assert_eq!(candle.adjusted_close, Some(decimal("9007199254740993.01")));
+    }
+    for input in [
+        r#"{"date":"2026-09-18","close":100}"#,
+        r#"{"date":"2026-09-18","close":100,"adjusted_close":null}"#,
+    ] {
+        let candle: CloseCandle = serde_json::from_str(input).unwrap();
+        assert_eq!(candle.adjusted_close, None);
+    }
 }
 
 #[test]

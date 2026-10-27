@@ -21,6 +21,8 @@ pub struct CloseCandle {
     pub date: NaiveDate,
     #[serde(deserialize_with = "deserialize_close")]
     pub close: Decimal,
+    #[serde(default, deserialize_with = "deserialize_adjusted_close")]
+    pub adjusted_close: Option<Decimal>,
 }
 
 #[derive(Debug, PartialEq, Eq, Serialize)]
@@ -62,7 +64,11 @@ pub fn score(candles: &[CloseCandle], as_of: NaiveDate) -> Result<TechnicalScore
         .collect();
     past.sort_unstable_by_key(|candle| candle.date);
     for (index, candle) in past.iter().enumerate() {
-        if candle.close <= Decimal::ZERO {
+        if candle.close <= Decimal::ZERO
+            || candle
+                .adjusted_close
+                .is_some_and(|close| close <= Decimal::ZERO)
+        {
             return Err(TechnicalError::InvalidClose(candle.date));
         }
         if index > 0 && past[index - 1].date == candle.date {
@@ -136,7 +142,12 @@ fn seasonality(
     // Sorted input leaves the last available session of each calendar month.
     let month_ends: BTreeMap<_, _> = candles
         .iter()
-        .map(|candle| ((candle.date.year(), candle.date.month()), candle.close))
+        .map(|candle| {
+            (
+                (candle.date.year(), candle.date.month()),
+                candle.adjusted_close.unwrap_or(candle.close),
+            )
+        })
         .collect();
     let mut sum = Decimal::ZERO;
     let mut years = 0_u32;
@@ -170,6 +181,16 @@ fn seasonality(
         )
     };
     Ok((mean, years as usize))
+}
+
+fn deserialize_adjusted_close<'de, D>(deserializer: D) -> Result<Option<Decimal>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    Option::<serde_json::Value>::deserialize(deserializer)?
+        .map(deserialize_close)
+        .transpose()
+        .map_err(de::Error::custom)
 }
 
 fn deserialize_close<'de, D>(deserializer: D) -> Result<Decimal, D::Error>

@@ -19,8 +19,8 @@ fn history(code: &str) -> Value {
         "instrument": {"code": code, "isin": format!("fixture-{code}")},
         "fetched_at": "2026-10-02T17:00:00Z",
         "candles": [
-            {"date": "2025-08-29", "close": 100, "adjusted_close": 1},
-            {"date": "2025-09-30", "close": 103, "adjusted_close": 999},
+            {"date": "2025-08-29", "close": 100},
+            {"date": "2025-09-30", "close": 103},
             {"date": "2026-09-18", "close": 100},
             {"date": AS_OF, "close": 0}
         ]
