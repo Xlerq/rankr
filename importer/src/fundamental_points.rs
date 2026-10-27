@@ -21,6 +21,7 @@ pub struct FundamentalPoints {
 pub fn score(mut ratios: FundamentalRatios, gics_sector_code: u16) -> FundamentalPoints {
     let equity_ratio_points = if gics_sector_code == 40 {
         // The entire Financials sector uses only equity, including insurers and KRUK.
+        // Known limitation: bank thresholds give KRUK (GICS 4020, equity ratio ~0.4) +1.
         ratios.net_margin = None;
         ratios.operating_margin = None;
         ratios.debt_to_equity = None;

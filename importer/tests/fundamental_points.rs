@@ -94,6 +94,7 @@ fn financials_only_scores_equity_with_inclusive_neutral_boundaries() {
         ("0.09", 0),
         ("0.10", 0),
         ("0.100000001", 1),
+        ("0.4", 1),
     ] {
         let result = score(
             FundamentalRatios {
