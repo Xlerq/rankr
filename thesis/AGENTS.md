@@ -11,6 +11,9 @@ wynika z kolejnego zadania użytkownika.
 - Pozostałe rozdziały mają na razie być krótkimi szkicami: mało zdań, tylko
   najważniejsze i sprawdzone informacje. Rozwijaj je szerzej dopiero na polecenie
   użytkownika.
+- Opis GICS jest wyjątkiem od skrótowego ujęcia: dokładnie wyjaśniaj hierarchię,
+  mapowanie spółek i wpływ klasyfikacji na punktację. Odróżniaj standard GICS,
+  przypisania zapisane w projekcie oraz własne progi punktowe.
 - Miejsca wymagające rozwinięcia oznaczaj komentarzami TODO w LaTeX. Roboczy
   charakter tekstu ma wynikać z ograniczonego zakresu, przy zachowaniu poprawności
   języka i zgodności z aktualnym kodem.

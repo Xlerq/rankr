@@ -81,9 +81,6 @@ __pycache__/
 *.vrb
 *.dvi
 
-# Generated thesis preview PDF
-thesis/main.pdf
-
 # Local databases and runtime state
 *.db
 *.sqlite

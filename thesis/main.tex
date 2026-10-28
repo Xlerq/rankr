@@ -7,8 +7,8 @@
 \newcommand{\FieldName}{Inżynieria i analiza danych}
 \newcommand{\StudyYear}{3}
 \newcommand{\ThesisYear}{2026}
-\newcommand{\ThesisTitle}{System webowy do scoringu i rankingowania instrumentów Giełdy Papierów Wartościowych na podstawie danych dziennych}
-\newcommand{\ThesisTitleEnglish}{Web system for scoring and ranking Warsaw Stock Exchange instruments using end-of-day data}
+\newcommand{\ThesisTitle}{Aplikacja analizująca makroekonomicznie wybrane rynki finansowe – narzędzie do monitorowania i prognozowania trendów na podstawie kluczowych wskaźników makroekonomicznych}
+\newcommand{\ThesisTitleEnglish}{Application for macroeconomic analysis of selected financial markets – a tool for monitoring and forecasting trends based on key macroeconomic indicators}
 
 \usepackage[left=3cm, right=2.5cm, top=2.5cm, bottom=2.5cm, headsep=1.2cm]{geometry}
 \linespread{1.3}
@@ -56,7 +56,7 @@
 \newcolumntype{j}{>{\raggedleft}p{200pt}}
 
 \hypersetup{
-    pdftitle={rankr - praca inżynierska},
+    pdftitle={\ThesisTitle},
     pdfauthor={\AuthorName}
 }
 
@@ -239,7 +239,110 @@ Publiczny rejestr KNF & Ujawnione pozycje krótkie netto & Punkty zmiany zaanga�
 \end{tabularx}
 \end{table}
 
-W mapie zapisano również sektor według klasyfikacji GICS. Jest to system grupowania przedsiębiorstw według rodzaju ich działalności \cite{gics}. Program wykorzystuje sektor do wyboru zestawu wskaźników fundamentalnych i progów punktowych. Nie wyznacza na tej podstawie osobnych rankingów branżowych.
+\section{Klasyfikacja sektorowa GICS}
+\label{sec:gics}
+
+\subsection{Cel i poziomy klasyfikacji}
+
+GICS, od angielskiego \textit{Global Industry Classification Standard}, jest standardem klasyfikowania przedsiębiorstw według prowadzonej działalności, opracowanym przez MSCI i S\&P Dow Jones Indices. Spółka otrzymuje jedno przypisanie na każdym poziomie hierarchii. Podstawą jest jej główna działalność, oceniana przede wszystkim przez przychody, z uwzględnieniem także wyników i sposobu postrzegania przedsiębiorstwa przez rynek \cite{gics}. Klasyfikacja opisuje rodzaj działalności; sama nie przyznaje punktów ani nie ocenia atrakcyjności inwestycyjnej.
+
+Hierarchia przechodzi od szerokiego sektora do szczegółowego rodzaju działalności. Kolejne poziomy mają kody dwu-, cztero-, sześcio- i ośmiocyfrowe, a początek dłuższego kodu wskazuje poziom nadrzędny. Przykładową ścieżkę przedstawiono w tabeli~\ref{tab:gics-levels}, na podstawie metodyki MSCI z sierpnia 2024 roku \cite{gicsmethodology}. Jest to przykład struktury standardu, bez przypisywania pełnego ośmiocyfrowego kodu konkretnej spółce z projektu.
+
+\begin{table}[htbp]
+\centering
+\caption{Cztery poziomy GICS na przykładzie działalności bankowej}
+\label{tab:gics-levels}
+\small
+\begin{tabularx}{\textwidth}{p{3.1cm}p{1.2cm}p{2.6cm}X}
+\toprule
+Poziom & Cyfry & Przykład kodu & Znaczenie \\
+\midrule
+Sektor & 2 & 40 & Financials --- finanse \\
+Grupa branżowa & 4 & 4010 & Banks --- banki \\
+Branża & 6 & 401010 & Banks --- banki \\
+Podbranża & 8 & 40101010 & Diversified Banks --- banki o zróżnicowanej działalności \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+Kod 4010 należy zatem do sektora 40, a kody 401010 i 40101010 uszczegóławiają tę samą ścieżkę. W aplikacji zapisano tylko sektor i grupę branżową. Brak dwóch dalszych poziomów jest ograniczeniem szczegółowości mapy, a nie skróconym zapisem pełnego przypisania spółki.
+
+\subsection{Sektory i ich znaczenie}
+
+Standard obejmuje 11 sektorów, zestawionych w tabeli~\ref{tab:gics-sectors}. Zachowano angielskie nazwy używane w standardzie i w danych programu. Polskie objaśnienia ułatwiają odczytanie ich zakresu; nie zastępują pełnych definicji sektorów MSCI \cite{gicssectors}.
+
+\begin{table}[htbp]
+\centering
+\caption{Sektory GICS i skrócone objaśnienie ich zakresu}
+\label{tab:gics-sectors}
+\small
+\begin{tabularx}{\textwidth}{p{0.8cm}XX}
+\toprule
+Kod & Nazwa & Przykładowy zakres działalności \\
+\midrule
+10 & Energy & Paliwa, ich wydobycie i przetwarzanie oraz powiązane usługi \\
+15 & Materials & Metale, chemia i materiały budowlane \\
+20 & Industrials & Produkcja przemysłowa, budownictwo, transport i usługi dla przedsiębiorstw \\
+25 & Consumer Discretionary & Dobra i usługi konsumpcyjne, np. odzież, samochody i wypoczynek \\
+30 & Consumer Staples & Podstawowe produkty konsumpcyjne, np. żywność, oraz ich handel \\
+35 & Health Care & Ochrona zdrowia, leki i sprzęt medyczny \\
+40 & Financials & Banki, ubezpieczenia i pozostałe usługi finansowe \\
+45 & Information Technology & Oprogramowanie, sprzęt i usługi informatyczne \\
+50 & Communication Services & Telekomunikacja, media i rozrywka, w tym gry \\
+55 & Utilities & Dostarczanie energii elektrycznej, gazu i wody oraz producenci energii \\
+60 & Real Estate & Nieruchomości i związane z nimi przedsiębiorstwa inwestycyjne \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+Rozróżnienie Energy i Utilities jest istotne: działalność paliwowa i dostarczanie energii elektrycznej trafiają do różnych sektorów. Podobnie handel podstawowymi produktami konsumpcyjnymi jest oddzielony od zakupów silniej zależnych od sytuacji gospodarczej, takich jak odzież czy wyposażenie domu \cite{gicssectors}. Dlatego w mapie projektu PKNORLEN ma sektor 10, PGE i TAURONPE sektor 55, a DINOPL i ZABKA sektor 30.
+
+\subsection{Przypisanie spółek w projekcie}
+
+Mapa zawiera kod sektora \texttt{gics\_sector\_code}, jego nazwę \texttt{gics\_sector}, kod grupy \texttt{gics\_industry\_group\_code} i nazwę grupy \texttt{gics\_industry\_group}. Wszystkie 20 przypisań przedstawia tabela~\ref{tab:gics-companies}, uporządkowana według sektora i grupy. Obejmuje ona osiem sektorów i dziesięć grup branżowych. Kod sektora można odczytać przy użyciu tabeli~\ref{tab:gics-sectors}.
+
+\begin{table}[p]
+\centering
+\caption{Przypisania GICS zapisane w mapie spółek projektu}
+\label{tab:gics-companies}
+\small
+\begin{tabularx}{\textwidth}{p{2.7cm}p{1.2cm}p{1.2cm}X}
+\toprule
+Kod spółki & Sektor & Grupa & Nazwa grupy branżowej \\
+\midrule
+PKNORLEN & 10 & 1010 & Energy \\
+KETY & 15 & 1510 & Materials \\
+KGHM & 15 & 1510 & Materials \\
+BUDIMEX & 20 & 2010 & Capital Goods \\
+ALLEGRO & 25 & 2550 & Consumer Discretionary Distribution \& Retail \\
+LPP & 25 & 2550 & Consumer Discretionary Distribution \& Retail \\
+MODIVO & 25 & 2550 & Consumer Discretionary Distribution \& Retail \\
+PEPCO & 25 & 2550 & Consumer Discretionary Distribution \& Retail \\
+DINOPL & 30 & 3010 & Consumer Staples Distribution \& Retail \\
+ZABKA & 30 & 3010 & Consumer Staples Distribution \& Retail \\
+ALIOR & 40 & 4010 & Banks \\
+ERSTEPL & 40 & 4010 & Banks \\
+MBANK & 40 & 4010 & Banks \\
+PEKAO & 40 & 4010 & Banks \\
+PKOBP & 40 & 4010 & Banks \\
+KRUK & 40 & 4020 & Financial Services \\
+PZU & 40 & 4030 & Insurance \\
+CDPROJEKT & 50 & 5020 & Media \& Entertainment \\
+PGE & 55 & 5510 & Utilities \\
+TAURONPE & 55 & 5510 & Utilities \\
+\bottomrule
+\end{tabularx}
+\par\smallskip
+\raggedright\footnotesize Źródło: \path{data/raw/wig20_symbols.csv} w repozytorium projektu.
+\end{table}
+
+Grupa 4010 obejmuje w tej mapie pięć banków, natomiast PZU i KRUK mają odpowiednio grupy 4030 i 4020. Wszystkie te spółki należą jednak do wspólnego sektora 40. Z kolei CDPROJEKT zapisano w grupie mediów i rozrywki sektora 50. Sam fakt tworzenia oprogramowania nie oznacza więc w tej mapie przynależności do sektora informatycznego 45.
+
+Przypisania są elementem konfiguracji projektu i są dołączane do programu podczas kompilacji. Program nie pobiera ich z MSCI ani nie wyznacza automatycznie z raportów finansowych. Starsza kolumna \texttt{sector}, z etykietami takimi jak \texttt{Banking} czy \texttt{Mining}, pozostaje odrębna od pól GICS i nie steruje punktacją. Wzór korzysta z dwucyfrowego kodu sektora, zgodnie z opisem w podrozdziale~\ref{sec:gics-scoring}.
+
+Tabela dokumentuje zawartość mapy, natomiast dokumentacja MSCI objaśnia strukturę standardu. Mapa nie zawiera osobnego źródła i daty potwierdzenia oficjalnego przypisania GICS każdej spółki. Nie można więc utożsamiać tej tabeli z bieżącym wykazem klasyfikacji opublikowanym przez dostawcę standardu.
+
+% TODO(thesis): Record the source and verification date of each company classification before presenting the mapping as official GICS assignments.
 
 \section{Historia cen}
 
@@ -416,7 +519,16 @@ Przepływy operacyjne / wynik netto & $>1$ & $<0$ \\
 
 Relacja zobowiązań do kapitału wymaga obu części zobowiązań: długo- i krótkoterminowej. Relacja przepływów do wyniku jest liczona tylko przy dodatnim wyniku netto. Brak potrzebnej kwoty lub zerowy mianownik daje \texttt{null}; brak wszystkich punktów oznacza brak wyniku rodziny.
 
-Dla sektora finansowego (Financials) punktowany jest tylko udział kapitału: powyżej $0{,}10$ otrzymuje $+1$, poniżej $0{,}08$ otrzymuje $-1$, a pomiędzy nimi zero. Reguła obejmuje cały sektor z mapy, również PZU i KRUK. Pozostałe cztery wskaźniki są w tym szablonie pomijane.
+\subsection{Wpływ GICS na wybór reguł}
+\label{sec:gics-scoring}
+
+Klasyfikacja z podrozdziału~\ref{sec:gics} wybiera w programie jeden z dwóch zestawów reguł. Dla kodu sektora 40 stosowany jest wariant finansowy, a dla wszystkich pozostałych kodów wspólny wariant pięciu wskaźników z tabeli~\ref{tab:thresholds}. Nie ma osobnych progów dla każdego z jedenastu sektorów ani porównywania wyniku spółki ze średnią jej branży. Kod grupy branżowej nie uczestniczy w wyborze wariantu; nazwa grupy służy do opisu danych, a główna strona pokazuje nazwę sektora.
+
+W wariancie Financials punktowany jest wyłącznie udział kapitału własnego przypisanego udziałowcom jednostki dominującej w aktywach. Wartość powyżej $0{,}10$, czyli $10\%$, daje $+1$, poniżej $0{,}08$, czyli $8\%$, daje $-1$, a przedział od $8\%$ do $10\%$ włącznie daje zero. Brak wskaźnika oznacza brak wyniku fundamentalnego. Pozostałe cztery wskaźniki i ich punkty są w tym wariancie ustawiane na \texttt{null}, nawet gdy można byłoby obliczyć je z dostępnych danych.
+
+Przykładowo udział kapitału równy $0{,}11$, czyli $11\%$, otrzyma $+1$ dla sektora 40 i $-1$ poza nim, ponieważ w drugim wariancie leży poniżej progu $30\%$. Jest to przykład działania progów, bez przypisywania tej wartości konkretnej spółce. Identyczna wartość wskaźnika może zatem otrzymać różną punktację po zmianie sektora. Spółka bez wpisu w mapie GICS jest pomijana przy budowie punktacji fundamentalnej i wspólnego rankingu, z zapisaniem informacji o przyczynie.
+
+Progi punktowe są regułami projektu, a nie częścią standardu GICS. Alternatywą byłoby zastosowanie jednego zestawu progów dla wszystkich spółek; obecny wariant wprowadza rozróżnienie sektora finansowego. Obejmuje ono jednak nie tylko pięć banków, lecz również PZU i KRUK, mimo różnych grup branżowych. Konsekwencje wspólnych progów i różnej liczby punktowanych wskaźników opisano w podrozdziale~\ref{sec:limitations}.
 
 % TODO(thesis): Expand the interpretation of the ratios and justify the adopted threshold convention.
 
@@ -481,8 +593,11 @@ cargo test --workspace --locked --offline
 % TODO(thesis): Document the final test cases and a repeatable check of the complete local workflow.
 
 \section{Ograniczenia}
+\label{sec:limitations}
 
 Wagi rodzin są równe, ale ich zakresy są różne: fundamenty mają od $-5$ do $+5$ (w sektorze finansowym od $-1$ do $+1$), wynik techniczny od $-2$ do $+2$, a sygnał KNF od $-1$ do $+1$. Fundamenty mogą być sumą niepełnego zestawu wskaźników; nie obejmują jeszcze wyceny ani dynamiki rok do roku. Rejestr KNF pokazuje tylko ujawnione pozycje, więc pusta lista nie dowodzi braku krótkiej sprzedaży ani optymizmu inwestorów.
+
+Wspólny wariant Financials nie uwzględnia odmienności banków, ubezpieczycieli i pozostałych usług finansowych. Przykładowo udział kapitału $40\%$ daje w nim $+1$, niezależnie od tego, czy dotyczy banku, czy spółki z grupy 4020. Wspólny zestaw progów nie dowodzi zatem jednakowej interpretacji ekonomicznej we wszystkich tych grupach. Ponieważ przypisania sektorowe są stałą częścią mapy programu, zmiana klasyfikacji wymaga aktualizacji pliku i ponownej kompilacji.
 
 Program korzysta ze stałej mapy spółek i najnowszych zapisanych danych, bez odtwarzania historycznych składów indeksu i dostępności raportów. Odcięcie przyszłych świec nie wystarcza więc do wiarygodnego odtworzenia całego rankingu z przeszłości. Dopisywanie nowych cen nie odświeża też dawnych korekt dostawcy, a kompletność sesji nie jest sprawdzana względem niezależnego kalendarza giełdowego.
 
@@ -521,6 +636,20 @@ GPW Benchmark.
 MSCI.
 \newblock \textit{The Global Industry Classification Standard (GICS)}.
 \newblock \url{https://www.msci.com/indexes/index-resources/gics}.
+\newblock Dostęp: 28.10.2026.
+
+\bibitem{gicsmethodology}
+MSCI.
+\newblock \textit{Global Industry Classification Standard (GICS) Methodology}.
+\newblock Sierpień 2024, s.~5--12.
+\newblock \url{https://www.msci.com/downloads/web/msci-com/indexes/index-resources/gics/MSCI_Global_Industry_Classification_Standard_(GICS%C2%AE)_Methodology_20240801.pdf}.
+\newblock Dostęp: 28.10.2026.
+
+\bibitem{gicssectors}
+MSCI, S\&P Global.
+\newblock \textit{Global Industry Classification Sector (GICS)}.
+\newblock Definicje sektorów obowiązujące od zamknięcia sesji 17.03.2023, s.~1--2.
+\newblock \url{https://www.msci.com/documents/1296102/11185224/GICS%2BSector%2BDefinitions%2B2023.pdf}.
 \newblock Dostęp: 28.10.2026.
 
 \bibitem{yahoo}
@@ -641,8 +770,8 @@ This thesis describes \textit{rankr}, a local web application written in Rust fo
     \centering
     \begin{tabularx}{\linewidth}{|c|X|X|}\hline
        \textbf{Lp.} & \multicolumn{1}{c|}{\textbf{Obszar wykorzystywania}} & \multicolumn{1}{c|}{\textbf{Narzędzie}} \\ \hline
-       1 & Przygotowanie i redakcja fragmentów pracy, korekta techniczna oraz porównanie opisu z kodem projektu. & ChatGPT / Codex \\ \hline
-       2 & Wsparcie w planowaniu zakresu, implementacji pobierania danych, punktacji i strony rankingu oraz przygotowaniu testów. & ChatGPT / Codex \\ \hline
+       1 & Wsparcie w redakcji fragmentów pracy oraz korekta techniczna. & ChatGPT / Codex \\ \hline
+       2 & Wsparcie w planowaniu zakresu pracy oraz przygotowaniu testów. & ChatGPT / Codex \\ \hline
        3 & Wsparcie w analizie dokumentacji technicznej i przygotowaniu prezentacji postępu prac. & ChatGPT / Codex \\ \hline
     \end{tabularx}
 \end{table}
