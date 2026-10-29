@@ -46,6 +46,30 @@ are kept in dated observation directories.
 A failure for one company is printed to stderr and does not stop the other
 companies or the page. Axum starts only after the entire refresh finishes.
 
+## Ranking history
+
+After refreshing data, each launch calculates and archives a ranking before
+starting the web server. Files are saved under:
+
+```text
+data/collected/rankings/YYYY-MM-DD_HH-MM-SS.nnnnnnnnnZ/ranking.json
+```
+
+Each file contains the UTC calculation timestamp (`computed_at`), ranking date
+(`as_of`), `scoring_version`, and rows with company codes, sectors, all three
+family scores and `final_score`. Missing scores stay `null`, while genuine
+zeros stay `0`. Empty rankings are not archived.
+
+Earlier snapshots are never overwritten, including repeated launches on the
+same day. Reloading the page does not create snapshots. Collection requires
+running the program; there is no background schedule or historical backfill.
+Snapshots use the data available locally after that launch's refresh, including
+older data if some downloads failed. An archive error is printed to stderr and
+does not stop the web server. Keep a backup of `data/collected`, which Git ignores.
+
+When changing scoring formulas, thresholds or weights, increment
+`SCORING_VERSION` in `importer/src/ranking.rs` to distinguish stored models.
+
 ## Ranking page
 
 Open `http://127.0.0.1:3000/`. Each request calculates the ranking for today's UTC
@@ -59,6 +83,6 @@ families with weights 1/1/1; a missing family gives a missing final score. Rows
 keep the ranking's order. An empty cell means a missing result, while a genuine
 zero is displayed as `0`.
 
-Sentiment requires two shorts downloads with different timestamps for the same
-ISIN. Two empty position lists still give a missing result. With daily collection,
-the first snapshot alone cannot produce a sentiment score.
+Sentiment compares the latest shorts snapshot with the latest snapshot of the
+same ISIN from an earlier UTC day. Two empty position lists give zero; a missing
+pair gives a missing score. The first snapshot alone cannot produce sentiment.

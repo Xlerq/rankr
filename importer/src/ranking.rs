@@ -8,15 +8,18 @@ use std::{
 };
 
 use anyhow::{Context, Result, ensure};
-use chrono::NaiveDate;
+use chrono::{DateTime, NaiveDate, Utc};
 use serde::Serialize;
 
 use crate::{
     archive::{SkippedFile, find_files},
     fundamental_points_table,
     model::ShortsSnapshot,
-    sentiment, technical_table,
+    sentiment, storage, technical_table,
 };
+
+/// Increment when scoring formulas, thresholds or family weights change.
+pub const SCORING_VERSION: &str = "v1";
 
 #[derive(Debug, Serialize)]
 pub struct RankingRow {
@@ -37,6 +40,13 @@ pub struct Ranking {
 struct ArchivedShorts {
     snapshot: ShortsSnapshot,
     source_file: PathBuf,
+}
+
+/// Calculate and archive a ranking for the supplied UTC timestamp.
+pub fn archive_snapshot(directory: &Path, computed_at: DateTime<Utc>) -> Result<Option<PathBuf>> {
+    let ranking = rank_directory(directory, computed_at.date_naive())?;
+    storage::save_ranking(directory, computed_at, &ranking.rows)
+        .context("saving the ranking snapshot")
 }
 
 /// Join the family results by code. Latest snapshots are independent of as_of;

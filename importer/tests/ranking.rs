@@ -196,3 +196,72 @@ fn sorts_descending_then_by_code_with_null_after_negative_scores() {
     assert_eq!(result[2]["final_score"], -3);
     assert!(result[3]["final_score"].is_null());
 }
+
+#[test]
+fn archives_ranked_scores_with_utc_metadata_and_preserves_null_and_zero() {
+    let directory = tempfile::tempdir().unwrap();
+    let root = directory.path();
+    write_company(root, "KGHM");
+    write_company(root, "ALLEGRO");
+    fs::remove_file(root.join("ALLEGRO/old/shorts.json")).unwrap();
+    let computed_at = "2026-09-19T23:30:00Z".parse().unwrap();
+    let path = rankr::ranking::archive_snapshot(root, computed_at)
+        .unwrap()
+        .unwrap();
+    let snapshot: Value = serde_json::from_slice(&fs::read(path).unwrap()).unwrap();
+
+    assert_eq!(snapshot["computed_at"], json!(computed_at));
+    assert_eq!(snapshot["as_of"], AS_OF);
+    assert_eq!(snapshot["scoring_version"], rankr::ranking::SCORING_VERSION);
+    assert_eq!(snapshot["rows"], json!(rank(root)));
+    assert_eq!(snapshot["rows"][0]["final_score"], 3);
+    assert_eq!(snapshot["rows"][0]["sentiment_score"], 0);
+    assert!(snapshot["rows"][1]["sentiment_score"].is_null());
+    assert!(snapshot["rows"][1]["final_score"].is_null());
+}
+
+#[test]
+fn repeated_ranking_snapshots_never_overwrite_previous_scores() {
+    let directory = tempfile::tempdir().unwrap();
+    let root = directory.path();
+    write_company(root, "KGHM");
+    let computed_at = "2026-09-19T23:30:00Z".parse().unwrap();
+    let first = rankr::ranking::archive_snapshot(root, computed_at)
+        .unwrap()
+        .unwrap();
+    let original = fs::read(&first).unwrap();
+
+    fs::remove_file(root.join("KGHM/old/shorts.json")).unwrap();
+    // Even identical timestamps must preserve both calculations.
+    let second = rankr::ranking::archive_snapshot(root, computed_at)
+        .unwrap()
+        .unwrap();
+    assert_ne!(first, second);
+    assert_eq!(fs::read(first).unwrap(), original);
+    let snapshot: Value = serde_json::from_slice(&fs::read(second).unwrap()).unwrap();
+    assert!(snapshot["rows"][0]["final_score"].is_null());
+}
+
+#[test]
+fn empty_rankings_do_not_create_history() {
+    let directory = tempfile::tempdir().unwrap();
+    let computed_at = "2026-09-19T23:30:00Z".parse().unwrap();
+    assert!(
+        rankr::ranking::archive_snapshot(directory.path(), computed_at)
+            .unwrap()
+            .is_none()
+    );
+    assert!(!directory.path().join("rankings").exists());
+}
+
+#[test]
+fn ranking_archive_write_failure_is_reported_without_changing_source_data() {
+    let directory = tempfile::tempdir().unwrap();
+    let root = directory.path();
+    write_company(root, "KGHM");
+    let expected = rank(root);
+    fs::write(root.join("rankings"), "not a directory").unwrap();
+    let computed_at = "2026-09-19T23:30:00Z".parse().unwrap();
+    assert!(rankr::ranking::archive_snapshot(root, computed_at).is_err());
+    assert_eq!(rank(root), expected);
+}

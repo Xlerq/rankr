@@ -6,11 +6,15 @@ use std::{
     path::{Path, PathBuf},
 };
 
+use chrono::{DateTime, NaiveDate, Utc};
 use serde::Serialize;
 use tempfile::NamedTempFile;
 use thiserror::Error;
 
-use crate::model::{DailyPriceHistory, FundamentalSnapshot, RawDocument, ShortsSnapshot, Source};
+use crate::{
+    model::{DailyPriceHistory, FundamentalSnapshot, RawDocument, ShortsSnapshot, Source},
+    ranking::{RankingRow, SCORING_VERSION},
+};
 
 #[derive(Debug, Error)]
 pub enum StorageError {
@@ -76,6 +80,40 @@ pub fn archive_raw(root: &Path, raw: &RawDocument) -> Result<ArchivedFetch, Stor
         return Err(error);
     }
     Ok(ArchivedFetch { directory })
+}
+
+/// Keep each startup's ranking separately, including null scores but not empty tables.
+pub fn save_ranking(
+    root: &Path,
+    computed_at: DateTime<Utc>,
+    rows: &[RankingRow],
+) -> Result<Option<PathBuf>, StorageError> {
+    if rows.is_empty() {
+        return Ok(None);
+    }
+    #[derive(Serialize)]
+    struct Snapshot<'a> {
+        computed_at: DateTime<Utc>,
+        as_of: NaiveDate,
+        scoring_version: &'static str,
+        rows: &'a [RankingRow],
+    }
+
+    let root = root.join("rankings");
+    fs::create_dir_all(&root)?;
+    let name = computed_at.format("%Y-%m-%d_%H-%M-%S%.9fZ").to_string();
+    let directory = create_archive_directory(&root, &name)?;
+    let path = directory.join("ranking.json");
+    write_json(
+        &path,
+        &Snapshot {
+            computed_at,
+            as_of: computed_at.date_naive(),
+            scoring_version: SCORING_VERSION,
+            rows,
+        },
+    )?;
+    Ok(Some(path))
 }
 
 fn archive_name(raw: &RawDocument) -> String {
