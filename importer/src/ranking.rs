@@ -97,14 +97,7 @@ pub fn rank_directory(directory: &Path, as_of: NaiveDate) -> Result<Ranking> {
         let fundamental_score = fundamentals.get(code).copied().flatten();
         let technical_score = technical.get(code).copied().flatten();
         let sentiment_score = match latest_shorts.get(code) {
-            Some(newer) => {
-                let older = shorts.iter().find(|archived| {
-                    let snapshot = &archived.snapshot;
-                    snapshot.isin == newer.isin
-                        && snapshot.fetched_at.date_naive() < newer.fetched_at.date_naive()
-                });
-                sentiment::score(older.map(|archived| &archived.snapshot), Some(newer))
-            }
+            Some(newer) => sentiment::score(older_shorts(&shorts, newer), Some(newer)),
             None => None,
         };
         let final_score = match (fundamental_score, technical_score, sentiment_score) {
@@ -129,6 +122,35 @@ pub fn rank_directory(directory: &Path, as_of: NaiveDate) -> Result<Ranking> {
             .then_with(|| left.code.cmp(&right.code))
     });
     Ok(Ranking { rows, skipped })
+}
+
+fn older_shorts<'a>(
+    shorts: &'a [ArchivedShorts],
+    newer: &ShortsSnapshot,
+) -> Option<&'a ShortsSnapshot> {
+    shorts
+        .iter()
+        .map(|archived| &archived.snapshot)
+        .find(|snapshot| {
+            snapshot.isin == newer.isin
+                && snapshot.fetched_at.date_naive() < newer.fetched_at.date_naive()
+        })
+}
+
+/// Expose precisely the observations used by the ranking, including its tie rule.
+pub(crate) fn shorts_pair(
+    directory: &Path,
+    code: &str,
+) -> io::Result<(Option<ShortsSnapshot>, Option<ShortsSnapshot>)> {
+    let shorts = read_shorts(directory, &mut Vec::new())?;
+    let newer = shorts
+        .iter()
+        .find(|archived| archived.snapshot.code == code);
+    let older = newer.and_then(|archived| older_shorts(&shorts, &archived.snapshot));
+    Ok((
+        newer.map(|archived| archived.snapshot.clone()),
+        older.cloned(),
+    ))
 }
 
 fn read_shorts(
