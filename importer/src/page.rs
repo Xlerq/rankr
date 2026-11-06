@@ -4,13 +4,14 @@ use std::{fmt::Display, path::PathBuf, sync::Arc};
 
 use axum::{
     Router,
-    extract::{Path, State},
+    extract::{Path, Query, State},
     http::StatusCode,
-    response::Html,
+    response::{Html, Redirect},
     routing::get,
 };
-use chrono::{NaiveDate, Utc};
+use chrono::{Datelike, NaiveDate, Utc};
 use rust_decimal::Decimal;
+use serde::Deserialize;
 
 use crate::{
     company_archive::ArchiveIndex,
@@ -23,18 +24,29 @@ use crate::{
 struct PageState {
     directory: PathBuf,
     archives: Arc<ArchiveIndex>,
+    company_codes: Arc<Vec<String>>,
 }
 
 fn router(directory: PathBuf) -> std::io::Result<Router> {
     let archives = Arc::new(ArchiveIndex::read(&directory)?);
+    let company_codes = Arc::new(
+        crate::fundamental_points_table::gics_map()
+            .map_err(std::io::Error::other)?
+            .into_keys()
+            .collect(),
+    );
     Ok(Router::new()
         .route("/", get(index))
         .route("/{code}", get(company))
-        .route("/{code}/wykres", get(chart))
-        .route("/{code}/shorty", get(shorts))
+        .route("/sezonowosc", get(seasonality))
+        .route("/historia", get(history))
+        .route("/shorty", get(shorts))
+        .route("/{code}/wykres", get(legacy_chart))
+        .route("/{code}/shorty", get(legacy_shorts))
         .with_state(PageState {
             directory,
             archives,
+            company_codes,
         }))
 }
 
@@ -86,20 +98,89 @@ async fn company(
     Ok(Html(render_company(&card, as_of)))
 }
 
-async fn chart(
+#[derive(Deserialize)]
+struct CompanyQuery {
+    spolka: Option<String>,
+}
+
+fn selected_code(
+    state: &PageState,
+    query: CompanyQuery,
+) -> Result<String, (StatusCode, &'static str)> {
+    let code = query
+        .spolka
+        .filter(|code| !code.trim().is_empty())
+        .map(|code| code.trim().to_ascii_uppercase())
+        .or_else(|| {
+            state
+                .company_codes
+                .iter()
+                .find(|code| {
+                    state
+                        .archives
+                        .company(code)
+                        .is_some_and(|files| !files.histories.is_empty())
+                })
+                .cloned()
+        })
+        .or_else(|| state.company_codes.first().cloned())
+        .ok_or_else(|| server_error("Brak mapy spółek"))?;
+    if !state.company_codes.contains(&code) {
+        return Err((
+            StatusCode::NOT_FOUND,
+            "Nie znaleziono spółki o podanym kodzie.",
+        ));
+    }
+    Ok(code)
+}
+
+async fn history(
     State(state): State<PageState>,
-    Path(code): Path<String>,
+    Query(query): Query<CompanyQuery>,
 ) -> Result<Html<String>, (StatusCode, &'static str)> {
+    let code = selected_code(&state, query)?;
+    let codes = state.company_codes.clone();
     let (card, as_of) = company_data(state, code).await?;
-    Ok(Html(render_chart(&card, as_of)))
+    Ok(Html(render_chart(&card, as_of, &codes)))
+}
+
+async fn seasonality(
+    State(state): State<PageState>,
+    Query(query): Query<CompanyQuery>,
+) -> Result<Html<String>, (StatusCode, &'static str)> {
+    let code = selected_code(&state, query)?;
+    let codes = state.company_codes.clone();
+    let (card, as_of) = company_data(state, code).await?;
+    Ok(Html(
+        render_seasonality(&card, as_of, &codes).map_err(server_error)?,
+    ))
 }
 
 async fn shorts(
     State(state): State<PageState>,
-    Path(code): Path<String>,
 ) -> Result<Html<String>, (StatusCode, &'static str)> {
-    let (card, as_of) = company_data(state, code).await?;
-    Ok(Html(render_shorts(&card, as_of)))
+    let board = tokio::task::spawn_blocking(move || {
+        crate::weekly_shorts::board(&state.archives, &state.company_codes)
+    })
+    .await
+    .map_err(server_error)?;
+    Ok(Html(render_shorts(&board, Utc::now().date_naive())))
+}
+
+async fn legacy_chart(
+    State(state): State<PageState>,
+    Path(code): Path<String>,
+) -> Result<Redirect, (StatusCode, &'static str)> {
+    let code = selected_code(&state, CompanyQuery { spolka: Some(code) })?;
+    Ok(Redirect::permanent(&format!("/historia?spolka={code}")))
+}
+
+async fn legacy_shorts(
+    State(state): State<PageState>,
+    Path(code): Path<String>,
+) -> Result<Redirect, (StatusCode, &'static str)> {
+    selected_code(&state, CompanyQuery { spolka: Some(code) })?;
+    Ok(Redirect::permanent("/shorty"))
 }
 
 fn server_error(error: impl Display) -> (StatusCode, &'static str) {
@@ -149,9 +230,10 @@ fn render(rows: &[RankingRow], as_of: NaiveDate) -> String {
         &format!(
             r#"
 <header class="page-heading"><h1>Ranking spółek</h1><p class="date">{as_of}<span>Data rankingu · UTC</span></p></header>
-<div class="table-panel"><table class="ranking"><thead><tr>
+{buttons}<div class="table-panel"><table class="ranking"><thead><tr>
 <th scope="col">Spółka</th><th scope="col">Sektor</th><th scope="col">Fundament</th><th scope="col">Technika</th><th scope="col">Sentyment</th><th scope="col">Wynik</th>
-</tr></thead><tbody>{body}</tbody></table></div>"#
+</tr></thead><tbody>{body}</tbody></table></div>"#,
+            buttons = global_links("")
         ),
     )
 }
@@ -166,20 +248,56 @@ fn company_header(card: &CompanyCard, as_of: NaiveDate, view: &str) -> String {
     )
 }
 
-fn view_links(code: &str, current: &str) -> String {
-    let mut links = String::from("<nav class=\"view-links\" aria-label=\"Widoki spółki\">");
-    for (view, suffix) in [("Wyniki", ""), ("Wykres", "/wykres"), ("Shorty", "/shorty")] {
-        if view != current {
-            links.push_str(&format!("<a href=\"/{}{suffix}\">{view}</a>", escape(code)));
-        }
+fn global_links(current: &str) -> String {
+    let mut links = String::from("<nav class=\"page-buttons\" aria-label=\"Analizy\">");
+    for (view, path) in [
+        ("Sezonowość", "/sezonowosc"),
+        ("Historia punktów", "/historia"),
+        ("Shorty KNF", "/shorty"),
+    ] {
+        let active = if current == path {
+            " aria-current=\"page\""
+        } else {
+            ""
+        };
+        links.push_str(&format!("<a href=\"{path}\"{active}>{view}</a>"));
     }
     links.push_str("</nav>");
     links
 }
 
+fn view_links(code: &str) -> String {
+    let code = escape(code);
+    format!(
+        "<nav class=\"view-links\" aria-label=\"Analizy spółki\"><a href=\"/sezonowosc?spolka={code}\">Sezonowość</a><a href=\"/historia?spolka={code}\">Historia punktów</a><a href=\"/shorty\">Shorty KNF</a></nav>"
+    )
+}
+
+fn page_heading(title: &str, as_of: NaiveDate) -> String {
+    format!(
+        "<a class=\"back\" href=\"/\">Ranking</a><header class=\"page-heading\"><h1>{title}</h1><p class=\"date\">{as_of}<span>Data rankingu · UTC</span></p></header>"
+    )
+}
+
+fn company_selector(action: &str, selected: &str, codes: &[String]) -> String {
+    let mut html = format!(
+        "<form class=\"company-selector\" action=\"{action}\" method=\"get\"><label for=\"company\">Spółka</label><select id=\"company\" name=\"spolka\">"
+    );
+    for code in codes {
+        let option = if code == selected { " selected" } else { "" };
+        html.push_str(&format!(
+            "<option value=\"{}\"{option}>{}</option>",
+            escape(code),
+            escape(code)
+        ));
+    }
+    html.push_str("</select><button type=\"submit\">Pokaż</button></form>");
+    html
+}
+
 fn render_company(card: &CompanyCard, as_of: NaiveDate) -> String {
     let mut body = company_header(card, as_of, "Karta wyników");
-    body.push_str(&view_links(&card.row.code, "Wyniki"));
+    body.push_str(&view_links(&card.row.code));
     body.push_str(&format!(
         "<div class=\"total\"><span>Wynik</span><div class=\"final-score\">{}</div></div>",
         score(card.row.final_score, true)
@@ -205,43 +323,68 @@ fn render_company(card: &CompanyCard, as_of: NaiveDate) -> String {
     document(&format!("{} — wyniki", card.row.code), &body)
 }
 
-fn render_chart(card: &CompanyCard, as_of: NaiveDate) -> String {
-    let mut body = company_header(card, as_of, "Wykres");
-    body.push_str(&view_links(&card.row.code, "Wykres"));
+fn render_chart(card: &CompanyCard, as_of: NaiveDate, codes: &[String]) -> String {
+    let mut body = page_heading("Historia punktów", as_of);
+    body.push_str(&global_links("/historia"));
+    body.push_str(&company_selector("/historia", &card.row.code, codes));
     body.push_str(&crate::charts::render(
         &card.candles,
         &card.currency,
         &card.saved_scores,
     ));
-    document(&format!("{} — wykres", card.row.code), &body)
+    document(&format!("{} — historia punktów", card.row.code), &body)
 }
 
-fn render_shorts(card: &CompanyCard, as_of: NaiveDate) -> String {
-    let mut body = company_header(card, as_of, "Shorty");
-    body.push_str(&view_links(&card.row.code, "Shorty"));
-    let weeks = crate::weekly_shorts::group(&card.short_totals);
-    if weeks.is_empty() {
+fn render_seasonality(
+    card: &CompanyCard,
+    as_of: NaiveDate,
+    codes: &[String],
+) -> Result<String, crate::technical::TechnicalError> {
+    let mut body = page_heading("Sezonowość", as_of);
+    body.push_str(&global_links("/sezonowosc"));
+    body.push_str(&company_selector("/sezonowosc", &card.row.code, codes));
+    if card.closes.is_empty() {
+        body.push_str("<p class=\"missing\">Brak historii cen.</p>");
+    } else {
+        let data = crate::seasonality::calculate(&card.closes, as_of)?;
+        body.push_str(&format!("<div class=\"season-summary\"><h2>{} {} · średni zwrot</h2><strong>{}</strong><span>{} lat</span></div>", crate::seasonality::month_name(as_of.month()), as_of.year(), decimal(data.mean, true), data.years));
+        body.push_str(&crate::charts::render_seasonality(&data, as_of.year()));
+    }
+    Ok(document(&format!("{} — sezonowość", card.row.code), &body))
+}
+
+fn render_shorts(board: &crate::weekly_shorts::KnfBoard, as_of: NaiveDate) -> String {
+    let mut body = page_heading("Shorty KNF", as_of);
+    body.push_str(&global_links("/shorty"));
+    if board.weeks.is_empty() {
         body.push_str("<p class=\"missing\">brak zapisanych odczytów rejestru</p>");
     } else {
-        body.push_str("<div class=\"table-panel\"><table class=\"weekly-shorts\"><thead><tr><th scope=\"col\">Tydzień</th><th scope=\"col\">Suma (%)</th><th scope=\"col\">Zmiana (p.p.)</th></tr></thead><tbody>");
-        for week in &weeks {
-            let change = week
-                .change
-                .map(|value| {
-                    let sign = if value > Decimal::ZERO { "+" } else { "" };
-                    format!("{sign}{}", decimal(Some(value), false))
-                })
-                .unwrap_or_default();
+        body.push_str("<div class=\"table-panel\"><table class=\"knf-board\"><thead><tr><th scope=\"col\">Spółka</th>");
+        for week in &board.weeks {
             body.push_str(&format!(
-                "<tr><th scope=\"row\">{}</th><td>{}</td><td>{change}</td></tr>",
-                week.week,
-                decimal(Some(week.total), false)
+                "<th scope=\"col\">{}-W{:02}</th>",
+                week.iso_week().year(),
+                week.iso_week().week()
             ));
         }
+        body.push_str("</tr></thead><tbody>");
+        for row in &board.rows {
+            body.push_str(&format!(
+                "<tr><th scope=\"row\"><a class=\"company-name\" href=\"/{}\">{}</a></th>",
+                escape(&row.code),
+                escape(&row.code)
+            ));
+            for week in &board.weeks {
+                body.push_str(&format!(
+                    "<td>{}</td>",
+                    decimal(row.totals.get(week).copied(), false)
+                ));
+            }
+            body.push_str("</tr>");
+        }
         body.push_str("</tbody></table></div>");
-        body.push_str(&crate::charts::render_shorts(&weeks));
     }
-    document(&format!("{} — shorty", card.row.code), &body)
+    document("Shorty KNF", &body)
 }
 
 fn band(number: &str, title: &str, points: Option<i8>, components: &str) -> String {

@@ -11,7 +11,6 @@ pub(crate) struct WeeklyShort {
     /// Monday of the ISO week, based on the fetch timestamp in UTC.
     pub week: NaiveDate,
     pub total: Decimal,
-    pub change: Option<Decimal>,
 }
 
 pub(crate) fn group(totals: &[ShortTotal]) -> Vec<WeeklyShort> {
@@ -28,20 +27,61 @@ pub(crate) fn group(totals: &[ShortTotal]) -> Vec<WeeklyShort> {
             *entry = observation;
         }
     }
-    let mut previous: Option<(NaiveDate, Decimal)> = None;
     selected
         .into_iter()
-        .map(|(week, observation)| {
-            // Without an observation in the preceding ISO week, the weekly change is unknown.
-            let change = previous
-                .filter(|(date, _)| (week - *date).num_days() == 7)
-                .and_then(|(_, total)| observation.total.checked_sub(total));
-            previous = Some((week, observation.total));
-            WeeklyShort {
-                week,
-                total: observation.total,
-                change,
-            }
+        .map(|(week, observation)| WeeklyShort {
+            week,
+            total: observation.total,
         })
         .collect()
+}
+
+pub(crate) struct BoardRow {
+    pub code: String,
+    pub totals: BTreeMap<NaiveDate, Decimal>,
+}
+
+pub(crate) struct KnfBoard {
+    pub weeks: Vec<NaiveDate>,
+    pub rows: Vec<BoardRow>,
+}
+
+pub(crate) fn board(index: &crate::company_archive::ArchiveIndex, codes: &[String]) -> KnfBoard {
+    let mut weeks = std::collections::BTreeSet::new();
+    let rows = codes
+        .iter()
+        .map(|code| {
+            let snapshots = index
+                .company(code)
+                .map(|files| crate::ranking::company_shorts(&files.shorts, code))
+                .unwrap_or_default();
+            let observations = snapshots
+                .iter()
+                .rev()
+                .map(|snapshot| ShortTotal {
+                    fetched_at: snapshot.fetched_at,
+                    total: snapshot
+                        .positions
+                        .iter()
+                        .map(|position| position.net_short_position_percent)
+                        .sum(),
+                })
+                .collect::<Vec<_>>();
+            let totals = group(&observations)
+                .into_iter()
+                .map(|observation| {
+                    weeks.insert(observation.week);
+                    (observation.week, observation.total)
+                })
+                .collect();
+            BoardRow {
+                code: code.clone(),
+                totals,
+            }
+        })
+        .collect();
+    KnfBoard {
+        weeks: weeks.into_iter().collect(),
+        rows,
+    }
 }

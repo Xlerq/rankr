@@ -7,7 +7,7 @@ description = "Refresh WIG20 data and show the local three-family ranking"
 
 [dependencies]
 anyhow = "1"
-axum = { version = "0.8", default-features = false, features = ["http1", "tokio"] }
+axum = { version = "0.8", default-features = false, features = ["http1", "tokio", "query"] }
 chrono = { version = "0.4", features = ["serde"] }
 chrono-tz = "0.10"
 csv = "1.4"

@@ -69,9 +69,6 @@ dt { color: var(--muted); font-size: 13px; margin-bottom: 7px; }
 dd { margin: 0; min-height: 1.5em; font-size: 16px; overflow-wrap: anywhere; }
 .missing, .empty { color: var(--muted); font-size: 13px; }
 .short-totals { margin: 24px 0; }
-.weekly-shorts th:first-child { text-align: left; }
-.weekly-shorts th, .weekly-shorts td { text-align: right; }
-.weekly-shorts tbody th { font-size: 16px; letter-spacing: 0; color: var(--text); }
 .chart-panel { margin: 20px 0; padding: 12px; background: var(--panel); border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
 .plot { overflow-x: auto; }
 .plot svg { display: block; width: 100%; min-width: 760px; font-family: var(--serif); font-variant-numeric: tabular-nums; }
@@ -85,8 +82,6 @@ dd { margin: 0; min-height: 1.5em; font-size: 16px; overflow-wrap: anywhere; }
 .score-bar.positive { fill: var(--plus); }
 .score-bar.negative { fill: var(--minus); }
 .score-zero { stroke: var(--muted); stroke-width: 2; }
-.short-line { stroke: var(--muted); stroke-width: 1.5; }
-.short-point { fill: var(--text); }
 @media (max-width: 700px) {
     main { padding: 0 12px 24px; }
     .page-heading { align-items: start; }
@@ -94,3 +89,28 @@ dd { margin: 0; min-height: 1.5em; font-size: 16px; overflow-wrap: anywhere; }
     .components { padding: 0 18px 10px; }
     dl { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
+.page-buttons { justify-content: start; flex-wrap: wrap; gap: 12px; border: 0; margin-bottom: 16px; padding-top: 0; }
+.page-buttons a, .company-selector button { padding: 10px 18px; border: 1px solid var(--line); background: var(--panel); color: var(--text); font: inherit; }
+.page-buttons a:hover, .page-buttons a[aria-current=page] { border-color: var(--muted); }
+.company-selector { display: flex; align-items: center; flex-wrap: wrap; gap: 14px; margin: 0 0 24px; }
+.company-selector select { font: inherit; color: var(--text); background: var(--panel); border: 1px solid var(--line); padding: 9px 28px 9px 12px; min-width: 170px; }
+.company-selector button { cursor: pointer; }
+.season-summary { display: flex; align-items: baseline; flex-wrap: wrap; gap: 12px 24px; margin: 24px 0; }
+.season-summary h2 { font-size: 22px; font-weight: 450; margin: 0; }
+.season-summary strong { font-size: clamp(42px, 5vw, 72px); font-weight: 450; }
+.season-summary > span { color: var(--muted); font-size: 16px; }
+.series-labels { display: flex; flex-wrap: wrap; gap: 24px; padding: 12px 18px; }
+.series-label { font-size: 16px; border-bottom: 2px solid; padding-bottom: 4px; }
+.series-label.season-current { border-color: var(--plus); }
+.series-label.season-all { border-color: var(--text); }
+.series-label.season-five { border-color: var(--minus); }
+.series-label.season-ten { border-color: var(--muted); border-bottom-style: dashed; }
+.season-series { fill: none; stroke-width: 2; }
+.season-series.season-current { stroke: var(--plus); }
+.season-series.season-all { stroke: var(--text); }
+.season-series.season-five { stroke: var(--minus); }
+.season-series.season-ten { stroke: var(--muted); stroke-dasharray: 6 4; }
+.knf-board { width: max-content; min-width: 100%; }
+.knf-board td, .knf-board thead th { text-align: right; white-space: nowrap; font-size: 16px; }
+.knf-board th:first-child { text-align: left; position: sticky; left: 0; background: var(--panel); }
+.knf-board tbody th { color: var(--text); font-size: 18px; text-transform: none; letter-spacing: 0; }

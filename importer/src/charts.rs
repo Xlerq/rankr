@@ -5,7 +5,7 @@ use std::fmt::Write;
 use chrono::{DateTime, NaiveDate, Utc};
 use rust_decimal::{Decimal, prelude::ToPrimitive};
 
-use crate::{company_archive::SavedScore, page::escape, weekly_shorts::WeeklyShort};
+use crate::{company_archive::SavedScore, page::escape, seasonality::Seasonality};
 
 pub(crate) struct OhlcCandle {
     pub date: NaiveDate,
@@ -230,53 +230,107 @@ fn draw_scores(svg: &mut String, scores: &[SavedScore], axis: &DateAxis) {
     }
 }
 
-pub(crate) fn render_shorts(weeks: &[WeeklyShort]) -> String {
-    let Some(axis) = DateAxis::new(weeks.iter().map(|week| week.week)) else {
-        return String::new();
-    };
-    let max_total = weeks
+pub(crate) fn render_seasonality(data: &Seasonality, year: i32) -> String {
+    let mut series = Vec::new();
+    if !data.current.is_empty() {
+        series.push(("current", year.to_string(), data.current.as_slice()));
+    }
+    if !data.all.is_empty() {
+        series.push((
+            "all",
+            "Średnia · wszystkie lata".into(),
+            data.all.as_slice(),
+        ));
+    }
+    if let Some(path) = &data.five {
+        series.push(("five", "Średnia · 5 lat".into(), path.as_slice()));
+    }
+    if let Some(path) = &data.ten {
+        series.push(("ten", "Średnia · 10 lat".into(), path.as_slice()));
+    }
+    if series.is_empty() {
+        return "<p class=\"missing\">Brak historii dla tego miesiąca.</p>".into();
+    }
+    let sessions = series
         .iter()
-        .map(|week| number(week.total))
-        .fold(0.0, f64::max)
-        .max(0.1);
-    let y = |total: Decimal| 660.0 - number(total) / max_total * 612.0;
-    let mut svg = String::from("<section class=\"chart-panel\">");
-    svg.push_str(&svg_start("shorts-chart", "Tygodniowa suma shortów", 720.0));
-    svg.push_str("<text class=\"panel-label\" x=\"6%\" y=\"26\">Suma (%)</text>");
+        .map(|(_, _, path)| path.len())
+        .max()
+        .unwrap_or(1)
+        .max(2);
+    let low = series
+        .iter()
+        .flat_map(|(_, _, path)| *path)
+        .map(|value| number(*value) * 100.0)
+        .fold(0.0, f64::min);
+    let high = series
+        .iter()
+        .flat_map(|(_, _, path)| *path)
+        .map(|value| number(*value) * 100.0)
+        .fold(0.0, f64::max);
+    let padding = ((high - low) * 0.08).max(0.1);
+    let top = high + padding;
+    let bottom = low - padding;
+    let x = |session: usize| LEFT + session as f64 / (sessions - 1) as f64 * (RIGHT - LEFT);
+    let y = |value: Decimal| 48.0 + (top - number(value) * 100.0) / (top - bottom) * 712.0;
+    let mut html = String::from("<section class=\"chart-panel\"><div class=\"series-labels\">");
+    for (kind, label, _) in &series {
+        let _ = write!(
+            html,
+            "<span class=\"series-label season-{kind}\">{label}</span>"
+        );
+    }
+    html.push_str("</div>");
+    html.push_str(&svg_start(
+        "seasonality-chart",
+        "Sezonowość bieżącego miesiąca",
+        840.0,
+    ));
     for tick in 0..=4 {
-        let value = f64::from(tick) / 4.0 * max_total;
-        horizontal_tick(
-            &mut svg,
-            660.0 - f64::from(tick) / 4.0 * 612.0,
-            &format!("{value:.2}%"),
-        );
+        let fraction = f64::from(tick) / 4.0;
+        let value = top - fraction * (top - bottom);
+        horizontal_tick(&mut html, 48.0 + fraction * 712.0, &format!("{value:.2}%"));
     }
-    for pair in weeks.windows(2) {
+    for (kind, label, path) in &series {
         let _ = write!(
-            svg,
-            "<line class=\"short-line\" x1=\"{:.6}%\" y1=\"{:.2}\" x2=\"{:.6}%\" y2=\"{:.2}\"/>",
-            axis.x(pair[0].week),
-            y(pair[0].total),
-            axis.x(pair[1].week),
-            y(pair[1].total)
+            html,
+            "<g class=\"season-series season-{kind}\" data-series=\"{kind}\"><title>{label}</title>"
         );
+        for (session, pair) in path.windows(2).enumerate() {
+            let _ = write!(
+                html,
+                "<line x1=\"{:.4}%\" y1=\"{:.2}\" x2=\"{:.4}%\" y2=\"{:.2}\"/>",
+                x(session),
+                y(pair[0]),
+                x(session + 1),
+                y(pair[1])
+            );
+        }
+        for (session, value) in path.iter().enumerate() {
+            let _ = write!(
+                html,
+                "<circle cx=\"{:.4}%\" cy=\"{:.2}\" r=\"2\"><title>Sesja {}: {:.4}%</title></circle>",
+                x(session),
+                y(*value),
+                session + 1,
+                number(*value) * 100.0
+            );
+        }
+        html.push_str("</g>");
     }
-    for week in weeks {
+    let ticks = (sessions - 1).min(5);
+    for tick in 0..=ticks {
+        let session = (sessions - 1) * tick / ticks;
         let _ = write!(
-            svg,
-            "<circle class=\"short-point\" data-week=\"{}\" data-total=\"{}\" cx=\"{:.6}%\" cy=\"{:.2}\" r=\"3\"><title>{}: {}%</title></circle>",
-            week.week,
-            week.total.normalize(),
-            axis.x(week.week),
-            y(week.total),
-            week.week,
-            week.total.normalize()
+            html,
+            "<text class=\"axis-label\" x=\"{:.4}%\" y=\"792\" text-anchor=\"middle\">{}</text>",
+            x(session),
+            session + 1
         );
     }
-    axis.draw(&mut svg, 700.0);
-    svg_end(&mut svg);
-    svg.push_str("</section>");
-    svg
+    html.push_str("<text class=\"axis-label\" x=\"50%\" y=\"822\" text-anchor=\"middle\">Sesja miesiąca</text>");
+    svg_end(&mut html);
+    html.push_str("</section>");
+    html
 }
 
 fn number(value: Decimal) -> f64 {

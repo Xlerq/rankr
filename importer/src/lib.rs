@@ -17,6 +17,7 @@ pub mod page;
 pub mod parser;
 pub mod ranking;
 mod scorecard;
+mod seasonality;
 pub mod sentiment;
 pub mod shorts;
 pub mod shorts_collect;

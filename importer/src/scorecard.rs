@@ -8,8 +8,8 @@ use rust_decimal::Decimal;
 use serde::Deserialize;
 
 use crate::{
-    charts::{OhlcCandle, ShortTotal},
-    company_archive::{ArchiveIndex, CompanyCode, SavedScore, read_json},
+    charts::OhlcCandle,
+    company_archive::{ArchiveIndex, CompanyCode, CompanyFiles, SavedScore, read_json},
     fundamental_points::{self, FundamentalPoints},
     fundamental_points_table,
     fundamental_ratios::{self, FundamentalRatioInput},
@@ -25,10 +25,10 @@ pub(crate) struct CompanyCard {
     pub technical: Option<TechnicalScore>,
     pub newer_shorts: Option<ShortsSnapshot>,
     pub older_shorts: Option<ShortsSnapshot>,
-    pub short_totals: Vec<ShortTotal>,
     pub candles: Vec<OhlcCandle>,
     pub currency: String,
     pub saved_scores: Vec<SavedScore>,
+    pub closes: Vec<CloseCandle>,
 }
 
 #[derive(Deserialize)]
@@ -58,9 +58,8 @@ pub(crate) fn load(
     let Some(gics) = classifications.get(code) else {
         return Ok(None);
     };
-    let Some(files) = index.company(code) else {
-        return Ok(None);
-    };
+    let empty = CompanyFiles::default();
+    let files = index.company(code).unwrap_or(&empty);
     let fundamental = latest::<FundamentalSnapshot>(
         &files.fundamentals,
         |snapshot| snapshot.instrument.code == code,
@@ -110,6 +109,12 @@ pub(crate) fn load(
             }
         }
     });
+    let closes = history
+        .as_ref()
+        .into_iter()
+        .flat_map(|history| &history.candles)
+        .map(|candle| candle.close.clone())
+        .collect();
     // Missing OHLC fields are never fabricated from close-only legacy data.
     let mut candles: Vec<_> = history
         .as_ref()
@@ -133,18 +138,6 @@ pub(crate) fn load(
     candles.sort_by_key(|candle| candle.date);
     let shorts = ranking::company_shorts(&files.shorts, code);
     let (newer_shorts, older_shorts) = ranking::shorts_pair(&shorts);
-    let short_totals = shorts
-        .iter()
-        .rev()
-        .map(|snapshot| ShortTotal {
-            fetched_at: snapshot.fetched_at,
-            total: snapshot
-                .positions
-                .iter()
-                .map(|position| position.net_short_position_percent)
-                .sum(),
-        })
-        .collect();
     let fundamental_score = fundamental
         .as_ref()
         .and_then(|(points, _)| points.fundamental_score);
@@ -164,7 +157,6 @@ pub(crate) fn load(
         technical,
         newer_shorts,
         older_shorts,
-        short_totals,
         candles,
         currency: history.map(|history| history.currency).unwrap_or_default(),
         saved_scores: files
@@ -173,6 +165,7 @@ pub(crate) fn load(
             .filter(|score| score.date <= as_of)
             .cloned()
             .collect(),
+        closes,
     }))
 }
 

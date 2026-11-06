@@ -26,6 +26,18 @@ fn card(root: &FsPath, code: &str) -> CompanyCard {
     scorecard::load(&index, code, as_of()).unwrap().unwrap()
 }
 
+fn history_page(card: &CompanyCard, as_of: NaiveDate) -> String {
+    render_chart(card, as_of, &[card.row.code.clone()])
+}
+
+fn board_page(root: &FsPath) -> String {
+    let index = ArchiveIndex::read(root).unwrap();
+    render_shorts(
+        &crate::weekly_shorts::board(&index, &["KGHM".into()]),
+        as_of(),
+    )
+}
+
 fn text(html: &ParsedHtml, selector: &str) -> Vec<String> {
     html.select(&Selector::parse(selector).unwrap())
         .map(|element| element.text().collect::<String>())
@@ -237,7 +249,22 @@ async fn axum_serves_ranking_card_and_polish_not_found() {
     for (path, expected_status, expected_text) in [
         ("/", StatusCode::OK, "Ranking spółek"),
         ("/KGHM", StatusCode::OK, "Karta wyników"),
-        ("/KGHM/wykres", StatusCode::OK, "Wykres"),
+        ("/KGHM/wykres", StatusCode::OK, "Historia punktów"),
+        ("/historia?spolka=KGHM", StatusCode::OK, "Historia punktów"),
+        ("/historia", StatusCode::OK, "Historia punktów"),
+        ("/sezonowosc?spolka=KGHM", StatusCode::OK, "Sezonowość"),
+        ("/sezonowosc", StatusCode::OK, "Sezonowość"),
+        ("/shorty", StatusCode::OK, "Shorty KNF"),
+        (
+            "/historia?spolka=UNKNOWN",
+            StatusCode::NOT_FOUND,
+            "Nie znaleziono spółki",
+        ),
+        (
+            "/sezonowosc?spolka=UNKNOWN",
+            StatusCode::NOT_FOUND,
+            "Nie znaleziono spółki",
+        ),
         ("/KGHM/shorty", StatusCode::OK, "Shorty"),
         (
             "/UNKNOWN/wykres",
@@ -263,6 +290,30 @@ async fn axum_serves_ranking_card_and_polish_not_found() {
         assert_eq!(response.status(), expected_status);
         assert!(response.text().await.unwrap().contains(expected_text));
     }
+    let client = reqwest::Client::builder()
+        .redirect(reqwest::redirect::Policy::none())
+        .build()
+        .unwrap();
+    for (old, target) in [
+        ("/KGHM/wykres", "/historia?spolka=KGHM"),
+        ("/KGHM/shorty", "/shorty"),
+    ] {
+        let response = client
+            .get(format!("http://{address}{old}"))
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::PERMANENT_REDIRECT);
+        assert_eq!(response.headers()["location"], target);
+    }
+    let response = client
+        .get(format!("http://{address}/historia?spolka=PGE"))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let html = ParsedHtml::parse_document(&response.text().await.unwrap());
+    assert_eq!(text(&html, "select option[selected]"), ["PGE"]);
     server.abort();
 }
 
@@ -297,7 +348,7 @@ fn company_without_saved_rankings_gets_real_candles_and_empty_score_panel() {
     );
     let company = card(directory.path(), "KGHM");
     assert!(company.saved_scores.is_empty());
-    let html = ParsedHtml::parse_document(&render_chart(&company, as_of()));
+    let html = ParsedHtml::parse_document(&history_page(&company, as_of()));
     assert_eq!(
         text(&html, ".price-chart .candle title"),
         [
@@ -358,7 +409,7 @@ fn score_bars_use_saved_company_values_only_preserving_null_zero_and_date_gaps()
     let company = card(root, "KGHM");
     assert_eq!(company.saved_scores.len(), 4);
     assert!(company.saved_scores.last().unwrap().score.is_none());
-    let html = ParsedHtml::parse_document(&render_chart(&company, as_of()));
+    let html = ParsedHtml::parse_document(&history_page(&company, as_of()));
     assert_eq!(
         text(&html, ".score-chart .score-bar title"),
         ["2026-09-10: 3", "2026-09-13: -2"]
@@ -472,7 +523,7 @@ fn candles_and_scores_share_one_svg_and_the_same_calendar_positions() {
         "2026-09-19T12:00:00Z",
         json!(-1),
     );
-    let html = ParsedHtml::parse_document(&render_chart(&card(root, "KGHM"), as_of()));
+    let html = ParsedHtml::parse_document(&history_page(&card(root, "KGHM"), as_of()));
     assert_eq!(text(&html, ".chart-panel svg").len(), 1);
     assert_eq!(text(&html, ".price-score-chart .candle").len(), 2);
     assert_eq!(text(&html, ".price-score-chart .score-bar").len(), 2);
@@ -518,7 +569,7 @@ fn missing_prices_show_an_explanation_while_saved_scores_remain_visible() {
         "2026-09-18T12:00:00Z",
         json!(2),
     );
-    let html = ParsedHtml::parse_document(&render_chart(&card(directory.path(), "KGHM"), as_of()));
+    let html = ParsedHtml::parse_document(&history_page(&card(directory.path(), "KGHM"), as_of()));
     assert!(text(&html, ".candle").is_empty());
     assert_eq!(
         text(&html, ".price-score-chart .score-bar title"),
@@ -558,34 +609,22 @@ fn weekly_shorts_select_the_latest_reading_of_each_iso_week_including_zero() {
                 &json!({"code":"KGHM", "isin":"PLKGHM000017", "fetched_at":date, "positions":positions}),
             );
         }
-        let company = card(root, "KGHM");
-        assert_eq!(company.short_totals.len(), 3);
-        let html = ParsedHtml::parse_document(&render_shorts(&company, as_of()));
-        assert_eq!(text(&html, ".weekly-shorts tbody tr").len(), 2);
+        let html = ParsedHtml::parse_document(&board_page(directory.path()));
+        assert_eq!(text(&html, ".knf-board tbody tr").len(), 1);
         assert_eq!(
-            text(&html, ".weekly-shorts tbody th"),
-            ["2026-09-07", "2026-09-14"]
+            text(&html, ".knf-board thead th"),
+            ["Spółka", "2026-W37", "2026-W38"]
         );
+        assert_eq!(text(&html, ".knf-board tbody th"), ["KGHM"]);
         assert_eq!(
-            text(&html, ".weekly-shorts tbody td"),
+            text(&html, ".knf-board tbody td"),
             if newest_empty {
-                vec!["1.5", "", "0", "-1.5"]
+                vec!["1.5", "0"]
             } else {
-                vec!["1.5", "", "1.3", "-0.2"]
+                vec!["1.5", "1.3"]
             }
         );
-        let points: Vec<_> = html
-            .select(&Selector::parse(".shorts-chart .short-point").unwrap())
-            .collect();
-        assert_eq!(points.len(), 2);
-        assert_eq!(
-            points[1].value().attr("data-total"),
-            Some(if newest_empty { "0" } else { "1.3" })
-        );
-        assert_eq!(text(&html, ".shorts-chart .short-line").len(), 1);
-        assert!(text(&html, ".price-score-chart").is_empty());
-        assert!(text(&html, ".holders").is_empty());
-        assert_eq!(text(&html, "svg").len(), 1);
+        assert!(text(&html, "svg").is_empty());
     }
 }
 
@@ -593,9 +632,7 @@ fn weekly_shorts_select_the_latest_reading_of_each_iso_week_including_zero() {
 fn company_without_short_files_has_a_message_without_a_zero_chart() {
     let directory = tempfile::tempdir().unwrap();
     write_json(directory.path(), "history.json", &ohlc_history("KGHM"));
-    let company = card(directory.path(), "KGHM");
-    assert!(company.short_totals.is_empty());
-    let html = ParsedHtml::parse_document(&render_shorts(&company, as_of()));
+    let html = ParsedHtml::parse_document(&board_page(directory.path()));
     assert!(text(&html, ".shorts-chart").is_empty());
     assert!(text(&html, ".short-point").is_empty());
     assert!(text(&html, ".short-line").is_empty());
@@ -665,8 +702,9 @@ fn scorecard_has_points_and_navigation_without_charts_or_explanations() {
     assert_eq!(
         links,
         [
-            ("Wykres".into(), "/KGHM/wykres".into()),
-            ("Shorty".into(), "/KGHM/shorty".into())
+            ("Sezonowość".into(), "/sezonowosc?spolka=KGHM".into()),
+            ("Historia punktów".into(), "/historia?spolka=KGHM".into()),
+            ("Shorty KNF".into(), "/shorty".into())
         ]
     );
     assert_eq!(
@@ -679,7 +717,7 @@ fn scorecard_has_points_and_navigation_without_charts_or_explanations() {
 fn charts_fill_the_container_and_keep_a_tall_pixel_height() {
     let directory = tempfile::tempdir().unwrap();
     write_json(directory.path(), "history.json", &ohlc_history("KGHM"));
-    let html = ParsedHtml::parse_document(&render_chart(&card(directory.path(), "KGHM"), as_of()));
+    let html = ParsedHtml::parse_document(&history_page(&card(directory.path(), "KGHM"), as_of()));
     let svgs: Vec<_> = html.select(&Selector::parse("svg").unwrap()).collect();
     assert_eq!(svgs.len(), 1);
     assert_eq!(svgs[0].value().attr("width"), Some("100%"));
@@ -690,7 +728,7 @@ fn charts_fill_the_container_and_keep_a_tall_pixel_height() {
 }
 
 #[test]
-fn weekly_grouping_handles_iso_year_boundaries_missing_weeks_and_the_first_delta() {
+fn weekly_grouping_handles_iso_year_boundaries_and_missing_weeks() {
     use crate::charts::ShortTotal;
     let observation = |at: &str, total| ShortTotal {
         fetched_at: at.parse().unwrap(),
@@ -711,7 +749,180 @@ fn weekly_grouping_handles_iso_year_boundaries_missing_weeks_and_the_first_delta
         ["2020-12-28", "2021-01-04", "2021-01-18"]
     );
     assert_eq!(weeks[0].total, Decimal::from(3));
-    assert!(weeks[0].change.is_none());
-    assert_eq!(weeks[1].change, Some(Decimal::ONE));
-    assert!(weeks[2].change.is_none());
+    assert_eq!(weeks[1].total, Decimal::from(4));
+    assert_eq!(weeks[2].total, Decimal::from(6));
+}
+
+fn seasonal_history(years: i32) -> Value {
+    let mut candles = Vec::new();
+    for year in (2026 - years)..2026 {
+        candles.extend([
+            json!({"date":format!("{year}-08-31"), "close":100}),
+            json!({"date":format!("{year}-09-02"), "close":100}),
+            json!({"date":format!("{year}-09-28"), "close":if year == 2026 - years { 120 } else { 110 }}),
+        ]);
+    }
+    candles.extend([
+        json!({"date":"2026-09-01", "close":100}),
+        json!({"date":"2026-09-18", "close":105}),
+        json!({"date":"2026-09-30", "close":1000}),
+    ]);
+    json!({"instrument":{"code":"KGHM"}, "fetched_at":"2026-09-19T10:00:00Z", "candles":candles})
+}
+
+#[test]
+fn six_years_show_the_full_mean_and_five_year_path_without_ten_years() {
+    let directory = tempfile::tempdir().unwrap();
+    write_json(directory.path(), "history.json", &seasonal_history(6));
+    let company = card(directory.path(), "KGHM");
+    let data = crate::seasonality::calculate(&company.closes, as_of()).unwrap();
+    assert_eq!(data.years, 6);
+    assert_eq!(data.mean, company.technical.as_ref().unwrap().explanation.r);
+    assert_eq!(data.current, [Decimal::ZERO, Decimal::new(5, 2)]);
+    assert_eq!(
+        data.five.as_ref().unwrap(),
+        &[Decimal::ZERO, Decimal::new(1, 1)]
+    );
+    assert!(data.ten.is_none());
+    let html = ParsedHtml::parse_document(
+        &render_seasonality(&company, as_of(), &["KGHM".into(), "PGE".into()]).unwrap(),
+    );
+    assert_eq!(text(&html, ".season-summary strong"), ["11.6667%"]);
+    assert!(text(&html, ".season-summary h2")[0].contains("Wrzesień 2026"));
+    for kind in ["current", "all", "five"] {
+        assert_eq!(text(&html, &format!("svg [data-series={kind}]")).len(), 1);
+    }
+    assert!(text(&html, "svg [data-series=ten]").is_empty());
+    assert_eq!(text(&html, ".seasonality-chart").len(), 1);
+    assert!(text(&html, "svg")[0].contains("Sesja miesiąca"));
+    assert_eq!(text(&html, "select option[selected]"), ["KGHM"]);
+    assert!(text(&html, "footer, .legend, .price-score-chart").is_empty());
+}
+
+#[test]
+fn seasonal_path_thresholds_use_completed_years_only_and_start_at_zero() {
+    for years in [0, 4, 5, 9, 10] {
+        let history: crate::technical::TechnicalHistory =
+            serde_json::from_value(seasonal_history(years)).unwrap();
+        let data = crate::seasonality::calculate(&history.candles, as_of()).unwrap();
+        assert_eq!(data.years, years as usize);
+        assert_eq!(data.five.is_some(), years >= 5);
+        assert_eq!(data.ten.is_some(), years >= 10);
+        assert_eq!(data.current.first(), Some(&Decimal::ZERO));
+        if years > 0 {
+            assert_eq!(data.all.first(), Some(&Decimal::ZERO));
+        } else {
+            assert!(data.all.is_empty());
+            assert!(data.mean.is_none());
+        }
+    }
+}
+
+#[test]
+fn seasonal_mean_preserves_the_scorers_adjusted_price_and_skips_missing_previous_months() {
+    let history: crate::technical::TechnicalHistory = serde_json::from_value(json!({"candles":[
+        {"date":"2024-09-02", "close":100}, {"date":"2024-09-30", "close":500},
+        {"date":"2025-08-29", "close":100, "adjusted_close":100},
+        {"date":"2025-09-02", "close":100, "adjusted_close":100},
+        {"date":"2025-09-30", "close":80, "adjusted_close":110}
+    ]}))
+    .unwrap();
+    let data = crate::seasonality::calculate(&history.candles, as_of()).unwrap();
+    assert_eq!(data.mean, Some(Decimal::new(1, 1)));
+    assert_eq!(data.years, 1);
+    assert_eq!(data.all, [Decimal::ZERO, Decimal::new(1, 1)]);
+    assert!(data.current.is_empty());
+}
+
+#[test]
+fn seasonality_in_january_uses_december_of_the_preceding_year() {
+    let history: crate::technical::TechnicalHistory = serde_json::from_value(json!({"candles":[
+        {"date":"2024-12-31", "close":100}, {"date":"2025-01-02", "close":100},
+        {"date":"2025-01-31", "close":110}, {"date":"2026-01-02", "close":200}
+    ]}))
+    .unwrap();
+    let data = crate::seasonality::calculate(
+        &history.candles,
+        NaiveDate::from_ymd_opt(2026, 1, 5).unwrap(),
+    )
+    .unwrap();
+    assert_eq!(data.mean, Some(Decimal::new(1, 1)));
+    assert_eq!(data.years, 1);
+    assert_eq!(data.current, [Decimal::ZERO]);
+}
+
+#[test]
+fn knf_board_has_multiple_companies_and_keeps_missing_observations_blank() {
+    let directory = tempfile::tempdir().unwrap();
+    let root = directory.path();
+    for (code, name, at, value) in [
+        ("KGHM", "old", "2026-09-08T12:00:00Z", Some("1.5")),
+        ("KGHM", "new", "2026-09-18T12:00:00Z", None),
+        ("PGE", "old", "2026-09-08T12:00:00Z", Some("0.7")),
+    ] {
+        let positions = value
+            .map(|value| {
+                json!([{"holder":"Holder", "net_short_position_percent":value,
+            "position_date":"2026-09-07", "modify_date":"2026-09-07"}])
+            })
+            .unwrap_or(json!([]));
+        write_json(
+            root,
+            &format!("{code}/{name}/shorts.json"),
+            &json!({"code":code, "isin":format!("fixture-{code}"), "fetched_at":at, "positions":positions}),
+        );
+    }
+    let index = ArchiveIndex::read(root).unwrap();
+    let board = crate::weekly_shorts::board(&index, &["KGHM".into(), "PGE".into(), "PKOBP".into()]);
+    let html = ParsedHtml::parse_document(&render_shorts(&board, as_of()));
+    assert_eq!(text(&html, ".knf-board tbody th"), ["KGHM", "PGE", "PKOBP"]);
+    assert_eq!(
+        text(&html, ".knf-board thead th"),
+        ["Spółka", "2026-W37", "2026-W38"]
+    );
+    assert_eq!(
+        text(&html, ".knf-board tbody td"),
+        ["1.5", "0", "0.7", "", "", ""]
+    );
+    assert!(text(&html, "svg, .holders").is_empty());
+}
+
+#[test]
+fn ranking_has_three_analysis_buttons_above_the_numeric_table() {
+    let rendered = render(&[], as_of());
+    let html = ParsedHtml::parse_document(&rendered);
+    let buttons: Vec<_> = html
+        .select(&Selector::parse(".page-buttons a").unwrap())
+        .map(|a| {
+            (
+                a.text().collect::<String>(),
+                a.value().attr("href").unwrap(),
+            )
+        })
+        .collect();
+    assert_eq!(
+        buttons,
+        [
+            ("Sezonowość".into(), "/sezonowosc"),
+            ("Historia punktów".into(), "/historia"),
+            ("Shorty KNF".into(), "/shorty")
+        ]
+    );
+    assert!(
+        rendered.find("page-buttons\" aria-label").unwrap()
+            < rendered.find("<table class=\"ranking\"").unwrap()
+    );
+    assert!(text(&html, ".arrow, .legend, footer").is_empty());
+    assert!(!rendered.contains("Wagi rodzin"));
+}
+
+#[test]
+fn a_known_company_without_archives_has_one_short_seasonality_message() {
+    let directory = tempfile::tempdir().unwrap();
+    let company = card(directory.path(), "KGHM");
+    let html = ParsedHtml::parse_document(
+        &render_seasonality(&company, as_of(), &["KGHM".into()]).unwrap(),
+    );
+    assert_eq!(text(&html, ".missing"), ["Brak historii cen."]);
+    assert!(text(&html, "svg, .season-summary").is_empty());
 }
