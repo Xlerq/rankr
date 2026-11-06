@@ -30,6 +30,8 @@ fn router(directory: PathBuf) -> std::io::Result<Router> {
     Ok(Router::new()
         .route("/", get(index))
         .route("/{code}", get(company))
+        .route("/{code}/wykres", get(chart))
+        .route("/{code}/shorty", get(shorts))
         .with_state(PageState {
             directory,
             archives,
@@ -60,12 +62,11 @@ async fn index(State(state): State<PageState>) -> Result<Html<String>, (StatusCo
     Ok(Html(render(&ranking.rows, as_of)))
 }
 
-async fn company(
-    State(state): State<PageState>,
-    Path(code): Path<String>,
-) -> Result<Html<String>, (StatusCode, &'static str)> {
+async fn company_data(
+    state: PageState,
+    code: String,
+) -> Result<(CompanyCard, NaiveDate), (StatusCode, &'static str)> {
     let as_of = Utc::now().date_naive();
-    // The URL is only a lookup key; it is never joined to a filesystem path.
     let card = tokio::task::spawn_blocking(move || scorecard::load(&state.archives, &code, as_of))
         .await
         .map_err(server_error)?
@@ -74,7 +75,31 @@ async fn company(
             StatusCode::NOT_FOUND,
             "Nie znaleziono spółki o podanym kodzie.",
         ))?;
+    Ok((card, as_of))
+}
+
+async fn company(
+    State(state): State<PageState>,
+    Path(code): Path<String>,
+) -> Result<Html<String>, (StatusCode, &'static str)> {
+    let (card, as_of) = company_data(state, code).await?;
     Ok(Html(render_company(&card, as_of)))
+}
+
+async fn chart(
+    State(state): State<PageState>,
+    Path(code): Path<String>,
+) -> Result<Html<String>, (StatusCode, &'static str)> {
+    let (card, as_of) = company_data(state, code).await?;
+    Ok(Html(render_chart(&card, as_of)))
+}
+
+async fn shorts(
+    State(state): State<PageState>,
+    Path(code): Path<String>,
+) -> Result<Html<String>, (StatusCode, &'static str)> {
+    let (card, as_of) = company_data(state, code).await?;
+    Ok(Html(render_shorts(&card, as_of)))
 }
 
 fn server_error(error: impl Display) -> (StatusCode, &'static str) {
@@ -92,7 +117,7 @@ fn document(title: &str, body: &str) -> String {
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{} — rankr</title><style>{}</style></head>
 <body><main><nav><a class="brand" href="/">rankr<span>.</span></a><span>GPW / WIG20</span></nav>
-{body}<footer>Wagi rodzin 1 / 1 / 1 <span>Fundament + technika + sentyment</span></footer>
+{body}
 </main></body></html>"#,
         escape(title),
         include_str!("page.css")
@@ -103,17 +128,15 @@ fn render(rows: &[RankingRow], as_of: NaiveDate) -> String {
     let mut body = String::new();
     for row in rows {
         body.push_str(&format!(
-            r#"<tr>
-<td class="final-score">{}</td>
-<th scope="row"><a class="row-link company-name" href="/{}">{}</a></th>
-<td class="sector">{}</td><td>{}</td><td>{}</td><td>{}</td></tr>"#,
-            score(row.final_score, false),
+            r#"<tr><th scope="row"><a class="row-link company-name" href="/{}">{}</a></th>
+<td class="sector">{}</td><td>{}</td><td>{}</td><td>{}</td><td class="final-score">{}</td></tr>"#,
             escape(&row.code),
             escape(&row.code),
             escape(&row.gics_sector),
-            score(row.fundamental_score, true),
-            score(row.technical_score, true),
-            score(row.sentiment_score, true)
+            score(row.fundamental_score, false),
+            score(row.technical_score, false),
+            score(row.sentiment_score, false),
+            score(row.final_score, false)
         ));
     }
     if rows.is_empty() {
@@ -125,55 +148,100 @@ fn render(rows: &[RankingRow], as_of: NaiveDate) -> String {
         "Ranking spółek GPW",
         &format!(
             r#"
-<header class="page-heading"><div><p class="eyebrow">Potencjał wzrostu</p><h1>Ranking spółek</h1></div>
-<p class="date">{as_of}<span>Data rankingu · UTC</span></p></header>
+<header class="page-heading"><h1>Ranking spółek</h1><p class="date">{as_of}<span>Data rankingu · UTC</span></p></header>
 <div class="table-panel"><table class="ranking"><thead><tr>
-<th scope="col">Wynik</th><th scope="col">Spółka</th><th scope="col">Sektor GICS</th>
-<th scope="col">Fundament</th><th scope="col">Technika</th><th scope="col">Sentyment</th>
-</tr></thead><tbody>{body}</tbody></table></div>
-<p class="legend">↑ dodatni punkt <span>↓ ujemny punkt</span> — zero <span>Puste pole: brak wyniku</span></p>"#
+<th scope="col">Spółka</th><th scope="col">Sektor</th><th scope="col">Fundament</th><th scope="col">Technika</th><th scope="col">Sentyment</th><th scope="col">Wynik</th>
+</tr></thead><tbody>{body}</tbody></table></div>"#
         ),
     )
 }
 
-fn render_company(card: &CompanyCard, as_of: NaiveDate) -> String {
-    let row = &card.row;
-    let mut body = format!(
-        r#"<a class="back" href="/">← Ranking spółek</a>
-<header class="page-heading company-heading"><div><p class="eyebrow">Karta spółki · {as_of} UTC</p>
-<h1 class="company-name">{}</h1><p class="sector">Sektor GICS · {}</p></div>
-<div class="total"><span class="eyebrow">Wynik końcowy</span><div class="final-score">{}</div></div></header>"#,
-        escape(&row.code),
-        escape(&row.gics_sector),
-        score(row.final_score, false)
-    );
-    if row.final_score.is_none() {
-        body.push_str("<p class=\"missing\">Brak wyniku co najmniej jednej rodziny.</p>");
+fn company_header(card: &CompanyCard, as_of: NaiveDate, view: &str) -> String {
+    format!(
+        r#"<a class="back" href="/">Ranking</a>
+<header class="page-heading company-heading"><div><p class="eyebrow">{view}</p><h1 class="company-name">{}</h1><p class="sector">{}</p></div>
+<p class="date">{as_of}<span>Data rankingu · UTC</span></p></header>"#,
+        escape(&card.row.code),
+        escape(&card.row.gics_sector)
+    )
+}
+
+fn view_links(code: &str, current: &str) -> String {
+    let mut links = String::from("<nav class=\"view-links\" aria-label=\"Widoki spółki\">");
+    for (view, suffix) in [("Wyniki", ""), ("Wykres", "/wykres"), ("Shorty", "/shorty")] {
+        if view != current {
+            links.push_str(&format!("<a href=\"/{}{suffix}\">{view}</a>", escape(code)));
+        }
     }
-    body.push_str(&crate::charts::render(
-        &card.candles,
-        &card.currency,
-        &card.saved_scores,
+    links.push_str("</nav>");
+    links
+}
+
+fn render_company(card: &CompanyCard, as_of: NaiveDate) -> String {
+    let mut body = company_header(card, as_of, "Karta wyników");
+    body.push_str(&view_links(&card.row.code, "Wyniki"));
+    body.push_str(&format!(
+        "<div class=\"total\"><span>Wynik</span><div class=\"final-score\">{}</div></div>",
+        score(card.row.final_score, true)
     ));
     body.push_str(&band(
         "01",
         "Fundament",
-        row.fundamental_score,
+        card.row.fundamental_score,
         &render_fundamental(card),
     ));
     body.push_str(&band(
         "02",
         "Technika",
-        row.technical_score,
+        card.row.technical_score,
         &render_technical(card),
     ));
     body.push_str(&band(
         "03",
         "Sentyment",
-        row.sentiment_score,
+        card.row.sentiment_score,
         &render_sentiment(card),
     ));
-    document(&format!("{} — karta spółki", row.code), &body)
+    document(&format!("{} — wyniki", card.row.code), &body)
+}
+
+fn render_chart(card: &CompanyCard, as_of: NaiveDate) -> String {
+    let mut body = company_header(card, as_of, "Wykres");
+    body.push_str(&view_links(&card.row.code, "Wykres"));
+    body.push_str(&crate::charts::render(
+        &card.candles,
+        &card.currency,
+        &card.saved_scores,
+    ));
+    document(&format!("{} — wykres", card.row.code), &body)
+}
+
+fn render_shorts(card: &CompanyCard, as_of: NaiveDate) -> String {
+    let mut body = company_header(card, as_of, "Shorty");
+    body.push_str(&view_links(&card.row.code, "Shorty"));
+    let weeks = crate::weekly_shorts::group(&card.short_totals);
+    if weeks.is_empty() {
+        body.push_str("<p class=\"missing\">brak zapisanych odczytów rejestru</p>");
+    } else {
+        body.push_str("<div class=\"table-panel\"><table class=\"weekly-shorts\"><thead><tr><th scope=\"col\">Tydzień</th><th scope=\"col\">Suma (%)</th><th scope=\"col\">Zmiana (p.p.)</th></tr></thead><tbody>");
+        for week in &weeks {
+            let change = week
+                .change
+                .map(|value| {
+                    let sign = if value > Decimal::ZERO { "+" } else { "" };
+                    format!("{sign}{}", decimal(Some(value), false))
+                })
+                .unwrap_or_default();
+            body.push_str(&format!(
+                "<tr><th scope=\"row\">{}</th><td>{}</td><td>{change}</td></tr>",
+                week.week,
+                decimal(Some(week.total), false)
+            ));
+        }
+        body.push_str("</tbody></table></div>");
+        body.push_str(&crate::charts::render_shorts(&weeks));
+    }
+    document(&format!("{} — shorty", card.row.code), &body)
 }
 
 fn band(number: &str, title: &str, points: Option<i8>, components: &str) -> String {
@@ -186,16 +254,11 @@ fn band(number: &str, title: &str, points: Option<i8>, components: &str) -> Stri
 
 fn render_fundamental(card: &CompanyCard) -> String {
     let Some((p, snapshot)) = &card.fundamental else {
-        return "<p class=\"missing\">Brak raportu pozwalającego obliczyć wskaźniki.</p>".into();
+        return String::new();
     };
     let f = &snapshot.fundamentals;
-    let mut body = format!(
-        "<p class=\"source-note\">Raport: {} · Kwoty raportu: {} × {} · Pobranie: {}</p>",
-        escape(&f.report_period),
-        escape(&f.currency),
-        f.unit_multiplier,
-        snapshot.fetched_at
-    );
+    let unit = format!("{} × {}", f.currency, f.unit_multiplier);
+    let mut body = String::new();
     // This is the same Financials template selected by fundamental_points::score.
     if card.row.gics_sector != "Financials" {
         body.push_str(&metric(
@@ -204,6 +267,7 @@ fn render_fundamental(card: &CompanyCard) -> String {
             p.net_margin_points,
             p.ratios.net_margin,
             true,
+            &unit,
             &[
                 ("Zysk netto", f.net_income_parent),
                 ("Przychody", f.revenue),
@@ -215,6 +279,7 @@ fn render_fundamental(card: &CompanyCard) -> String {
             p.operating_margin_points,
             p.ratios.operating_margin,
             true,
+            &unit,
             &[
                 ("Zysk operacyjny", f.operating_profit),
                 ("Przychody", f.revenue),
@@ -227,6 +292,7 @@ fn render_fundamental(card: &CompanyCard) -> String {
         p.equity_ratio_points,
         p.ratios.equity_ratio,
         true,
+        &unit,
         &[
             ("Kapitał własny (equity_parent)", f.equity_parent),
             ("Aktywa", f.assets),
@@ -239,6 +305,7 @@ fn render_fundamental(card: &CompanyCard) -> String {
             p.debt_to_equity_points,
             p.ratios.debt_to_equity,
             false,
+            &unit,
             &[
                 ("Zobowiązania długoterminowe", f.long_term_liabilities),
                 ("Zobowiązania krótkoterminowe", f.short_term_liabilities),
@@ -251,6 +318,7 @@ fn render_fundamental(card: &CompanyCard) -> String {
             p.ocf_to_net_income_points,
             p.ratios.ocf_to_net_income,
             false,
+            &unit,
             &[
                 ("Przepływy operacyjne", f.operating_cash_flow),
                 ("Zysk netto", f.net_income_parent),
@@ -266,75 +334,51 @@ fn metric(
     points: Option<i8>,
     ratio: Option<Decimal>,
     percent: bool,
+    unit: &str,
     amounts: &[(&str, Option<Decimal>)],
 ) -> String {
     let mut details = String::new();
     for (label, value) in amounts {
-        details.push_str(&datum(label, &decimal(*value, false)));
+        details.push_str(&datum(
+            &format!("{label} ({unit})"),
+            &decimal(*value, false),
+        ));
     }
     details.push_str(&datum(key, &decimal(ratio, percent)));
-    let missing = if points.is_none() {
-        "<p class=\"missing\">Brak danych lub poprawnego mianownika.</p>"
-    } else {
-        ""
-    };
     format!(
         r#"<article class="metric" data-metric="{key}"><div class="metric-heading"><h3>{title}</h3>{}</div>
-<dl>{details}</dl>{missing}</article>"#,
+<dl>{details}</dl></article>"#,
         score(points, true)
     )
 }
 
 fn render_technical(card: &CompanyCard) -> String {
     let Some(t) = &card.technical else {
-        return "<p class=\"missing\">Brak historii pozwalającej obliczyć wynik techniczny.</p>"
-            .into();
+        return String::new();
     };
     let e = &t.explanation;
-    let mut body = format!(
-        r#"<article class="metric" data-metric="seasonality_points">
-<div class="metric-heading"><h3>Sezonowość</h3>{}</div><dl>{}{}</dl>{}</article>
-<article class="metric" data-metric="trend_points"><div class="metric-heading"><h3>Trend SMA200</h3>{}</div>
-<dl>{}{}{}</dl><p class="source-note">Sesje: {} / 200 · Ostatnia sesja: {}</p></article>"#,
+    format!(
+        r#"<article class="metric" data-metric="seasonality_points"><div class="metric-heading"><h3>Sezonowość</h3>{}</div><dl>{}{}</dl></article>
+<article class="metric" data-metric="trend_points"><div class="metric-heading"><h3>Trend SMA200</h3>{}</div><dl>{}{}{}</dl></article>"#,
         score(t.seasonality_points, true),
         datum("Średni zwrot R", &decimal(e.r, true)),
         datum("Liczba lat", &e.years.to_string()),
-        if t.seasonality_points.is_none() {
-            "<p class=\"missing\">Brak porównywalnych miesięcy z poprzednich lat.</p>"
-        } else {
-            ""
-        },
         score(Some(t.trend_points), true),
         datum("Ostatni close", &decimal(e.close, false)),
         datum("SMA200", &decimal(e.sma200, false)),
-        datum("Odchylenie d", &decimal(e.d, true)),
-        e.trend_sessions,
-        e.last_session
-            .map(|date| date.to_string())
-            .unwrap_or_default()
-    );
-    if t.technical_score.is_none() && t.seasonality_points.is_some() {
-        body.push_str("<p class=\"missing\">Historia cen jest nieaktualna.</p>");
-    }
-    body
+        datum("Odchylenie d", &decimal(e.d, true))
+    )
 }
 
 fn render_sentiment(card: &CompanyCard) -> String {
-    let mut body = String::from(
-        "<p class=\"source-note\">Rejestr krótkiej sprzedaży KNF · ujawnione pozycje netto</p>",
-    );
-    if card.older_shorts.is_none() || card.newer_shorts.is_none() {
-        body.push_str("<p class=\"missing\">brak drugiego odczytu rejestru</p>");
-    }
-    body.push_str("<dl class=\"short-totals\">");
+    let mut body = String::from("<dl class=\"short-totals\">");
     for (label, snapshot) in [
         ("Suma nowszego odczytu", &card.newer_shorts),
         ("Suma starszego odczytu", &card.older_shorts),
     ] {
-        // KNF stores percentages already; do not multiply by 100 here.
-        let total = snapshot.as_ref().map(short_total);
-        let value = total
-            .map(|value| format!("{}%", decimal(Some(value), false)))
+        let value = snapshot
+            .as_ref()
+            .map(|snapshot| format!("{}%", decimal(Some(short_total(snapshot)), false)))
             .unwrap_or_default();
         body.push_str(&datum(label, &value));
         if let Some(snapshot) = snapshot {
@@ -344,19 +388,7 @@ fn render_sentiment(card: &CompanyCard) -> String {
             ));
         }
     }
-    body.push_str("</dl><h3 class=\"holders-title\">Posiadacze w nowszym odczycie</h3><div class=\"table-panel\"><table class=\"holders\"><thead><tr><th scope=\"col\">Posiadacz</th><th scope=\"col\">Pozycja netto</th><th scope=\"col\">Data pozycji</th></tr></thead><tbody>");
-    if let Some(snapshot) = &card.newer_shorts {
-        for position in &snapshot.positions {
-            body.push_str(&format!(
-                "<tr><td>{}</td><td class=\"number\">{}%</td><td class=\"number\">{}</td></tr>",
-                escape(&position.holder),
-                decimal(Some(position.net_short_position_percent), false),
-                position.position_date
-            ));
-        }
-    }
-    body.push_str("</tbody></table></div>");
-    body.push_str(&crate::charts::render_shorts(&card.short_totals));
+    body.push_str("</dl>");
     body
 }
 
@@ -409,7 +441,9 @@ fn score(value: Option<i8>, with_arrow: bool) -> String {
     } else {
         String::new()
     };
-    let number = if value < 0 {
+    let number = if value == 0 && with_arrow {
+        String::new()
+    } else if value < 0 {
         format!("−{}", -i16::from(value))
     } else {
         value.to_string()
