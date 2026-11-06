@@ -281,7 +281,7 @@ fn saved_ranking(root: &FsPath, name: &str, date: &str, time: &str, value: Value
 }
 
 #[test]
-fn company_without_saved_rankings_gets_real_candles_and_empty_score_svg() {
+fn company_without_saved_rankings_gets_real_candles_and_empty_score_panel() {
     let directory = tempfile::tempdir().unwrap();
     write_json(
         directory.path(),
@@ -301,6 +301,16 @@ fn company_without_saved_rankings_gets_real_candles_and_empty_score_svg() {
     assert_eq!(text(&html, ".price-chart .positive").len(), 1);
     assert_eq!(text(&html, ".price-chart .negative").len(), 1);
     assert_eq!(text(&html, ".score-chart"), [""]);
+    assert_eq!(text(&html, ".chart-panel svg").len(), 1);
+    assert_eq!(
+        text(&html, ".price-score-chart .price-chart .candle").len(),
+        2
+    );
+    assert!(
+        html.select(&Selector::parse(".price-score-chart .score-chart *").unwrap())
+            .next()
+            .is_none()
+    );
     assert!(
         text(&html, ".chart-panel .missing")
             .iter()
@@ -375,10 +385,11 @@ fn score_bars_use_saved_company_values_only_preserving_null_zero_and_date_gaps()
             .next()
             .is_none()
     );
+    assert_eq!(text(&html, ".chart-panel svg").len(), 1);
     assert!(
-        text(&html, ".score-chart .axis-label")
+        marks
             .iter()
-            .all(|s| !s.starts_with("2020"))
+            .all(|mark| mark.value().attr("data-date").unwrap() >= "2026-09-10")
     );
     assert!(
         !text(&html, ".score-chart title")
@@ -442,5 +453,175 @@ fn company_loading_is_independent_of_other_company_archives_and_matches_ranking(
     assert_eq!(
         serde_json::to_value(company.row).unwrap(),
         serde_json::to_value(expected).unwrap()
+    );
+}
+
+#[test]
+fn candles_and_scores_share_one_svg_and_the_same_calendar_positions() {
+    let directory = tempfile::tempdir().unwrap();
+    let root = directory.path();
+    write_json(root, "history.json", &ohlc_history("KGHM"));
+    saved_ranking(
+        root,
+        "friday",
+        "2026-09-18",
+        "2026-09-18T12:00:00Z",
+        json!(3),
+    );
+    // A saved Saturday ranking has its own calendar position even without a candle.
+    saved_ranking(
+        root,
+        "saturday",
+        "2026-09-19",
+        "2026-09-19T12:00:00Z",
+        json!(-1),
+    );
+    let html = ParsedHtml::parse_document(&render_company(&card(root, "KGHM"), as_of()));
+    assert_eq!(text(&html, ".chart-panel svg").len(), 1);
+    assert_eq!(text(&html, ".price-score-chart .candle").len(), 2);
+    assert_eq!(text(&html, ".price-score-chart .score-bar").len(), 2);
+    let candle = html
+        .select(&Selector::parse(".candle[data-date='2026-09-18']").unwrap())
+        .next()
+        .unwrap();
+    let friday = html
+        .select(&Selector::parse(".score-bar[data-date='2026-09-18']").unwrap())
+        .next()
+        .unwrap();
+    let saturday = html
+        .select(&Selector::parse(".score-bar[data-date='2026-09-19']").unwrap())
+        .next()
+        .unwrap();
+    assert_eq!(candle.value().attr("data-x"), friday.value().attr("data-x"));
+    let x = |element: scraper::ElementRef<'_>| {
+        element
+            .value()
+            .attr("data-x")
+            .unwrap()
+            .parse::<f64>()
+            .unwrap()
+    };
+    assert!((x(saturday) - x(friday) - 6.0).abs() < 0.01);
+    for mark in [friday, saturday] {
+        assert!(mark.value().attr("y").unwrap().parse::<f64>().unwrap() >= 350.0);
+    }
+    assert!(
+        text(&html, ".price-score-chart .time-axis .axis-label")
+            .iter()
+            .any(|s| s.starts_with("2020"))
+    );
+}
+
+#[test]
+fn missing_prices_show_an_explanation_while_saved_scores_remain_visible() {
+    let directory = tempfile::tempdir().unwrap();
+    saved_ranking(
+        directory.path(),
+        "saved",
+        "2026-09-18",
+        "2026-09-18T12:00:00Z",
+        json!(2),
+    );
+    let html =
+        ParsedHtml::parse_document(&render_company(&card(directory.path(), "KGHM"), as_of()));
+    assert!(text(&html, ".candle").is_empty());
+    assert_eq!(
+        text(&html, ".price-score-chart .score-bar title"),
+        ["2026-09-18: 2"]
+    );
+    assert!(
+        text(&html, ".chart-panel .missing")
+            .iter()
+            .any(|s| s == "Brak zapisanej historii OHLC.")
+    );
+}
+
+#[test]
+fn short_chart_keeps_every_reading_in_time_order_including_empty_registers() {
+    for newest_empty in [false, true] {
+        let directory = tempfile::tempdir().unwrap();
+        let root = directory.path();
+        write_json(root, "history.json", &ohlc_history("KGHM"));
+        let positions = json!([
+            {"holder":"Holder A", "net_short_position_percent":"0.6", "position_date":"2026-09-18", "modify_date":"2026-09-18"},
+            {"holder":"Holder B", "net_short_position_percent":"0.7", "position_date":"2026-09-18", "modify_date":"2026-09-18"}
+        ]);
+        // Same UTC day: both observations belong on the chart, without daily reduction.
+        for (path, date, empty) in [
+            ("a/shorts.json", "2026-09-19T12:00:00Z", newest_empty),
+            ("z/shorts.json", "2026-09-19T08:00:00Z", !newest_empty),
+        ] {
+            write_json(
+                root,
+                path,
+                &json!({"code":"KGHM", "isin":"PLKGHM000017", "fetched_at":date,
+                "positions":if empty { json!([]) } else { positions.clone() }}),
+            );
+        }
+        let company = card(root, "KGHM");
+        assert_eq!(company.short_totals.len(), 2);
+        let html = ParsedHtml::parse_document(&render_company(&company, as_of()));
+        let points: Vec<_> = html
+            .select(&Selector::parse(".shorts-chart .short-point").unwrap())
+            .collect();
+        assert_eq!(points.len(), 2);
+        assert_eq!(
+            points
+                .iter()
+                .map(|p| p.value().attr("data-total").unwrap())
+                .collect::<Vec<_>>(),
+            if newest_empty {
+                vec!["1.3", "0"]
+            } else {
+                vec!["0", "1.3"]
+            }
+        );
+        assert_eq!(
+            points[0].value().attr("data-fetched-at"),
+            Some("2026-09-19T08:00:00+00:00")
+        );
+        assert_eq!(
+            points[1].value().attr("data-fetched-at"),
+            Some("2026-09-19T12:00:00+00:00")
+        );
+        assert!(
+            points[0]
+                .value()
+                .attr("cx")
+                .unwrap()
+                .parse::<f64>()
+                .unwrap()
+                < points[1]
+                    .value()
+                    .attr("cx")
+                    .unwrap()
+                    .parse::<f64>()
+                    .unwrap()
+        );
+        assert_eq!(
+            text(&html, ".holders tbody tr").len(),
+            if newest_empty { 0 } else { 2 }
+        );
+        assert_eq!(text(&html, ".shorts-chart .short-line").len(), 1);
+        assert!(text(&html, ".price-score-chart .short-point").is_empty());
+        assert_eq!(text(&html, "svg").len(), 2);
+    }
+}
+
+#[test]
+fn company_without_short_files_has_a_message_without_a_zero_chart() {
+    let directory = tempfile::tempdir().unwrap();
+    write_json(directory.path(), "history.json", &ohlc_history("KGHM"));
+    let company = card(directory.path(), "KGHM");
+    assert!(company.short_totals.is_empty());
+    let html = ParsedHtml::parse_document(&render_company(&company, as_of()));
+    assert!(text(&html, ".shorts-chart").is_empty());
+    assert!(text(&html, ".short-point").is_empty());
+    assert!(text(&html, ".short-line").is_empty());
+    assert!(text(&html, ".holders tbody tr").is_empty());
+    assert!(
+        text(&html, ".missing")
+            .iter()
+            .any(|s| s == "brak zapisanych odczytów rejestru")
     );
 }

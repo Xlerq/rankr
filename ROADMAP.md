@@ -12,7 +12,7 @@ Widokiem głównym jest tabela spółek. Dla każdej spółki liczone są wyniki
 
 Trzy rodziny wyników v1: `fundamental` — zaimplementowana kondycja finansowa według szablonów GICS; wycena i dynamika rok do roku (wzrost przychodów i zysku, nie sam poziom ROE) pozostają do zrobienia; `technical` — sezonowość miesiąca kalendarzowego i trend SMA200 z dziennego `close`; `sentiment` — zaimplementowany sygnał ze zmiany sumy ujawnionych pozycji krótkich netto KNF między dwoma snapshotami emitenta. v1 używa wag 1/1/1 dla całego WIG20, w tym banków. Wzór `technical` v1 jest zaimplementowany: `technical_score = seasonality_points + trend_points`, każdy składnik to -1, 0 albo +1, bez wag wewnętrznych i osobnego sygnału momentum. Brak sezonowości oznacza `null`, także dla pełnego wyniku technicznego; sezonowość nie dodaje czwartej wagi rodziny. Szablony GICS i progi fundamentów pozostają bez zmian, także węższy zakres punktów Financials. Wspólny ranking trzech rodzin jest zaimplementowany.
 
-Docelowo frontend, backend i silnik scoringu w pełni w Rust. Planowany stos: Rust, Leptos/WASM, Axum/Tokio, SurrealDB, Plotters. Import, automatyzacja i analiza również w Rust. Obecna tabela działa; SurrealDB, frontend w Leptos i wykresy pozostają do zrobienia.
+Docelowo frontend, backend i silnik scoringu w pełni w Rust. Planowany stos: Rust, Leptos/WASM, Axum/Tokio, SurrealDB, Plotters. Import, automatyzacja i analiza również w Rust. Tabela, karta spółki i wykresy SVG generowane w Rust działają; SurrealDB i frontend w Leptos pozostają do zrobienia.
 
 Poza zakresem MVP: bot inwestycyjny, integracja z brokerem, dane realtime i uczenie maszynowe.
 
@@ -83,9 +83,9 @@ Strona shortów KNF dla spółki nie zastępuje COT; widok rejestru KNF należy 
 
 ## Etap 7. Frontend
 
-- [ ] Najpierw dodać kartę spółki otwieraną kliknięciem wiersza rankingu. Przy każdym punkcie pokazać strzałkę: +1 w górę, −1 w dół, 0 jako kreskę, a `null` jako puste pole z krótkim powodem. Pod strzałką pokazać surowe składniki i przeliczoną relację, z której powstał punkt: kwoty raportu obok marży, kapitału i długu; ostatni `close` i SMA200 przy trendzie; dwie sumy shortów przy sentymencie. Financials nie dostaje strzałek dla wskaźników, których jego szablon nie liczy.
-- [ ] Następnie dodać wykres spółki: świece OHLC z zapisanej historii cen, a pod spodem słupki `final_score` wyłącznie z dni, w których `rankr` zapisał ranking. Nie odtwarzać punktów za lata przed startem archiwum rankingów. Historia cen może być wieloletnia; słupki oceny obejmują tylko zapisane rankingi.
-- [ ] Potem dodać widok rejestru KNF dla spółki, nie nazywany COT: tabelę posiadaczy z procentem i datą oraz wykres sumy ujawnionych shortów w czasie. Pusta lista zostaje pusta.
+- [x] Najpierw dodać kartę spółki otwieraną kliknięciem wiersza rankingu. Przy każdym punkcie pokazać strzałkę: +1 w górę, −1 w dół, 0 jako kreskę, a `null` jako puste pole z krótkim powodem. Pod strzałką pokazać surowe składniki i przeliczoną relację, z której powstał punkt: kwoty raportu obok marży, kapitału i długu; ostatni `close` i SMA200 przy trendzie; dwie sumy shortów przy sentymencie. Financials nie dostaje strzałek dla wskaźników, których jego szablon nie liczy.
+- [x] Następnie dodać wykres spółki: świece OHLC z zapisanej historii cen, a pod spodem, w tym samym SVG i na wspólnej osi dat, słupki `final_score` wyłącznie z dni, w których `rankr` zapisał ranking. Nie odtwarzać punktów za lata przed startem archiwum rankingów. Historia cen może być wieloletnia; słupki oceny obejmują tylko zapisane rankingi.
+- [x] Potem dodać widok rejestru KNF dla spółki, nie nazywany COT: tabelę posiadaczy z procentem i datą oraz wykres sumy ujawnionych shortów w czasie. Tabela pokazuje najnowszy odczyt i pozostaje pusta przy braku pozycji. Na osobnym wykresie każdy zapisany odczyt wnosi sumę procentów, także 0 dla pustej listy; brak plików oznacza komunikat bez wykresu.
 
 ## Etap 8. Walidacja na zebranych danych
 

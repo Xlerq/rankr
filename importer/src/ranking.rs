@@ -97,7 +97,10 @@ pub fn rank_directory(directory: &Path, as_of: NaiveDate) -> Result<Ranking> {
         let fundamental_score = fundamentals.get(code).copied().flatten();
         let technical_score = technical.get(code).copied().flatten();
         let sentiment_score = match latest_shorts.get(code) {
-            Some(newer) => sentiment::score(older_shorts(&shorts, newer), Some(newer)),
+            Some(newer) => sentiment::score(
+                older_shorts(shorts.iter().map(|archived| &archived.snapshot), newer),
+                Some(newer),
+            ),
             None => None,
         };
         let final_score = combine_scores(fundamental_score, technical_score, sentiment_score);
@@ -128,32 +131,31 @@ pub(crate) fn combine_scores(
 }
 
 fn older_shorts<'a>(
-    shorts: &'a [ArchivedShorts],
+    mut shorts: impl Iterator<Item = &'a ShortsSnapshot>,
     newer: &ShortsSnapshot,
 ) -> Option<&'a ShortsSnapshot> {
-    shorts
-        .iter()
-        .map(|archived| &archived.snapshot)
-        .find(|snapshot| {
-            snapshot.isin == newer.isin
-                && snapshot.fetched_at.date_naive() < newer.fetched_at.date_naive()
-        })
+    shorts.find(|snapshot| {
+        snapshot.isin == newer.isin
+            && snapshot.fetched_at.date_naive() < newer.fetched_at.date_naive()
+    })
 }
 
 /// Expose precisely the observations used by the ranking, including its tie rule.
 pub(crate) fn shorts_pair(
-    files: &[PathBuf],
-    code: &str,
-) -> io::Result<(Option<ShortsSnapshot>, Option<ShortsSnapshot>)> {
-    let shorts = read_shorts_files(files.to_vec(), &mut Vec::new());
-    let newer = shorts
-        .iter()
-        .find(|archived| archived.snapshot.code == code);
-    let older = newer.and_then(|archived| older_shorts(&shorts, &archived.snapshot));
-    Ok((
-        newer.map(|archived| archived.snapshot.clone()),
-        older.cloned(),
-    ))
+    shorts: &[ShortsSnapshot],
+) -> (Option<ShortsSnapshot>, Option<ShortsSnapshot>) {
+    let newer = shorts.first();
+    let older = newer.and_then(|newer| older_shorts(shorts.iter(), newer));
+    (newer.cloned(), older.cloned())
+}
+
+/// Newest first, with the same timestamp/path tie rule as the ranking.
+pub(crate) fn company_shorts(files: &[PathBuf], code: &str) -> Vec<ShortsSnapshot> {
+    read_shorts_files(files.to_vec(), &mut Vec::new())
+        .into_iter()
+        .map(|archived| archived.snapshot)
+        .filter(|snapshot| snapshot.code == code)
+        .collect()
 }
 
 fn read_shorts(

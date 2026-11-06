@@ -356,6 +356,7 @@ fn render_sentiment(card: &CompanyCard) -> String {
         }
     }
     body.push_str("</tbody></table></div>");
+    body.push_str(&crate::charts::render_shorts(&card.short_totals));
     body
 }
 

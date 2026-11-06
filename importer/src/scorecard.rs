@@ -8,7 +8,7 @@ use rust_decimal::Decimal;
 use serde::Deserialize;
 
 use crate::{
-    charts::OhlcCandle,
+    charts::{OhlcCandle, ShortTotal},
     company_archive::{ArchiveIndex, CompanyCode, SavedScore, read_json},
     fundamental_points::{self, FundamentalPoints},
     fundamental_points_table,
@@ -25,6 +25,7 @@ pub(crate) struct CompanyCard {
     pub technical: Option<TechnicalScore>,
     pub newer_shorts: Option<ShortsSnapshot>,
     pub older_shorts: Option<ShortsSnapshot>,
+    pub short_totals: Vec<ShortTotal>,
     pub candles: Vec<OhlcCandle>,
     pub currency: String,
     pub saved_scores: Vec<SavedScore>,
@@ -130,7 +131,20 @@ pub(crate) fn load(
         })
         .collect();
     candles.sort_by_key(|candle| candle.date);
-    let (newer_shorts, older_shorts) = ranking::shorts_pair(&files.shorts, code)?;
+    let shorts = ranking::company_shorts(&files.shorts, code);
+    let (newer_shorts, older_shorts) = ranking::shorts_pair(&shorts);
+    let short_totals = shorts
+        .iter()
+        .rev()
+        .map(|snapshot| ShortTotal {
+            fetched_at: snapshot.fetched_at,
+            total: snapshot
+                .positions
+                .iter()
+                .map(|position| position.net_short_position_percent)
+                .sum(),
+        })
+        .collect();
     let fundamental_score = fundamental
         .as_ref()
         .and_then(|(points, _)| points.fundamental_score);
@@ -150,6 +164,7 @@ pub(crate) fn load(
         technical,
         newer_shorts,
         older_shorts,
+        short_totals,
         candles,
         currency: history.map(|history| history.currency).unwrap_or_default(),
         saved_scores: files
