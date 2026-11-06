@@ -33,7 +33,7 @@ pub struct FundamentalPointsTable {
 #[derive(Deserialize)]
 pub(crate) struct GicsEntry {
     gpw_code: String,
-    gics_sector_code: u16,
+    pub(crate) gics_sector_code: u16,
     pub(crate) gics_sector: String,
     gics_industry_group: String,
 }

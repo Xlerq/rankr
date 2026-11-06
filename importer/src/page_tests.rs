@@ -22,7 +22,8 @@ fn report(code: &str) -> Value {
 }
 
 fn card(root: &FsPath, code: &str) -> CompanyCard {
-    scorecard::load(root, code, as_of()).unwrap().unwrap()
+    let index = ArchiveIndex::read(root).unwrap();
+    scorecard::load(&index, code, as_of()).unwrap().unwrap()
 }
 
 fn text(html: &ParsedHtml, selector: &str) -> Vec<String> {
@@ -233,7 +234,7 @@ async fn axum_serves_ranking_card_and_polish_not_found() {
     write_json(directory.path(), "fundamentals.json", &report("KGHM"));
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let address = listener.local_addr().unwrap();
-    let app = router(directory.path().to_path_buf());
+    let app = router(directory.path().to_path_buf()).unwrap();
     let server = tokio::spawn(async move {
         axum::serve(listener, app).await.unwrap();
     });
@@ -256,4 +257,190 @@ async fn axum_serves_ranking_card_and_polish_not_found() {
         assert!(response.text().await.unwrap().contains(expected_text));
     }
     server.abort();
+}
+
+fn ohlc_history(code: &str) -> Value {
+    json!({
+        "instrument":{"code":code}, "currency":"PLN", "fetched_at":"2026-09-19T12:00:00Z",
+        "candles":[
+            {"date":"2020-01-02", "open":10, "high":13, "low":9, "close":12},
+            {"date":"2026-09-18", "open":12, "high":13, "low":10, "close":11}
+        ]
+    })
+}
+
+fn saved_ranking(root: &FsPath, name: &str, date: &str, time: &str, value: Value) {
+    write_json(
+        root,
+        &format!("rankings/{name}/ranking.json"),
+        &json!({
+            "as_of":date, "computed_at":time,
+            "rows":[{"code":"KGHM", "final_score":value}, {"code":"PGE", "final_score":9}]
+        }),
+    );
+}
+
+#[test]
+fn company_without_saved_rankings_gets_real_candles_and_empty_score_svg() {
+    let directory = tempfile::tempdir().unwrap();
+    write_json(
+        directory.path(),
+        "2026-09-19_KGHM_history/history.json",
+        &ohlc_history("KGHM"),
+    );
+    let company = card(directory.path(), "KGHM");
+    assert!(company.saved_scores.is_empty());
+    let html = ParsedHtml::parse_document(&render_company(&company, as_of()));
+    assert_eq!(
+        text(&html, ".price-chart .candle title"),
+        [
+            "2020-01-02: O 10 · H 13 · L 9 · C 12",
+            "2026-09-18: O 12 · H 13 · L 10 · C 11"
+        ]
+    );
+    assert_eq!(text(&html, ".price-chart .positive").len(), 1);
+    assert_eq!(text(&html, ".price-chart .negative").len(), 1);
+    assert_eq!(text(&html, ".score-chart"), [""]);
+    assert!(
+        text(&html, ".chart-panel .missing")
+            .iter()
+            .any(|value| value.contains("Brak zapisanych snapshotów"))
+    );
+}
+
+#[test]
+fn score_bars_use_saved_company_values_only_preserving_null_zero_and_date_gaps() {
+    let directory = tempfile::tempdir().unwrap();
+    let root = directory.path();
+    write_json(root, "history.json", &ohlc_history("KGHM"));
+    saved_ranking(
+        root,
+        "positive",
+        "2026-09-10",
+        "2026-09-10T12:00:00Z",
+        json!(3),
+    );
+    saved_ranking(
+        root,
+        "negative",
+        "2026-09-13",
+        "2026-09-13T12:00:00Z",
+        json!(-2),
+    );
+    saved_ranking(root, "zero", "2026-09-16", "2026-09-16T12:00:00Z", json!(0));
+    saved_ranking(
+        root,
+        "early",
+        "2026-09-18",
+        "2026-09-18T08:00:00Z",
+        json!(5),
+    );
+    saved_ranking(
+        root,
+        "late",
+        "2026-09-18",
+        "2026-09-18T12:00:00Z",
+        Value::Null,
+    );
+    let company = card(root, "KGHM");
+    assert_eq!(company.saved_scores.len(), 4);
+    assert!(company.saved_scores.last().unwrap().score.is_none());
+    let html = ParsedHtml::parse_document(&render_company(&company, as_of()));
+    assert_eq!(
+        text(&html, ".score-chart .score-bar title"),
+        ["2026-09-10: 3", "2026-09-13: -2"]
+    );
+    assert_eq!(
+        text(&html, ".score-chart .score-zero title"),
+        ["2026-09-16: 0"]
+    );
+    let marks: Vec<_> = html
+        .select(&Selector::parse(".score-chart [data-score]").unwrap())
+        .collect();
+    assert_eq!(marks.len(), 3);
+    let positions: Vec<f64> = marks
+        .iter()
+        .map(|mark| {
+            mark.value()
+                .attr("x")
+                .or_else(|| mark.value().attr("x1"))
+                .unwrap()
+                .parse()
+                .unwrap()
+        })
+        .collect();
+    assert!((positions[1] - positions[0] - (positions[2] - positions[1])).abs() < 0.02);
+    assert!(
+        html.select(&Selector::parse(".score-chart [data-date='2026-09-18']").unwrap())
+            .next()
+            .is_none()
+    );
+    assert!(
+        text(&html, ".score-chart .axis-label")
+            .iter()
+            .all(|s| !s.starts_with("2020"))
+    );
+    assert!(
+        !text(&html, ".score-chart title")
+            .iter()
+            .any(|s| s.contains(": 9"))
+    );
+}
+
+#[test]
+fn company_loading_is_independent_of_other_company_archives_and_matches_ranking() {
+    let directory = tempfile::tempdir().unwrap();
+    let root = directory.path();
+    write_json(
+        root,
+        "2026-09-19_KGHM_fundamentals/fundamentals.json",
+        &report("KGHM"),
+    );
+    let mut history = ohlc_history("KGHM");
+    history["candles"].as_array_mut().unwrap().extend([
+        json!({"date":"2025-08-29", "open":100, "high":101, "low":99, "close":100}),
+        json!({"date":"2025-09-30", "open":100, "high":104, "low":99, "close":103}),
+    ]);
+    write_json(root, "2026-09-19_KGHM_history/history.json", &history);
+    write_json(
+        root,
+        "2026-09-19_PGE_fundamentals/fundamentals.json",
+        &report("PGE"),
+    );
+    write_json(
+        root,
+        "2026-09-19_PGE_history/history.json",
+        &ohlc_history("PGE"),
+    );
+    for (name, date, percent) in [
+        ("older", "2026-09-18T12:00:00Z", "1.5"),
+        ("newer", "2026-09-19T12:00:00Z", "1.2"),
+    ] {
+        write_json(
+            root,
+            &format!("{name}/shorts.json"),
+            &json!({
+                "code":"KGHM", "isin":"PLKGHM000017", "fetched_at":date,
+                "positions":[{"holder":"Holder", "net_short_position_percent":percent,
+                    "position_date":"2026-09-17", "modify_date":"2026-09-18"}]
+            }),
+        );
+    }
+    let expected = rank_directory(root, as_of())
+        .unwrap()
+        .rows
+        .into_iter()
+        .find(|row| row.code == "KGHM")
+        .unwrap();
+    assert_eq!(expected.final_score, Some(5));
+    let index = ArchiveIndex::read(root).unwrap();
+    assert_eq!(index.company("KGHM").unwrap().histories.len(), 1);
+    // The indexed card needs no walk of the collection directory and no foreign sources.
+    fs::remove_dir_all(root.join("2026-09-19_PGE_fundamentals")).unwrap();
+    fs::remove_dir_all(root.join("2026-09-19_PGE_history")).unwrap();
+    let company = scorecard::load(&index, "KGHM", as_of()).unwrap().unwrap();
+    assert_eq!(
+        serde_json::to_value(company.row).unwrap(),
+        serde_json::to_value(expected).unwrap()
+    );
 }

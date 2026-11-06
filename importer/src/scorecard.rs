@@ -1,59 +1,187 @@
-//! Presentation data selected through the same archive tables as the ranking.
+//! Load and score just one company's indexed archives, using the existing formulas.
 
-use std::{fs::File, io::BufReader, path::Path};
+use std::path::PathBuf;
 
 use anyhow::Result;
-use chrono::NaiveDate;
+use chrono::{DateTime, NaiveDate, Utc};
+use rust_decimal::Decimal;
+use serde::Deserialize;
 
 use crate::{
-    fundamental_points_table::{self, FundamentalPointsRow},
+    charts::OhlcCandle,
+    company_archive::{ArchiveIndex, CompanyCode, SavedScore, read_json},
+    fundamental_points::{self, FundamentalPoints},
+    fundamental_points_table,
+    fundamental_ratios::{self, FundamentalRatioInput},
     model::{FundamentalSnapshot, ShortsSnapshot},
     ranking::{self, RankingRow},
-    technical::{self, TechnicalHistory, TechnicalScore},
-    technical_table,
+    sentiment,
+    technical::{self, CloseCandle, TechnicalScore},
 };
 
 pub(crate) struct CompanyCard {
     pub row: RankingRow,
-    pub fundamental: Option<(FundamentalPointsRow, FundamentalSnapshot)>,
+    pub fundamental: Option<(FundamentalPoints, FundamentalSnapshot)>,
     pub technical: Option<TechnicalScore>,
     pub newer_shorts: Option<ShortsSnapshot>,
     pub older_shorts: Option<ShortsSnapshot>,
+    pub candles: Vec<OhlcCandle>,
+    pub currency: String,
+    pub saved_scores: Vec<SavedScore>,
 }
 
-pub(crate) fn load(directory: &Path, code: &str, as_of: NaiveDate) -> Result<Option<CompanyCard>> {
-    let Some(row) = ranking::rank_directory(directory, as_of)?
-        .rows
-        .into_iter()
-        .find(|row| row.code == code)
-    else {
+#[derive(Deserialize)]
+struct History {
+    instrument: CompanyCode,
+    fetched_at: DateTime<Utc>,
+    #[serde(default)]
+    currency: String,
+    candles: Vec<HistoryCandle>,
+}
+
+#[derive(Deserialize)]
+struct HistoryCandle {
+    #[serde(flatten)]
+    close: CloseCandle,
+    open: Option<Decimal>,
+    high: Option<Decimal>,
+    low: Option<Decimal>,
+}
+
+pub(crate) fn load(
+    index: &ArchiveIndex,
+    code: &str,
+    as_of: NaiveDate,
+) -> Result<Option<CompanyCard>> {
+    let classifications = fundamental_points_table::gics_map()?;
+    let Some(gics) = classifications.get(code) else {
         return Ok(None);
     };
-    let fundamental = fundamental_points_table::build_table(directory)?
-        .rows
+    let Some(files) = index.company(code) else {
+        return Ok(None);
+    };
+    let fundamental = latest::<FundamentalSnapshot>(
+        &files.fundamentals,
+        |snapshot| snapshot.instrument.code == code,
+        |snapshot| snapshot.fetched_at,
+    )
+    .and_then(|snapshot| {
+        let f = &snapshot.fundamentals;
+        let input = FundamentalRatioInput {
+            unit_multiplier: f.unit_multiplier,
+            revenue: f.revenue,
+            net_income_parent: f.net_income_parent,
+            operating_profit: f.operating_profit,
+            equity_parent: f.equity_parent,
+            assets: f.assets,
+            long_term_liabilities: f.long_term_liabilities,
+            short_term_liabilities: f.short_term_liabilities,
+            operating_cash_flow: f.operating_cash_flow,
+        };
+        let ratios = match fundamental_ratios::calculate(&input) {
+            Ok(ratios) => ratios,
+            Err(error) => {
+                eprintln!("{code}: {error}");
+                return None;
+            }
+        };
+        Some((
+            fundamental_points::score(ratios, gics.gics_sector_code),
+            snapshot,
+        ))
+    });
+    let history = latest::<History>(
+        &files.histories,
+        |history| history.instrument.code == code,
+        |history| history.fetched_at,
+    );
+    let technical = history.as_ref().and_then(|history| {
+        let closes: Vec<_> = history
+            .candles
+            .iter()
+            .map(|candle| candle.close.clone())
+            .collect();
+        match technical::score(&closes, as_of) {
+            Ok(score) => Some(score),
+            Err(error) => {
+                eprintln!("{code}: {error}");
+                None
+            }
+        }
+    });
+    // Missing OHLC fields are never fabricated from close-only legacy data.
+    let mut candles: Vec<_> = history
+        .as_ref()
         .into_iter()
-        .find(|row| row.code == code)
-        .map(|row| -> Result<_> {
-            let report = serde_json::from_reader(BufReader::new(File::open(&row.source_file)?))?;
-            Ok((row, report))
+        .flat_map(|history| &history.candles)
+        .filter_map(|candle| {
+            let candle = OhlcCandle {
+                date: candle.close.date,
+                open: candle.open?,
+                high: candle.high?,
+                low: candle.low?,
+                close: candle.close.close,
+            };
+            (candle.date <= as_of
+                && candle.low > Decimal::ZERO
+                && candle.low <= candle.open.min(candle.close)
+                && candle.high >= candle.open.max(candle.close))
+            .then_some(candle)
         })
-        .transpose()?;
-    let technical = technical_table::rank_directory(directory, as_of)?
-        .rows
-        .into_iter()
-        .find(|row| row.code == code)
-        .map(|row| -> Result<_> {
-            let history: TechnicalHistory =
-                serde_json::from_reader(BufReader::new(File::open(row.source_file)?))?;
-            Ok(technical::score(&history.candles, as_of)?)
-        })
-        .transpose()?;
-    let (newer_shorts, older_shorts) = ranking::shorts_pair(directory, code)?;
+        .collect();
+    candles.sort_by_key(|candle| candle.date);
+    let (newer_shorts, older_shorts) = ranking::shorts_pair(&files.shorts, code)?;
+    let fundamental_score = fundamental
+        .as_ref()
+        .and_then(|(points, _)| points.fundamental_score);
+    let technical_score = technical.as_ref().and_then(|score| score.technical_score);
+    let sentiment_score = sentiment::score(older_shorts.as_ref(), newer_shorts.as_ref());
+    let row = RankingRow {
+        code: code.to_owned(),
+        gics_sector: gics.gics_sector.clone(),
+        fundamental_score,
+        technical_score,
+        sentiment_score,
+        final_score: ranking::combine_scores(fundamental_score, technical_score, sentiment_score),
+    };
     Ok(Some(CompanyCard {
         row,
         fundamental,
         technical,
         newer_shorts,
         older_shorts,
+        candles,
+        currency: history.map(|history| history.currency).unwrap_or_default(),
+        saved_scores: files
+            .scores
+            .iter()
+            .filter(|score| score.date <= as_of)
+            .cloned()
+            .collect(),
     }))
+}
+
+fn latest<T: serde::de::DeserializeOwned>(
+    paths: &[PathBuf],
+    matches: impl Fn(&T) -> bool,
+    timestamp: impl Fn(&T) -> DateTime<Utc>,
+) -> Option<T> {
+    let mut selected = None;
+    for path in paths {
+        let candidate: T = match read_json(path) {
+            Ok(candidate) => candidate,
+            Err(error) => {
+                eprintln!("{}: {error:#}", path.display());
+                continue;
+            }
+        };
+        if matches(&candidate)
+            && selected
+                .as_ref()
+                .is_none_or(|current| timestamp(&candidate) > timestamp(current))
+        {
+            selected = Some(candidate);
+        }
+    }
+    selected
 }

@@ -106,8 +106,9 @@ pub(crate) async fn collect_history(
             instrument.isin
         );
     }
-    // There cannot be a finished session after today. Avoid sending inverted bounds.
-    if last_date.is_some_and(|date| date >= now.date_naive()) {
+    // A candle from today or yesterday is fresh enough; no HTTP request is needed.
+    let yesterday = now.date_naive().pred_opt().unwrap_or(now.date_naive());
+    if last_date.is_some_and(|date| date >= yesterday) {
         eprintln!("{}: no new sessions", instrument.code);
         return Ok(());
     }

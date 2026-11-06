@@ -2,6 +2,8 @@
 //! The rankr program refreshes these data sources before starting its local page.
 
 pub mod archive;
+mod charts;
+mod company_archive;
 pub mod data_collect;
 pub mod data_refresh;
 pub mod fundamental_points;

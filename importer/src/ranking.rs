@@ -100,12 +100,7 @@ pub fn rank_directory(directory: &Path, as_of: NaiveDate) -> Result<Ranking> {
             Some(newer) => sentiment::score(older_shorts(&shorts, newer), Some(newer)),
             None => None,
         };
-        let final_score = match (fundamental_score, technical_score, sentiment_score) {
-            (Some(fundamental), Some(technical), Some(sentiment)) => {
-                Some(fundamental + technical + sentiment)
-            }
-            _ => None,
-        };
+        let final_score = combine_scores(fundamental_score, technical_score, sentiment_score);
         rows.push(RankingRow {
             code: code.clone(),
             gics_sector: gics.gics_sector.clone(),
@@ -124,6 +119,14 @@ pub fn rank_directory(directory: &Path, as_of: NaiveDate) -> Result<Ranking> {
     Ok(Ranking { rows, skipped })
 }
 
+pub(crate) fn combine_scores(
+    fundamental: Option<i8>,
+    technical: Option<i8>,
+    sentiment: Option<i8>,
+) -> Option<i8> {
+    Some(fundamental? + technical? + sentiment?)
+}
+
 fn older_shorts<'a>(
     shorts: &'a [ArchivedShorts],
     newer: &ShortsSnapshot,
@@ -139,10 +142,10 @@ fn older_shorts<'a>(
 
 /// Expose precisely the observations used by the ranking, including its tie rule.
 pub(crate) fn shorts_pair(
-    directory: &Path,
+    files: &[PathBuf],
     code: &str,
 ) -> io::Result<(Option<ShortsSnapshot>, Option<ShortsSnapshot>)> {
-    let shorts = read_shorts(directory, &mut Vec::new())?;
+    let shorts = read_shorts_files(files.to_vec(), &mut Vec::new());
     let newer = shorts
         .iter()
         .find(|archived| archived.snapshot.code == code);
@@ -158,6 +161,10 @@ fn read_shorts(
     skipped: &mut Vec<SkippedFile>,
 ) -> io::Result<Vec<ArchivedShorts>> {
     let files = find_files(directory, "shorts.json", skipped)?;
+    Ok(read_shorts_files(files, skipped))
+}
+
+fn read_shorts_files(files: Vec<PathBuf>, skipped: &mut Vec<SkippedFile>) -> Vec<ArchivedShorts> {
     let mut snapshots = Vec::new();
     for source_file in files {
         match read_snapshot(&source_file) {
@@ -178,7 +185,7 @@ fn read_shorts(
             .cmp(&left.snapshot.fetched_at)
             .then_with(|| left.source_file.cmp(&right.source_file))
     });
-    Ok(snapshots)
+    snapshots
 }
 
 fn read_snapshot(path: &Path) -> Result<ShortsSnapshot> {

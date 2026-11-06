@@ -38,7 +38,7 @@ const KINDS: [DataKind; 3] = [DataKind::Fundamentals, DataKind::History, DataKin
 fn needs_refresh(kind: DataKind, latest: Option<NaiveDate>, today: NaiveDate) -> bool {
     match kind {
         DataKind::Fundamentals | DataKind::Shorts => latest != Some(today),
-        DataKind::History => true,
+        DataKind::History => latest.is_none_or(|date| date < today.pred_opt().unwrap_or(today)),
     }
 }
 
@@ -59,7 +59,13 @@ pub async fn refresh(directory: &Path) -> Result<()> {
 
     for instrument in symbols.instruments() {
         for kind in KINDS {
-            let latest = dates.get(&(instrument.code.clone(), kind)).copied();
+            let latest = if kind == DataKind::History {
+                histories
+                    .get(&instrument.code)
+                    .and_then(|saved| saved.history.candles.iter().map(|candle| candle.date).max())
+            } else {
+                dates.get(&(instrument.code.clone(), kind)).copied()
+            };
             if !needs_refresh(kind, latest, today) {
                 skipped += 1;
                 eprintln!(
@@ -202,5 +208,22 @@ mod tests {
             assert!(!needs_refresh(kind, Some(today), today));
             assert!(needs_refresh(kind, Some(today - Days::new(1)), today));
         }
+    }
+
+    #[test]
+    fn history_refresh_depends_on_last_candle_not_fetch_date() {
+        let today = NaiveDate::from_ymd_opt(2026, 11, 6).unwrap();
+        assert!(!needs_refresh(DataKind::History, Some(today), today));
+        assert!(!needs_refresh(
+            DataKind::History,
+            Some(today - Days::new(1)),
+            today
+        ));
+        assert!(needs_refresh(
+            DataKind::History,
+            Some(today - Days::new(2)),
+            today
+        ));
+        assert!(needs_refresh(DataKind::History, None, today));
     }
 }

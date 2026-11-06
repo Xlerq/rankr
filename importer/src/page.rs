@@ -1,6 +1,6 @@
 //! Local, server-rendered ranking and company scorecard.
 
-use std::{fmt::Display, path::PathBuf};
+use std::{fmt::Display, path::PathBuf, sync::Arc};
 
 use axum::{
     Router,
@@ -13,30 +13,40 @@ use chrono::{NaiveDate, Utc};
 use rust_decimal::Decimal;
 
 use crate::{
+    company_archive::ArchiveIndex,
     model::ShortsSnapshot,
     ranking::{RankingRow, rank_directory},
     scorecard::{self, CompanyCard},
 };
 
-fn router(directory: PathBuf) -> Router {
-    Router::new()
+#[derive(Clone)]
+struct PageState {
+    directory: PathBuf,
+    archives: Arc<ArchiveIndex>,
+}
+
+fn router(directory: PathBuf) -> std::io::Result<Router> {
+    let archives = Arc::new(ArchiveIndex::read(&directory)?);
+    Ok(Router::new()
         .route("/", get(index))
         .route("/{code}", get(company))
-        .with_state(directory)
+        .with_state(PageState {
+            directory,
+            archives,
+        }))
 }
 
 pub async fn serve(directory: PathBuf) -> std::io::Result<()> {
+    let app = tokio::task::spawn_blocking(move || router(directory)).await??;
     let listener = tokio::net::TcpListener::bind("127.0.0.1:3000").await?;
     eprintln!("rankr: http://127.0.0.1:3000/");
-    axum::serve(listener, router(directory)).await?;
+    axum::serve(listener, app).await?;
     Ok(())
 }
 
-async fn index(
-    State(directory): State<PathBuf>,
-) -> Result<Html<String>, (StatusCode, &'static str)> {
+async fn index(State(state): State<PageState>) -> Result<Html<String>, (StatusCode, &'static str)> {
     let as_of = Utc::now().date_naive();
-    let ranking = tokio::task::spawn_blocking(move || rank_directory(&directory, as_of))
+    let ranking = tokio::task::spawn_blocking(move || rank_directory(&state.directory, as_of))
         .await
         .map_err(server_error)?
         .map_err(server_error)?;
@@ -51,12 +61,12 @@ async fn index(
 }
 
 async fn company(
-    State(directory): State<PathBuf>,
+    State(state): State<PageState>,
     Path(code): Path<String>,
 ) -> Result<Html<String>, (StatusCode, &'static str)> {
     let as_of = Utc::now().date_naive();
     // The URL is only a lookup key; it is never joined to a filesystem path.
-    let card = tokio::task::spawn_blocking(move || scorecard::load(&directory, &code, as_of))
+    let card = tokio::task::spawn_blocking(move || scorecard::load(&state.archives, &code, as_of))
         .await
         .map_err(server_error)?
         .map_err(server_error)?
@@ -140,6 +150,11 @@ fn render_company(card: &CompanyCard, as_of: NaiveDate) -> String {
     if row.final_score.is_none() {
         body.push_str("<p class=\"missing\">Brak wyniku co najmniej jednej rodziny.</p>");
     }
+    body.push_str(&crate::charts::render(
+        &card.candles,
+        &card.currency,
+        &card.saved_scores,
+    ));
     body.push_str(&band(
         "01",
         "Fundament",
@@ -170,11 +185,10 @@ fn band(number: &str, title: &str, points: Option<i8>, components: &str) -> Stri
 }
 
 fn render_fundamental(card: &CompanyCard) -> String {
-    let Some((row, snapshot)) = &card.fundamental else {
+    let Some((p, snapshot)) = &card.fundamental else {
         return "<p class=\"missing\">Brak raportu pozwalającego obliczyć wskaźniki.</p>".into();
     };
     let f = &snapshot.fundamentals;
-    let p = &row.points;
     let mut body = format!(
         "<p class=\"source-note\">Raport: {} · Kwoty raportu: {} × {} · Pobranie: {}</p>",
         escape(&f.report_period),
@@ -183,7 +197,7 @@ fn render_fundamental(card: &CompanyCard) -> String {
         snapshot.fetched_at
     );
     // This is the same Financials template selected by fundamental_points::score.
-    if row.gics_sector != "Financials" {
+    if card.row.gics_sector != "Financials" {
         body.push_str(&metric(
             "Marża netto",
             "net_margin",
@@ -218,7 +232,7 @@ fn render_fundamental(card: &CompanyCard) -> String {
             ("Aktywa", f.assets),
         ],
     ));
-    if row.gics_sector != "Financials" {
+    if card.row.gics_sector != "Financials" {
         body.push_str(&metric(
             "Dług",
             "debt_to_equity",
@@ -402,7 +416,7 @@ fn score(value: Option<i8>, with_arrow: bool) -> String {
     format!("<span class=\"score {class}\">{arrow}<span>{number}</span></span>")
 }
 
-fn escape(text: &str) -> String {
+pub(crate) fn escape(text: &str) -> String {
     text.replace('&', "&amp;")
         .replace('<', "&lt;")
         .replace('>', "&gt;")

@@ -386,7 +386,7 @@ mod tests {
             &instrument,
             directory.path(),
             Some(history),
-            now,
+            now + chrono::Duration::days(1),
         )
         .await
         .unwrap();
@@ -396,5 +396,27 @@ mod tests {
             std::fs::read_dir(directory.path()).unwrap().count(),
             observations
         );
+        // Neither today's nor yesterday's last candle may make an HTTP request.
+        let unreachable = YahooClient {
+            client: Client::builder().no_proxy().build().unwrap(),
+            endpoint: "http://127.0.0.1:0/".into(),
+        };
+        for day in [22, 23] {
+            let history = data_collect::SavedHistory {
+                path: path.clone(),
+                history: serde_json::from_slice(&saved_bytes).unwrap(),
+            };
+            data_collect::collect_history(
+                &unreachable,
+                &symbols,
+                &instrument,
+                directory.path(),
+                Some(history),
+                Utc.with_ymd_and_hms(2026, 10, day, 12, 0, 0).unwrap(),
+            )
+            .await
+            .unwrap();
+            assert_eq!(std::fs::read(&path).unwrap(), saved_bytes);
+        }
     }
 }
