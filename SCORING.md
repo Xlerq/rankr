@@ -16,8 +16,9 @@ względnego potencjału wzrostu, nie prognozą zwrotu w procentach.
 `rankr` → lista spółek z `data/raw/wig20_symbols.csv` → pobieranie → surowe
 odpowiedzi `raw.json` i parsowanie → pliki w `data/collected` → obliczenia → tabela HTML.
 
-Fundamenty i shorty są pobierane najwyżej raz dziennie na spółkę, według dnia UTC.
-Rejestr KNF jest pobierany wspólnie i filtrowany lokalnie. Historia cen jest
+Fundamenty są pobierane najwyżej raz dziennie na spółkę, według dnia UTC.
+Rejestr KNF jest pobierany wspólnie przy każdym uruchomieniu i filtrowany lokalnie,
+aby uwzględniać również zmiany opublikowane w ciągu dnia. Historia cen jest
 pobierana raz w całości, potem uzupełniana o brakujące świece bez duplikatów.
 Błąd jednej spółki nie zatrzymuje reszty.
 

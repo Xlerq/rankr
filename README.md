@@ -27,10 +27,11 @@ binary during compilation. No API keys or database are needed.
 Each launch checks every mapped company separately:
 
 - GPW / Notoria fundamentals: skip a company with today's `fundamentals.json`;
-  otherwise download a new snapshot.
-- KNF short positions: skip a company with today's `shorts.json`; otherwise
-  download a new snapshot. Both daily checks use the UTC date prefix
+  otherwise download a new snapshot. This daily check uses the UTC date prefix
   `YYYY-MM-DD` of the observation directory.
+- KNF short positions: fetch the current register on every launch, sharing each
+  response page across companies. Preserve a new snapshot even when today's
+  archive already exists: KNF can publish intraday changes.
 - Yahoo price history: download the full daily series once for a company without
   history. On subsequent launches, request only dates after its last stored
   candle, up to the current time. Append finished candles to the existing

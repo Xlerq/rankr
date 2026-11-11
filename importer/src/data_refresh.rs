@@ -37,7 +37,9 @@ const KINDS: [DataKind; 3] = [DataKind::Fundamentals, DataKind::History, DataKin
 
 fn needs_refresh(kind: DataKind, latest: Option<NaiveDate>, today: NaiveDate) -> bool {
     match kind {
-        DataKind::Fundamentals | DataKind::Shorts => latest != Some(today),
+        DataKind::Fundamentals => latest != Some(today),
+        // KNF can publish new positions after the first fetch of the UTC day.
+        DataKind::Shorts => true,
         DataKind::History => latest.is_none_or(|date| date < today.pred_opt().unwrap_or(today)),
     }
 }
@@ -202,11 +204,21 @@ mod tests {
     use chrono::Days;
 
     #[test]
-    fn skips_todays_fundamentals_and_shorts_but_not_yesterdays() {
+    fn skips_todays_fundamentals_but_not_yesterdays() {
         let today = NaiveDate::from_ymd_opt(2026, 10, 26).unwrap();
-        for kind in [DataKind::Fundamentals, DataKind::Shorts] {
-            assert!(!needs_refresh(kind, Some(today), today));
-            assert!(needs_refresh(kind, Some(today - Days::new(1)), today));
+        assert!(!needs_refresh(DataKind::Fundamentals, Some(today), today));
+        assert!(needs_refresh(
+            DataKind::Fundamentals,
+            Some(today - Days::new(1)),
+            today
+        ));
+    }
+
+    #[test]
+    fn refreshes_shorts_on_every_launch_even_with_todays_snapshot() {
+        let today = NaiveDate::from_ymd_opt(2026, 11, 11).unwrap();
+        for latest in [None, Some(today), Some(today - Days::new(1))] {
+            assert!(needs_refresh(DataKind::Shorts, latest, today));
         }
     }
 

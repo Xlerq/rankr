@@ -340,4 +340,52 @@ mod tests {
         assert_eq!(snapshot(&first).positions.len(), 2);
         assert!(snapshot(&second).positions.is_empty());
     }
+
+    #[tokio::test]
+    async fn an_intraday_register_change_updates_sentiment_against_the_previous_utc_day() {
+        let root = tempfile::tempdir().unwrap();
+        let company = crate::history::YahooSymbolMap::bundled()
+            .unwrap()
+            .instrument("KRUK")
+            .unwrap();
+        let companies = [company.clone()];
+        let mut requests = 0;
+        for (timestamp, total, expected) in [
+            ("2026-11-10T20:00:00Z", "2.81", None),
+            ("2026-11-11T10:00:00Z", "2.81", Some(0)),
+            ("2026-11-11T16:00:00Z", "2.75", Some(1)),
+        ] {
+            let body = serde_json::json!({"status":"success", "total":1, "records":[{
+                "ISIN":company.isin, "HOLDER_FULL_NAME":"Holder", "NET_SHORT_POSITION_O":total,
+                "POSITION_DATE":"2026-11-09", "MODIFY_DATE":&timestamp[..10]
+            }]})
+            .to_string();
+            let fetched_at = timestamp.parse().unwrap();
+            let saved = collect_with(&companies, root.path(), async |_| {
+                requests += 1;
+                let mut response = raw(&company, &body);
+                response.fetched_at = fetched_at;
+                Ok(response)
+            })
+            .await;
+            assert_eq!(saved, 1);
+            let ranking =
+                crate::ranking::rank_directory(root.path(), fetched_at.date_naive()).unwrap();
+            assert_eq!(ranking.rows[0].code, "KRUK");
+            assert_eq!(ranking.rows[0].sentiment_score, expected);
+        }
+        assert_eq!(requests, 3);
+        assert_eq!(
+            snapshot(&root.path().join("2026-11-11_KRUK_shorts")).positions[0]
+                .net_short_position_percent
+                .to_string(),
+            "2.81"
+        );
+        assert_eq!(
+            snapshot(&root.path().join("2026-11-11_KRUK_shorts_2")).positions[0]
+                .net_short_position_percent
+                .to_string(),
+            "2.75"
+        );
+    }
 }
