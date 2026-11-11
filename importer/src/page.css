@@ -20,15 +20,13 @@ main { width: 100%; padding: 0 24px 32px; }
 a { color: inherit; text-decoration: none; }
 a:focus-visible { outline: 1px solid var(--text); outline-offset: 5px; }
 nav { display: flex; align-items: center; justify-content: space-between; padding: 18px 0; border-bottom: 1px solid var(--line); }
-nav > span, .eyebrow, th, .band-number { font-size: 13px; font-weight: 500; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.eyebrow, th, .band-number { font-size: 13px; font-weight: 500; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
 .brand { font-size: 31px; letter-spacing: -.07em; }
 .brand span { color: var(--muted); }
 .page-heading { display: flex; align-items: end; justify-content: space-between; gap: 24px; padding: 24px 0; }
 h1 { margin: 8px 0 0; font-size: clamp(30px, 4vw, 46px); font-weight: 450; letter-spacing: -.04em; line-height: 1.15; }
 p { line-height: 1.6; }
 .eyebrow { margin: 0; }
-.date { margin: 0; text-align: right; font-size: 16px; }
-.date span { display: block; color: var(--muted); font-size: 13px; margin-top: 7px; }
 .table-panel { overflow-x: auto; background: var(--panel); border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
 table { width: 100%; border-collapse: collapse; text-align: left; }
 .ranking { min-width: 730px; }
@@ -112,5 +110,15 @@ dd { margin: 0; min-height: 1.5em; font-size: 16px; overflow-wrap: anywhere; }
 .season-series.season-ten { stroke: var(--muted); stroke-dasharray: 6 4; }
 .knf-board { width: max-content; min-width: 100%; }
 .knf-board td, .knf-board thead th { text-align: right; white-space: nowrap; font-size: 16px; }
-.knf-board th:first-child { text-align: left; position: sticky; left: 0; background: var(--panel); }
+.knf-board tbody th, .knf-board .company-column { text-align: left; position: sticky; left: 0; background: var(--panel); }
 .knf-board tbody th { color: var(--text); font-size: 18px; text-transform: none; letter-spacing: 0; }
+.knf-guide { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 24px; margin: 0 0 24px; padding: 20px 24px; background: var(--panel); border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+.knf-guide h2 { margin: 0 0 10px; font-size: 19px; font-weight: 500; }
+.knf-guide p { margin: 0; font-size: 16px; color: var(--muted); }
+.knf-guide a { color: var(--text); text-decoration: underline; text-underline-offset: 3px; }
+.knf-board .column-groups th { text-align: center; font-size: 13px; }
+.knf-board .sentiment-point, .knf-board .sentiment-change { text-align: center; }
+.knf-board .sentiment-readings { text-align: left; }
+.reading-line { display: grid; grid-template-columns: 5.5rem auto 5rem; gap: 14px; margin: 5px 0; }
+.reading-label { color: var(--muted); font-size: 13px; align-self: center; }
+.reading-value { text-align: right; }

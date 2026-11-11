@@ -2,7 +2,7 @@
 
 use std::collections::BTreeMap;
 
-use chrono::{Datelike, Duration, NaiveDate};
+use chrono::{DateTime, Datelike, Duration, NaiveDate, Utc};
 use rust_decimal::Decimal;
 
 use crate::charts::ShortTotal;
@@ -11,6 +11,7 @@ pub(crate) struct WeeklyShort {
     /// Monday of the ISO week, based on the fetch timestamp in UTC.
     pub week: NaiveDate,
     pub total: Decimal,
+    pub fetched_at: DateTime<Utc>,
 }
 
 pub(crate) fn group(totals: &[ShortTotal]) -> Vec<WeeklyShort> {
@@ -32,13 +33,17 @@ pub(crate) fn group(totals: &[ShortTotal]) -> Vec<WeeklyShort> {
         .map(|(week, observation)| WeeklyShort {
             week,
             total: observation.total,
+            fetched_at: observation.fetched_at,
         })
         .collect()
 }
 
 pub(crate) struct BoardRow {
     pub code: String,
-    pub totals: BTreeMap<NaiveDate, Decimal>,
+    pub weekly: BTreeMap<NaiveDate, WeeklyShort>,
+    pub newer: Option<ShortTotal>,
+    pub older: Option<ShortTotal>,
+    pub sentiment_score: Option<i8>,
 }
 
 pub(crate) struct KnfBoard {
@@ -67,16 +72,29 @@ pub(crate) fn board(index: &crate::company_archive::ArchiveIndex, codes: &[Strin
                         .sum(),
                 })
                 .collect::<Vec<_>>();
-            let totals = group(&observations)
+            let (newer, older) = crate::ranking::shorts_pair(&snapshots);
+            let sentiment_score = crate::sentiment::score(older.as_ref(), newer.as_ref());
+            let total = |snapshot: crate::model::ShortsSnapshot| ShortTotal {
+                fetched_at: snapshot.fetched_at,
+                total: snapshot
+                    .positions
+                    .iter()
+                    .map(|position| position.net_short_position_percent)
+                    .sum(),
+            };
+            let weekly = group(&observations)
                 .into_iter()
                 .map(|observation| {
                     weeks.insert(observation.week);
-                    (observation.week, observation.total)
+                    (observation.week, observation)
                 })
                 .collect();
             BoardRow {
                 code: code.clone(),
-                totals,
+                weekly,
+                newer: newer.map(total),
+                older: older.map(total),
+                sentiment_score,
             }
         })
         .collect();

@@ -612,12 +612,12 @@ fn weekly_shorts_select_the_latest_reading_of_each_iso_week_including_zero() {
         let html = ParsedHtml::parse_document(&board_page(directory.path()));
         assert_eq!(text(&html, ".knf-board tbody tr").len(), 1);
         assert_eq!(
-            text(&html, ".knf-board thead th"),
-            ["Spółka", "2026-W37", "2026-W38"]
+            text(&html, ".knf-board thead .weekly-heading"),
+            ["2026-W37", "2026-W38"]
         );
         assert_eq!(text(&html, ".knf-board tbody th"), ["KGHM"]);
         assert_eq!(
-            text(&html, ".knf-board tbody td"),
+            text(&html, ".knf-board tbody .weekly-total"),
             if newest_empty {
                 vec!["1.5", "0"]
             } else {
@@ -672,7 +672,7 @@ fn ranking_is_numeric_and_has_only_the_requested_columns() {
     }
     assert!(!rendered.contains("Wagi rodzin"));
     assert!(text(&html, "footer, .legend, .source-note").is_empty());
-    assert_eq!(text(&html, ".date"), ["2026-09-19Data rankingu · UTC"]);
+    assert!(text(&html, ".date").is_empty());
 }
 
 #[test]
@@ -877,11 +877,11 @@ fn knf_board_has_multiple_companies_and_keeps_missing_observations_blank() {
     let html = ParsedHtml::parse_document(&render_shorts(&board, as_of()));
     assert_eq!(text(&html, ".knf-board tbody th"), ["KGHM", "PGE", "PKOBP"]);
     assert_eq!(
-        text(&html, ".knf-board thead th"),
-        ["Spółka", "2026-W37", "2026-W38"]
+        text(&html, ".knf-board thead .weekly-heading"),
+        ["2026-W37", "2026-W38"]
     );
     assert_eq!(
-        text(&html, ".knf-board tbody td"),
+        text(&html, ".knf-board tbody .weekly-total"),
         ["1.5", "0", "0.7", "", "", ""]
     );
     assert!(text(&html, "svg, .holders").is_empty());
@@ -925,4 +925,130 @@ fn a_known_company_without_archives_has_one_short_seasonality_message() {
     );
     assert_eq!(text(&html, ".missing"), ["Brak historii cen."]);
     assert!(text(&html, "svg, .season-summary").is_empty());
+}
+
+#[test]
+fn knf_daily_points_show_the_actual_pair_even_when_weekly_changes_have_another_direction() {
+    let directory = tempfile::tempdir().unwrap();
+    let root = directory.path();
+    for (code, observations) in [
+        ("KRUK", ["2.34", "2.30", "2.81", "2.75"]),
+        ("ALLEGRO", ["0.76", "0.66", "0.66", "0.66"]),
+    ] {
+        for (index, (at, total)) in [
+            "2026-11-06T10:00:00Z",
+            "2026-11-09T19:00:00Z",
+            "2026-11-10T20:00:00Z",
+            "2026-11-11T16:00:00Z",
+        ]
+        .into_iter()
+        .zip(observations)
+        .enumerate()
+        {
+            write_json(
+                root,
+                &format!("{code}/{index}/shorts.json"),
+                &json!({
+                    "code":code, "isin":format!("fixture-{code}"), "fetched_at":at,
+                    "positions":[{"holder":"Holder", "net_short_position_percent":total, "position_date":"2026-11-05", "modify_date":"2026-11-06"}]
+                }),
+            );
+        }
+    }
+    let index = ArchiveIndex::read(root).unwrap();
+    let board = crate::weekly_shorts::board(&index, &["KRUK".into(), "ALLEGRO".into()]);
+    let date = NaiveDate::from_ymd_opt(2026, 11, 11).unwrap();
+    let ranking = rank_directory(root, date).unwrap();
+    for row in &board.rows {
+        assert_eq!(
+            row.sentiment_score,
+            ranking
+                .rows
+                .iter()
+                .find(|ranked| ranked.code == row.code)
+                .unwrap()
+                .sentiment_score
+        );
+    }
+    let html = ParsedHtml::parse_document(&render_shorts(&board, date));
+    assert_eq!(text(&html, "tr[data-code=KRUK] .sentiment-point"), ["1"]);
+    assert_eq!(
+        text(&html, "tr[data-code=KRUK] .sentiment-change"),
+        ["-0.06"]
+    );
+    assert_eq!(
+        text(&html, "tr[data-code=KRUK] .reading-value"),
+        ["2.81%", "2.75%"]
+    );
+    assert_eq!(
+        text(&html, "tr[data-code=KRUK] time"),
+        ["2026-11-10 20:00", "2026-11-11 16:00"]
+    );
+    assert_eq!(
+        text(&html, "tr[data-code=KRUK] .weekly-total"),
+        ["2.34", "2.75"]
+    );
+    assert_eq!(text(&html, "tr[data-code=ALLEGRO] .sentiment-point"), ["0"]);
+    assert_eq!(
+        text(&html, "tr[data-code=ALLEGRO] .sentiment-change"),
+        ["0"]
+    );
+    assert_eq!(
+        text(&html, "tr[data-code=ALLEGRO] .weekly-total"),
+        ["0.76", "0.66"]
+    );
+    let weekly = html
+        .select(&Selector::parse("tr[data-code=KRUK] .weekly-total").unwrap())
+        .last()
+        .unwrap();
+    assert_eq!(
+        weekly.value().attr("title"),
+        Some("Ostatni odczyt: 2026-11-11 16:00 UTC")
+    );
+    let explanation = text(&html, ".knf-guide").join(" ");
+    for fragment in [
+        "procentach",
+        "wcześniejszego dnia UTC",
+        "Spadek sumy daje +1",
+        "tydzień ISO",
+        "bieżący tydzień jest niepełny",
+        "Puste pole oznacza brak zapisu",
+    ] {
+        assert!(explanation.contains(fragment), "{fragment}");
+    }
+    assert!(text(&html, "svg").is_empty());
+}
+
+#[test]
+fn missing_comparison_does_not_become_a_zero_point_on_the_knf_board() {
+    let directory = tempfile::tempdir().unwrap();
+    write_json(
+        directory.path(),
+        "shorts.json",
+        &json!({
+            "code":"KGHM", "isin":"PLKGHM000017", "fetched_at":"2026-09-19T12:00:00Z", "positions":[]
+        }),
+    );
+    let html = ParsedHtml::parse_document(&board_page(directory.path()));
+    assert_eq!(text(&html, ".sentiment-point"), [""]);
+    assert_eq!(text(&html, ".sentiment-change"), [""]);
+    assert_eq!(text(&html, ".reading-value"), ["0%"]);
+    assert_eq!(text(&html, ".weekly-total"), ["0"]);
+}
+
+#[test]
+fn the_top_right_market_badge_and_ranking_date_are_removed_from_every_page() {
+    let directory = tempfile::tempdir().unwrap();
+    let company = card(directory.path(), "KGHM");
+    for rendered in [
+        render(&[], as_of()),
+        render_company(&company, as_of()),
+        history_page(&company, as_of()),
+        render_seasonality(&company, as_of(), &["KGHM".into()]).unwrap(),
+        board_page(directory.path()),
+    ] {
+        assert!(!rendered.contains("GPW / WIG20"));
+        assert!(!rendered.contains("Data rankingu"));
+        assert!(text(&ParsedHtml::parse_document(&rendered), ".date").is_empty());
+    }
 }

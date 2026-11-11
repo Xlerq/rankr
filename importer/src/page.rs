@@ -197,7 +197,7 @@ fn document(title: &str, body: &str) -> String {
 <html lang="pl"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{} — rankr</title><style>{}</style></head>
-<body><main><nav><a class="brand" href="/">rankr<span>.</span></a><span>GPW / WIG20</span></nav>
+<body><main><nav><a class="brand" href="/">rankr<span>.</span></a></nav>
 {body}
 </main></body></html>"#,
         escape(title),
@@ -205,7 +205,7 @@ fn document(title: &str, body: &str) -> String {
     )
 }
 
-fn render(rows: &[RankingRow], as_of: NaiveDate) -> String {
+fn render(rows: &[RankingRow], _as_of: NaiveDate) -> String {
     let mut body = String::new();
     for row in rows {
         body.push_str(&format!(
@@ -229,7 +229,7 @@ fn render(rows: &[RankingRow], as_of: NaiveDate) -> String {
         "Ranking spółek GPW",
         &format!(
             r#"
-<header class="page-heading"><h1>Ranking spółek</h1><p class="date">{as_of}<span>Data rankingu · UTC</span></p></header>
+<header class="page-heading"><h1>Ranking spółek</h1></header>
 {buttons}<div class="table-panel"><table class="ranking"><thead><tr>
 <th scope="col">Spółka</th><th scope="col">Sektor</th><th scope="col">Fundament</th><th scope="col">Technika</th><th scope="col">Sentyment</th><th scope="col">Wynik</th>
 </tr></thead><tbody>{body}</tbody></table></div>"#,
@@ -238,11 +238,11 @@ fn render(rows: &[RankingRow], as_of: NaiveDate) -> String {
     )
 }
 
-fn company_header(card: &CompanyCard, as_of: NaiveDate, view: &str) -> String {
+fn company_header(card: &CompanyCard, _as_of: NaiveDate, view: &str) -> String {
     format!(
         r#"<a class="back" href="/">Ranking</a>
 <header class="page-heading company-heading"><div><p class="eyebrow">{view}</p><h1 class="company-name">{}</h1><p class="sector">{}</p></div>
-<p class="date">{as_of}<span>Data rankingu · UTC</span></p></header>"#,
+</header>"#,
         escape(&card.row.code),
         escape(&card.row.gics_sector)
     )
@@ -273,9 +273,9 @@ fn view_links(code: &str) -> String {
     )
 }
 
-fn page_heading(title: &str, as_of: NaiveDate) -> String {
+fn page_heading(title: &str, _as_of: NaiveDate) -> String {
     format!(
-        "<a class=\"back\" href=\"/\">Ranking</a><header class=\"page-heading\"><h1>{title}</h1><p class=\"date\">{as_of}<span>Data rankingu · UTC</span></p></header>"
+        "<a class=\"back\" href=\"/\">Ranking</a><header class=\"page-heading\"><h1>{title}</h1></header>"
     )
 }
 
@@ -356,28 +356,52 @@ fn render_seasonality(
 fn render_shorts(board: &crate::weekly_shorts::KnfBoard, as_of: NaiveDate) -> String {
     let mut body = page_heading("Shorty KNF", as_of);
     body.push_str(&global_links("/shorty"));
+    body.push_str(r#"<section class="knf-guide" aria-label="Jak czytać dane KNF">
+<div><h2>Co oznaczają liczby?</h2><p>To suma ujawnionych pozycji krótkich netto posiadaczy, w procentach wyemitowanego kapitału spółki. Źródło: <a href="https://rss.knf.gov.pl/rss_pub/">rejestr KNF</a>. To publiczne wpisy, a nie wszystkie shorty ani opinie wszystkich inwestorów.</p></div>
+<div><h2>Punkt sentymentu: porównanie dni</h2><p>Najnowszy odczyt porównujemy z ostatnim odczytem z wcześniejszego dnia UTC. Spadek sumy daje +1, wzrost −1, brak zmiany 0. Obok punktu widać obie daty, sumy i różnicę. Pusty punkt oznacza brak pary odczytów.</p></div>
+<div><h2>Historia tygodniowa: inny okres</h2><p>Każda kolumna to tydzień ISO, od poniedziałku. Pokazuje ostatni zapisany odczyt z tego tygodnia; bieżący tydzień jest niepełny. Daty oznaczają pobranie rejestru (UTC). Spadek między tygodniami nie musi dawać dzisiaj +1. W tej części 0 oznacza zapisany odczyt z sumą 0%, także pustą listę wpisów. Puste pole oznacza brak zapisu.</p></div>
+</section>"#);
     if board.weeks.is_empty() {
         body.push_str("<p class=\"missing\">brak zapisanych odczytów rejestru</p>");
     } else {
-        body.push_str("<div class=\"table-panel\"><table class=\"knf-board\"><thead><tr><th scope=\"col\">Spółka</th>");
+        body.push_str(&format!("<div class=\"table-panel\"><table class=\"knf-board\"><thead><tr class=\"column-groups\"><th class=\"company-column\" scope=\"col\" rowspan=\"2\">Spółka</th><th scope=\"colgroup\" colspan=\"3\">Aktualny sentyment · porównanie dni UTC</th><th scope=\"colgroup\" colspan=\"{}\">Historia tygodniowa · suma (%)</th></tr><tr class=\"columns\"><th scope=\"col\">Punkt</th><th scope=\"col\">Porównywane odczyty (UTC)</th><th scope=\"col\">Zmiana (p.p.)</th>", board.weeks.len()));
         for week in &board.weeks {
-            body.push_str(&format!(
-                "<th scope=\"col\">{}-W{:02}</th>",
-                week.iso_week().year(),
-                week.iso_week().week()
-            ));
+            let end = week
+                .checked_add_signed(chrono::Duration::days(6))
+                .unwrap_or(*week);
+            body.push_str(&format!("<th class=\"weekly-heading\" scope=\"col\" title=\"{week} — {end}\">{}-W{:02}</th>", week.iso_week().year(), week.iso_week().week()));
         }
         body.push_str("</tr></thead><tbody>");
         for row in &board.rows {
-            body.push_str(&format!(
-                "<tr><th scope=\"row\"><a class=\"company-name\" href=\"/{}\">{}</a></th>",
-                escape(&row.code),
-                escape(&row.code)
-            ));
+            let change = row
+                .older
+                .as_ref()
+                .zip(row.newer.as_ref())
+                .and_then(|(older, newer)| newer.total.checked_sub(older.total));
+            let change = change
+                .map(|value| {
+                    format!(
+                        "{}{}",
+                        if value > Decimal::ZERO { "+" } else { "" },
+                        decimal(Some(value), false)
+                    )
+                })
+                .unwrap_or_default();
+            body.push_str(&format!("<tr data-code=\"{}\"><th scope=\"row\"><a class=\"company-name\" href=\"/{}\">{}</a></th><td class=\"sentiment-point\">{}</td><td class=\"sentiment-readings\">{}{}</td><td class=\"sentiment-change\">{change}</td>",
+                escape(&row.code), escape(&row.code), escape(&row.code), score(row.sentiment_score, false), short_reading("Poprzedni", row.older.as_ref()), short_reading("Najnowszy", row.newer.as_ref())));
             for week in &board.weeks {
+                let observation = row.weekly.get(week);
+                let title = observation
+                    .map(|observation| {
+                        format!(
+                            "Ostatni odczyt: {} UTC",
+                            observation.fetched_at.format("%Y-%m-%d %H:%M")
+                        )
+                    })
+                    .unwrap_or_else(|| "Brak zapisanego odczytu".into());
                 body.push_str(&format!(
-                    "<td>{}</td>",
-                    decimal(row.totals.get(week).copied(), false)
+                    "<td class=\"weekly-total\" title=\"{title}\">{}</td>",
+                    decimal(observation.map(|observation| observation.total), false)
                 ));
             }
             body.push_str("</tr>");
@@ -385,6 +409,18 @@ fn render_shorts(board: &crate::weekly_shorts::KnfBoard, as_of: NaiveDate) -> St
         body.push_str("</tbody></table></div>");
     }
     document("Shorty KNF", &body)
+}
+
+fn short_reading(label: &str, reading: Option<&crate::charts::ShortTotal>) -> String {
+    let Some(reading) = reading else {
+        return String::new();
+    };
+    format!(
+        "<span class=\"reading-line\"><span class=\"reading-label\">{label}</span><time datetime=\"{}\">{}</time><span class=\"reading-value\">{}%</span></span>",
+        reading.fetched_at.to_rfc3339(),
+        reading.fetched_at.format("%Y-%m-%d %H:%M"),
+        decimal(Some(reading.total), false)
+    )
 }
 
 fn band(number: &str, title: &str, points: Option<i8>, components: &str) -> String {
