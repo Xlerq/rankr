@@ -18,8 +18,8 @@ use crate::{
     sentiment, storage, technical_table,
 };
 
-/// Increment when scoring formulas, thresholds or family weights change.
-pub const SCORING_VERSION: &str = "v1";
+/// Increment when scoring formulas, observation periods, thresholds or family weights change.
+pub const SCORING_VERSION: &str = "v2-weekly-sentiment";
 
 #[derive(Debug, Serialize)]
 pub struct RankingRow {
@@ -49,8 +49,8 @@ pub fn archive_snapshot(directory: &Path, computed_at: DateTime<Utc>) -> Result<
         .context("saving the ranking snapshot")
 }
 
-/// Join the family results by code. Latest snapshots are independent of as_of;
-/// only the existing technical calculation limits candles to dates before as_of.
+/// Join family scores by code. Sentiment uses the two ISO weeks ending at as_of;
+/// the technical calculation uses only candles before as_of.
 pub fn rank_directory(directory: &Path, as_of: NaiveDate) -> Result<Ranking> {
     let fundamentals = fundamental_points_table::build_table(directory)
         .context("building the fundamental points table")?;
@@ -96,13 +96,14 @@ pub fn rank_directory(directory: &Path, as_of: NaiveDate) -> Result<Ranking> {
         };
         let fundamental_score = fundamentals.get(code).copied().flatten();
         let technical_score = technical.get(code).copied().flatten();
-        let sentiment_score = match latest_shorts.get(code) {
-            Some(newer) => sentiment::score(
-                older_shorts(shorts.iter().map(|archived| &archived.snapshot), newer),
-                Some(newer),
-            ),
-            None => None,
-        };
+        let (newer, older) = sentiment::weekly_pair(
+            shorts
+                .iter()
+                .map(|archived| &archived.snapshot)
+                .filter(|snapshot| snapshot.code.as_str() == code.as_str()),
+            as_of,
+        );
+        let sentiment_score = sentiment::score(older, newer);
         let final_score = combine_scores(fundamental_score, technical_score, sentiment_score);
         rows.push(RankingRow {
             code: code.clone(),
@@ -130,22 +131,12 @@ pub(crate) fn combine_scores(
     Some(fundamental? + technical? + sentiment?)
 }
 
-fn older_shorts<'a>(
-    mut shorts: impl Iterator<Item = &'a ShortsSnapshot>,
-    newer: &ShortsSnapshot,
-) -> Option<&'a ShortsSnapshot> {
-    shorts.find(|snapshot| {
-        snapshot.isin == newer.isin
-            && snapshot.fetched_at.date_naive() < newer.fetched_at.date_naive()
-    })
-}
-
-/// Expose precisely the observations used by the ranking, including its tie rule.
+/// Select the latest observation from each of the two scoring weeks.
 pub(crate) fn shorts_pair(
     shorts: &[ShortsSnapshot],
+    as_of: NaiveDate,
 ) -> (Option<ShortsSnapshot>, Option<ShortsSnapshot>) {
-    let newer = shorts.first();
-    let older = newer.and_then(|newer| older_shorts(shorts.iter(), newer));
+    let (newer, older) = sentiment::weekly_pair(shorts.iter(), as_of);
     (newer.cloned(), older.cloned())
 }
 

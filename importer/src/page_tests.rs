@@ -33,7 +33,7 @@ fn history_page(card: &CompanyCard, as_of: NaiveDate) -> String {
 fn board_page(root: &FsPath) -> String {
     let index = ArchiveIndex::read(root).unwrap();
     render_shorts(
-        &crate::weekly_shorts::board(&index, &["KGHM".into()]),
+        &crate::weekly_shorts::board(&index, &["KGHM".into()], as_of()),
         as_of(),
     )
 }
@@ -181,7 +181,7 @@ fn sentiment_details_use_the_rankings_pair_without_a_holder_list() {
     write_json(
         root,
         "old/shorts.json",
-        &snapshot("2026-09-18T18:00:00Z", "1.5"),
+        &snapshot("2026-09-11T18:00:00Z", "1.5"),
     );
     write_json(
         root,
@@ -203,7 +203,7 @@ fn sentiment_details_use_the_rankings_pair_without_a_holder_list() {
             "1.2%",
             "2026-09-19T12:00:00+00:00",
             "1.5%",
-            "2026-09-18T18:00:00+00:00"
+            "2026-09-11T18:00:00+00:00"
         ]
     );
     assert!(text(&html, ".holders").is_empty());
@@ -215,7 +215,7 @@ fn sentiment_details_use_the_rankings_pair_without_a_holder_list() {
 fn empty_register_has_no_fabricated_holders_and_real_zero_stays_zero() {
     let directory = tempfile::tempdir().unwrap();
     for (path, date) in [
-        ("old/shorts.json", "2026-09-18T12:00:00Z"),
+        ("old/shorts.json", "2026-09-11T12:00:00Z"),
         ("new/shorts.json", "2026-09-19T12:00:00Z"),
     ] {
         write_json(
@@ -471,7 +471,7 @@ fn company_loading_is_independent_of_other_company_archives_and_matches_ranking(
         &ohlc_history("PGE"),
     );
     for (name, date, percent) in [
-        ("older", "2026-09-18T12:00:00Z", "1.5"),
+        ("older", "2026-09-11T12:00:00Z", "1.5"),
         ("newer", "2026-09-19T12:00:00Z", "1.2"),
     ] {
         write_json(
@@ -873,7 +873,11 @@ fn knf_board_has_multiple_companies_and_keeps_missing_observations_blank() {
         );
     }
     let index = ArchiveIndex::read(root).unwrap();
-    let board = crate::weekly_shorts::board(&index, &["KGHM".into(), "PGE".into(), "PKOBP".into()]);
+    let board = crate::weekly_shorts::board(
+        &index,
+        &["KGHM".into(), "PGE".into(), "PKOBP".into()],
+        as_of(),
+    );
     let html = ParsedHtml::parse_document(&render_shorts(&board, as_of()));
     assert_eq!(text(&html, ".knf-board tbody th"), ["KGHM", "PGE", "PKOBP"]);
     assert_eq!(
@@ -928,7 +932,7 @@ fn a_known_company_without_archives_has_one_short_seasonality_message() {
 }
 
 #[test]
-fn knf_daily_points_show_the_actual_pair_even_when_weekly_changes_have_another_direction() {
+fn knf_points_follow_weekly_changes_in_both_the_ranking_and_board() {
     let directory = tempfile::tempdir().unwrap();
     let root = directory.path();
     for (code, observations) in [
@@ -955,11 +959,25 @@ fn knf_daily_points_show_the_actual_pair_even_when_weekly_changes_have_another_d
             );
         }
     }
+    write_json(
+        root,
+        "KRUK/future/shorts.json",
+        &json!({
+            "code":"KRUK", "isin":"fixture-KRUK", "fetched_at":"2026-11-16T10:00:00Z", "positions":[]
+        }),
+    );
     let index = ArchiveIndex::read(root).unwrap();
-    let board = crate::weekly_shorts::board(&index, &["KRUK".into(), "ALLEGRO".into()]);
     let date = NaiveDate::from_ymd_opt(2026, 11, 11).unwrap();
+    let board = crate::weekly_shorts::board(&index, &["KRUK".into(), "ALLEGRO".into()], date);
     let ranking = rank_directory(root, date).unwrap();
     for row in &board.rows {
+        let company = scorecard::load(&index, &row.code, date).unwrap().unwrap();
+        assert_eq!(company.row.sentiment_score, row.sentiment_score);
+        assert_eq!(company.newer_shorts.unwrap().fetched_at.date_naive(), date);
+        assert_eq!(
+            company.older_shorts.unwrap().fetched_at.date_naive(),
+            NaiveDate::from_ymd_opt(2026, 11, 6).unwrap()
+        );
         assert_eq!(
             row.sentiment_score,
             ranking
@@ -971,28 +989,12 @@ fn knf_daily_points_show_the_actual_pair_even_when_weekly_changes_have_another_d
         );
     }
     let html = ParsedHtml::parse_document(&render_shorts(&board, date));
-    assert_eq!(text(&html, "tr[data-code=KRUK] .sentiment-point"), ["1"]);
-    assert_eq!(
-        text(&html, "tr[data-code=KRUK] .sentiment-change"),
-        ["-0.06"]
-    );
-    assert_eq!(
-        text(&html, "tr[data-code=KRUK] .reading-value"),
-        ["2.81%", "2.75%"]
-    );
-    assert_eq!(
-        text(&html, "tr[data-code=KRUK] time"),
-        ["2026-11-10 20:00", "2026-11-11 16:00"]
-    );
+    assert_eq!(text(&html, "tr[data-code=KRUK] .sentiment-point"), ["−1"]);
     assert_eq!(
         text(&html, "tr[data-code=KRUK] .weekly-total"),
         ["2.34", "2.75"]
     );
-    assert_eq!(text(&html, "tr[data-code=ALLEGRO] .sentiment-point"), ["0"]);
-    assert_eq!(
-        text(&html, "tr[data-code=ALLEGRO] .sentiment-change"),
-        ["0"]
-    );
+    assert_eq!(text(&html, "tr[data-code=ALLEGRO] .sentiment-point"), ["1"]);
     assert_eq!(
         text(&html, "tr[data-code=ALLEGRO] .weekly-total"),
         ["0.76", "0.66"]
@@ -1008,15 +1010,22 @@ fn knf_daily_points_show_the_actual_pair_even_when_weekly_changes_have_another_d
     let explanation = text(&html, ".knf-guide").join(" ");
     for fragment in [
         "procentach",
-        "wcześniejszego dnia UTC",
+        "poprzedniego tygodnia",
         "Spadek sumy daje +1",
-        "tydzień ISO",
-        "bieżący tydzień jest niepełny",
+        "Tydzień ISO",
+        "Bieżący tydzień jest niepełny",
         "Puste pole oznacza brak zapisu",
     ] {
         assert!(explanation.contains(fragment), "{fragment}");
     }
-    assert!(text(&html, "svg").is_empty());
+    assert!(
+        text(
+            &html,
+            "svg, .sentiment-readings, .sentiment-change, .reading-value"
+        )
+        .is_empty()
+    );
+    assert_eq!(text(&html, ".knf-board thead th").len(), 4);
 }
 
 #[test]
@@ -1031,8 +1040,8 @@ fn missing_comparison_does_not_become_a_zero_point_on_the_knf_board() {
     );
     let html = ParsedHtml::parse_document(&board_page(directory.path()));
     assert_eq!(text(&html, ".sentiment-point"), [""]);
-    assert_eq!(text(&html, ".sentiment-change"), [""]);
-    assert_eq!(text(&html, ".reading-value"), ["0%"]);
+    assert!(text(&html, ".sentiment-change").is_empty());
+    assert!(text(&html, ".reading-value").is_empty());
     assert_eq!(text(&html, ".weekly-total"), ["0"]);
 }
 
@@ -1050,5 +1059,62 @@ fn the_top_right_market_badge_and_ranking_date_are_removed_from_every_page() {
         assert!(!rendered.contains("GPW / WIG20"));
         assert!(!rendered.contains("Data rankingu"));
         assert!(text(&ParsedHtml::parse_document(&rendered), ".date").is_empty());
+    }
+}
+
+#[test]
+fn history_has_interaction_controls_and_keeps_missing_scores_out_of_the_chart() {
+    let directory = tempfile::tempdir().unwrap();
+    let mut company = card(directory.path(), "KGHM");
+    let start = NaiveDate::from_ymd_opt(2026, 8, 1).unwrap();
+    company.candles = (0..50)
+        .map(|offset| {
+            let base = rust_decimal::Decimal::from(100 + offset);
+            crate::charts::OhlcCandle {
+                date: start + Duration::days(offset),
+                open: base,
+                high: base + rust_decimal::Decimal::from(3),
+                low: base - rust_decimal::Decimal::from(2),
+                close: base + rust_decimal::Decimal::from(if offset % 2 == 0 { 2 } else { -1 }),
+            }
+        })
+        .collect();
+    company.candles.insert(
+        0,
+        crate::charts::OhlcCandle {
+            date: NaiveDate::from_ymd_opt(2020, 1, 2).unwrap(),
+            open: 50.into(),
+            high: 53.into(),
+            low: 49.into(),
+            close: 52.into(),
+        },
+    );
+    company.saved_scores = [
+        ("2026-09-04", None),
+        ("2026-09-05", Some(3)),
+        ("2026-09-11", None),
+        ("2026-09-15", Some(0)),
+        ("2026-09-18", Some(-2)),
+    ]
+    .into_iter()
+    .map(|(date, score)| crate::company_archive::SavedScore {
+        date: date.parse().unwrap(),
+        score,
+    })
+    .collect();
+    let rendered = history_page(&company, as_of());
+    let html = ParsedHtml::parse_document(&rendered);
+    assert_eq!(text(&html, ".price-score-chart").len(), 1);
+    let panel = html
+        .select(&Selector::parse("[data-history-chart]").unwrap())
+        .next()
+        .unwrap();
+    assert_eq!(panel.value().attr("data-first-score"), Some("2026-09-05"));
+    assert_eq!(text(&html, ".chart-controls [data-range]").len(), 4);
+    assert_eq!(text(&html, ".score-chart [data-score]").len(), 3);
+    assert!(text(&html, ".score-chart [data-date='2026-09-11']").is_empty());
+    assert_eq!(text(&html, ".view-guide").len(), 1);
+    if let Ok(path) = std::env::var("RANKR_CHART_PREVIEW") {
+        fs::write(path, rendered).unwrap();
     }
 }

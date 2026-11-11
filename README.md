@@ -79,11 +79,13 @@ date using `rank_directory`, with columns:
 `code`, `gics_sector`, `fundamental_score`, `technical_score`, `sentiment_score`,
 `final_score`.
 
-The scoring formulas are unchanged. The final score is the sum of all three
+The final score is the sum of all three
 families with weights 1/1/1; a missing family gives a missing final score. Rows
 keep the ranking's order. An empty cell means a missing result, while a genuine
 zero is displayed as `0`.
 
-Sentiment compares the latest shorts snapshot with the latest snapshot of the
-same ISIN from an earlier UTC day. Two empty position lists give zero; a missing
-pair gives a missing score. The first snapshot alone cannot produce sentiment.
+Sentiment uses `v2-weekly-sentiment`: the latest available observation in the
+current ISO week versus the latest in the immediately preceding ISO week, for
+the same ISIN, using UTC fetch dates. The current week is provisional; a missing
+week gives a missing score. Old ranking snapshots retain their original scores.
+Two empty position lists give zero. The first snapshot alone cannot produce sentiment.

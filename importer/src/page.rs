@@ -159,12 +159,13 @@ async fn seasonality(
 async fn shorts(
     State(state): State<PageState>,
 ) -> Result<Html<String>, (StatusCode, &'static str)> {
+    let as_of = Utc::now().date_naive();
     let board = tokio::task::spawn_blocking(move || {
-        crate::weekly_shorts::board(&state.archives, &state.company_codes)
+        crate::weekly_shorts::board(&state.archives, &state.company_codes, as_of)
     })
     .await
     .map_err(server_error)?;
-    Ok(Html(render_shorts(&board, Utc::now().date_naive())))
+    Ok(Html(render_shorts(&board, as_of)))
 }
 
 async fn legacy_chart(
@@ -327,10 +328,15 @@ fn render_chart(card: &CompanyCard, as_of: NaiveDate, codes: &[String]) -> Strin
     let mut body = page_heading("Historia punktów", as_of);
     body.push_str(&global_links("/historia"));
     body.push_str(&company_selector("/historia", &card.row.code, codes));
+    body.push_str("<p class=\"view-guide\">Świece pokazują ceny, a dolne słupki wyłącznie zapisane oceny. Dawnych punktów nie odtwarzamy. Domyślnie widzisz okres od pierwszego zapisu oceny; przycisk „Całość” odsłania starsze ceny. Przeciągnij wykres, aby go przesunąć; Ctrl + kółko myszy zmienia powiększenie.</p>");
     body.push_str(&crate::charts::render(
         &card.candles,
         &card.currency,
         &card.saved_scores,
+    ));
+    body.push_str(&format!(
+        "<script>{}</script>",
+        include_str!("history_chart.js")
     ));
     document(&format!("{} — historia punktów", card.row.code), &body)
 }
@@ -343,6 +349,7 @@ fn render_seasonality(
     let mut body = page_heading("Sezonowość", as_of);
     body.push_str(&global_links("/sezonowosc"));
     body.push_str(&company_selector("/sezonowosc", &card.row.code, codes));
+    body.push_str("<p class=\"view-guide\">Duża liczba to średni zwrot tego miesiąca w zakończonych latach: od ostatniej sesji poprzedniego miesiąca do ostatniej sesji tego miesiąca, z cen skorygowanych, gdy są dostępne. Linie zaczynają od 0% w pierwszej sesji miesiąca; średnie z 5 i 10 lat pojawiają się tylko przy wystarczającej historii.</p>");
     if card.closes.is_empty() {
         body.push_str("<p class=\"missing\">Brak historii cen.</p>");
     } else {
@@ -358,13 +365,13 @@ fn render_shorts(board: &crate::weekly_shorts::KnfBoard, as_of: NaiveDate) -> St
     body.push_str(&global_links("/shorty"));
     body.push_str(r#"<section class="knf-guide" aria-label="Jak czytać dane KNF">
 <div><h2>Co oznaczają liczby?</h2><p>To suma ujawnionych pozycji krótkich netto posiadaczy, w procentach wyemitowanego kapitału spółki. Źródło: <a href="https://rss.knf.gov.pl/rss_pub/">rejestr KNF</a>. To publiczne wpisy, a nie wszystkie shorty ani opinie wszystkich inwestorów.</p></div>
-<div><h2>Punkt sentymentu: porównanie dni</h2><p>Najnowszy odczyt porównujemy z ostatnim odczytem z wcześniejszego dnia UTC. Spadek sumy daje +1, wzrost −1, brak zmiany 0. Obok punktu widać obie daty, sumy i różnicę. Pusty punkt oznacza brak pary odczytów.</p></div>
-<div><h2>Historia tygodniowa: inny okres</h2><p>Każda kolumna to tydzień ISO, od poniedziałku. Pokazuje ostatni zapisany odczyt z tego tygodnia; bieżący tydzień jest niepełny. Daty oznaczają pobranie rejestru (UTC). Spadek między tygodniami nie musi dawać dzisiaj +1. W tej części 0 oznacza zapisany odczyt z sumą 0%, także pustą listę wpisów. Puste pole oznacza brak zapisu.</p></div>
+<div><h2>Punkt sentymentu: tydzień do tygodnia</h2><p>Porównujemy ostatni odczyt bieżącego tygodnia ISO z ostatnim odczytem poprzedniego tygodnia. Spadek sumy daje +1, wzrost −1, brak zmiany 0. Bez odczytu w jednym z tych tygodni punkt pozostaje pusty.</p></div>
+<div><h2>Jak czytać tygodnie?</h2><p>Tydzień ISO zaczyna się w poniedziałek. Daty odczytów oznaczają pobranie rejestru (UTC). Bieżący tydzień jest niepełny, więc jego suma i punkt mogą się jeszcze zmieniać. W tabeli 0 to odczyt z sumą 0%, także pusta lista wpisów. Puste pole oznacza brak zapisu.</p></div>
 </section>"#);
     if board.weeks.is_empty() {
         body.push_str("<p class=\"missing\">brak zapisanych odczytów rejestru</p>");
     } else {
-        body.push_str(&format!("<div class=\"table-panel\"><table class=\"knf-board\"><thead><tr class=\"column-groups\"><th class=\"company-column\" scope=\"col\" rowspan=\"2\">Spółka</th><th scope=\"colgroup\" colspan=\"3\">Aktualny sentyment · porównanie dni UTC</th><th scope=\"colgroup\" colspan=\"{}\">Historia tygodniowa · suma (%)</th></tr><tr class=\"columns\"><th scope=\"col\">Punkt</th><th scope=\"col\">Porównywane odczyty (UTC)</th><th scope=\"col\">Zmiana (p.p.)</th>", board.weeks.len()));
+        body.push_str("<div class=\"table-panel\"><table class=\"knf-board\"><thead><tr><th class=\"company-column\" scope=\"col\">Spółka</th><th scope=\"col\">Punkt</th>");
         for week in &board.weeks {
             let end = week
                 .checked_add_signed(chrono::Duration::days(6))
@@ -373,22 +380,7 @@ fn render_shorts(board: &crate::weekly_shorts::KnfBoard, as_of: NaiveDate) -> St
         }
         body.push_str("</tr></thead><tbody>");
         for row in &board.rows {
-            let change = row
-                .older
-                .as_ref()
-                .zip(row.newer.as_ref())
-                .and_then(|(older, newer)| newer.total.checked_sub(older.total));
-            let change = change
-                .map(|value| {
-                    format!(
-                        "{}{}",
-                        if value > Decimal::ZERO { "+" } else { "" },
-                        decimal(Some(value), false)
-                    )
-                })
-                .unwrap_or_default();
-            body.push_str(&format!("<tr data-code=\"{}\"><th scope=\"row\"><a class=\"company-name\" href=\"/{}\">{}</a></th><td class=\"sentiment-point\">{}</td><td class=\"sentiment-readings\">{}{}</td><td class=\"sentiment-change\">{change}</td>",
-                escape(&row.code), escape(&row.code), escape(&row.code), score(row.sentiment_score, false), short_reading("Poprzedni", row.older.as_ref()), short_reading("Najnowszy", row.newer.as_ref())));
+            body.push_str(&format!("<tr data-code=\"{}\"><th scope=\"row\"><a class=\"company-name\" href=\"/{}\">{}</a></th><td class=\"sentiment-point\">{}</td>", escape(&row.code), escape(&row.code), escape(&row.code), score(row.sentiment_score, false)));
             for week in &board.weeks {
                 let observation = row.weekly.get(week);
                 let title = observation
@@ -409,18 +401,6 @@ fn render_shorts(board: &crate::weekly_shorts::KnfBoard, as_of: NaiveDate) -> St
         body.push_str("</tbody></table></div>");
     }
     document("Shorty KNF", &body)
-}
-
-fn short_reading(label: &str, reading: Option<&crate::charts::ShortTotal>) -> String {
-    let Some(reading) = reading else {
-        return String::new();
-    };
-    format!(
-        "<span class=\"reading-line\"><span class=\"reading-label\">{label}</span><time datetime=\"{}\">{}</time><span class=\"reading-value\">{}%</span></span>",
-        reading.fetched_at.to_rfc3339(),
-        reading.fetched_at.format("%Y-%m-%d %H:%M"),
-        decimal(Some(reading.total), false)
-    )
 }
 
 fn band(number: &str, title: &str, points: Option<i8>, components: &str) -> String {
@@ -552,8 +532,8 @@ fn render_technical(card: &CompanyCard) -> String {
 fn render_sentiment(card: &CompanyCard) -> String {
     let mut body = String::from("<dl class=\"short-totals\">");
     for (label, snapshot) in [
-        ("Suma nowszego odczytu", &card.newer_shorts),
-        ("Suma starszego odczytu", &card.older_shorts),
+        ("Suma bieżącego tygodnia", &card.newer_shorts),
+        ("Suma poprzedniego tygodnia", &card.older_shorts),
     ] {
         let value = snapshot
             .as_ref()

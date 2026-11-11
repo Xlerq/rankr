@@ -137,7 +137,7 @@ pub(crate) fn load(
         .collect();
     candles.sort_by_key(|candle| candle.date);
     let shorts = ranking::company_shorts(&files.shorts, code);
-    let (newer_shorts, older_shorts) = ranking::shorts_pair(&shorts);
+    let (newer_shorts, older_shorts) = ranking::shorts_pair(&shorts, as_of);
     let fundamental_score = fundamental
         .as_ref()
         .and_then(|(points, _)| points.fundamental_score);

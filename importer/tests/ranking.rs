@@ -1,6 +1,5 @@
 use std::{fs, path::Path};
 
-use chrono::{DateTime, Duration, Utc};
 use serde_json::{Value, json};
 
 const AS_OF: &str = "2026-09-19";
@@ -35,6 +34,11 @@ fn shorts(code: &str, older: bool) -> Value {
         serde_json::from_str(if older { older_fixture } else { newer_fixture }).unwrap();
     input["code"] = json!(code);
     input["isin"] = json!(format!("fixture-{code}"));
+    input["fetched_at"] = json!(if older {
+        "2026-09-11T12:00:00Z"
+    } else {
+        "2026-09-18T12:00:00Z"
+    });
     // Equal disclosed exposure gives a real sentiment score of zero.
     let baseline: Value = serde_json::from_str(older_fixture).unwrap();
     input["positions"] = baseline["positions"].clone();
@@ -141,33 +145,57 @@ fn a_missing_family_yields_null_instead_of_a_partial_sum() {
 }
 
 #[test]
-fn sentiment_uses_latest_snapshot_from_an_earlier_utc_day() {
-    let newer_at: DateTime<Utc> = "2026-10-28T07:00:00Z".parse().unwrap();
-    for (hours, expected) in [(1, None), (13, Some(-1)), (24, Some(-1)), (48, Some(-1))] {
+fn sentiment_uses_the_latest_observation_in_each_of_two_consecutive_iso_weeks() {
+    let directory = tempfile::tempdir().unwrap();
+    let root = directory.path();
+    write_company(root, "KGHM");
+    let mut newest = shorts("KGHM", false);
+    newest["positions"][0]["net_short_position_percent"] = json!(0.8);
+    write_json(root, "KGHM/new/shorts.json", &newest);
+    for (name, date, total) in [
+        ("within-week", "2026-09-17T12:00:00Z", 5),
+        ("early-prior-week", "2026-09-08T12:00:00Z", 9),
+        ("future", "2026-09-21T12:00:00Z", 0),
+    ] {
+        let mut other = newest.clone();
+        other["fetched_at"] = json!(date);
+        other["positions"][0]["net_short_position_percent"] = json!(total);
+        write_json(root, &format!("KGHM/{name}/shorts.json"), &other);
+    }
+    let rows = rank(root);
+    assert_eq!(rows[0]["sentiment_score"], -1);
+    assert_eq!(rows[0]["final_score"], 2);
+}
+
+#[test]
+fn sentiment_requires_the_current_and_immediately_preceding_week_including_iso_year_boundaries() {
+    for (as_of, older_at, newer_at, expected) in [
+        (
+            "2021-01-06",
+            "2021-01-01T12:00:00Z",
+            "2021-01-05T12:00:00Z",
+            Some(-1),
+        ),
+        (AS_OF, "2026-09-04T12:00:00Z", "2026-09-18T12:00:00Z", None),
+        (AS_OF, "2026-09-11T12:00:00Z", "2026-09-12T12:00:00Z", None),
+        (AS_OF, "2026-09-11T12:00:00Z", "2026-09-21T12:00:00Z", None),
+    ] {
         let directory = tempfile::tempdir().unwrap();
-        let root = directory.path();
-        write_company(root, "KGHM");
+        let mut older = shorts("KGHM", true);
+        older["fetched_at"] = json!(older_at);
         let mut newer = shorts("KGHM", false);
         newer["fetched_at"] = json!(newer_at);
         newer["positions"][0]["net_short_position_percent"] = json!(0.8);
-        let mut older = shorts("KGHM", true);
-        older["fetched_at"] = json!(newer_at - Duration::hours(hours));
-        write_json(root, "KGHM/new/shorts.json", &newer);
-        write_json(root, "KGHM/old/shorts.json", &older);
-        if expected.is_some() {
-            let mut recent = newer.clone();
-            recent["fetched_at"] = json!(newer_at - Duration::hours(1));
-            write_json(root, "KGHM/recent/shorts.json", &recent);
-            older["fetched_at"] = json!(newer_at - Duration::days(3));
-            older["positions"][0]["net_short_position_percent"] = json!(5);
-            write_json(root, "KGHM/earliest/shorts.json", &older);
-        }
-        let rows = rank(root);
-        assert_eq!(rows[0]["sentiment_score"], json!(expected));
+        write_json(directory.path(), "old/shorts.json", &older);
+        write_json(directory.path(), "new/shorts.json", &newer);
+        let rows = rankr::ranking::rank_directory(directory.path(), as_of.parse().unwrap())
+            .unwrap()
+            .rows;
         assert_eq!(
-            rows[0]["final_score"],
-            json!(expected.map(|points| 3 + points))
+            rows[0].sentiment_score, expected,
+            "{as_of}: {older_at} -> {newer_at}"
         );
+        assert!(rows[0].final_score.is_none());
     }
 }
 

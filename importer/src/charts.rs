@@ -84,7 +84,14 @@ impl DateAxis {
 }
 
 pub(crate) fn render(candles: &[OhlcCandle], currency: &str, scores: &[SavedScore]) -> String {
-    let mut html = String::from("<section class=\"chart-panel\">");
+    let first_score = scores
+        .iter()
+        .find(|score| score.score.is_some())
+        .map(|score| score.date.to_string())
+        .unwrap_or_default();
+    let mut html = format!(
+        "<section class=\"chart-panel\" data-history-chart data-first-score=\"{first_score}\">"
+    );
     if candles.is_empty() {
         html.push_str("<p class=\"missing\">Brak zapisanej historii OHLC.</p>");
     }
@@ -94,7 +101,17 @@ pub(crate) fn render(candles: &[OhlcCandle], currency: &str, scores: &[SavedScor
             .map(|c| c.date)
             .chain(scores.iter().map(|s| s.date)),
     ) {
-        let mut svg = svg_start("price-score-chart", "Cena i zapisane wyniki", 900.0);
+        html.push_str(r#"<div class="chart-controls" hidden aria-label="Zakres historii">
+<button type="button" data-range="scores">Od pierwszej oceny</button><button type="button" data-range="90">3 miesiące</button><button type="button" data-range="365">Rok</button><button type="button" data-range="all">Całość</button>
+<button type="button" data-zoom="0.5" aria-label="Powiększ wykres">+</button><button type="button" data-zoom="2" aria-label="Pomniejsz wykres">−</button>
+<button type="button" data-pan="-0.5">Wcześniej</button><button type="button" data-pan="0.5">Później</button>
+<label>Od <input type="date" data-from></label><label>Do <input type="date" data-to></label><button type="button" data-apply>Pokaż</button><output class="chart-range" data-range-label></output></div>"#);
+        let end = axis.start + chrono::Duration::days(axis.days - 1);
+        let attrs = format!(
+            "data-domain-start=\"{}\" data-domain-end=\"{end}\" tabindex=\"0\"",
+            axis.start
+        );
+        let mut svg = svg_start("price-score-chart", "Cena i zapisane wyniki", 900.0, &attrs);
         let _ = write!(
             svg,
             "<text class=\"panel-label\" x=\"6%\" y=\"26\">Cena {}</text><g class=\"price-chart\">",
@@ -105,17 +122,18 @@ pub(crate) fn render(candles: &[OhlcCandle], currency: &str, scores: &[SavedScor
         draw_scores(&mut svg, scores, &axis);
         svg.push_str("</g><g class=\"time-axis\">");
         axis.draw(&mut svg, 878.0);
-        svg.push_str("</g>");
+        svg.push_str("</g><line class=\"chart-cursor\" x1=\"6%\" x2=\"6%\" y1=\"48\" y2=\"840\" visibility=\"hidden\"/>");
         svg_end(&mut svg);
         html.push_str(&svg);
+        html.push_str("<div class=\"chart-tooltip\" data-tooltip aria-live=\"off\"></div>");
     }
     html.push_str("</section>");
     html
 }
 
-fn svg_start(class: &str, label: &str, height: f64) -> String {
+fn svg_start(class: &str, label: &str, height: f64, attrs: &str) -> String {
     format!(
-        "<div class=\"plot\"><svg xmlns=\"http://www.w3.org/2000/svg\" class=\"{class}\" role=\"img\" aria-label=\"{label}\" width=\"100%\" height=\"{height}\">"
+        "<div class=\"plot\"><svg xmlns=\"http://www.w3.org/2000/svg\" class=\"{class}\" role=\"img\" aria-label=\"{label}\" width=\"100%\" height=\"{height}\" {attrs}>"
     )
 }
 
@@ -173,8 +191,12 @@ fn draw_prices(svg: &mut String, candles: &[OhlcCandle], axis: &DateAxis) {
         let body_width = (axis.step * 0.65).min(0.8);
         let _ = write!(
             svg,
-            "<g class=\"candle {class}\" data-date=\"{}\" data-x=\"{x:.6}\"><title>{}: O {} · H {} · L {} · C {}</title><line x1=\"{x:.6}%\" y1=\"{:.2}\" x2=\"{x:.6}%\" y2=\"{:.2}\"/><rect x=\"{:.6}%\" y=\"{body_top:.2}\" width=\"{body_width:.6}%\" height=\"{body_height:.2}\"/></g>",
+            "<g class=\"candle {class}\" data-date=\"{}\" data-x=\"{x:.6}\" data-open=\"{}\" data-high=\"{}\" data-low=\"{}\" data-close=\"{}\"><title>{}: O {} · H {} · L {} · C {}</title><line x1=\"{x:.6}%\" y1=\"{:.2}\" x2=\"{x:.6}%\" y2=\"{:.2}\"/><rect x=\"{:.6}%\" y=\"{body_top:.2}\" width=\"{body_width:.6}%\" height=\"{body_height:.2}\"/></g>",
             candle.date,
+            candle.open,
+            candle.high,
+            candle.low,
+            candle.close,
             candle.date,
             candle.open,
             candle.high,
@@ -284,6 +306,7 @@ pub(crate) fn render_seasonality(data: &Seasonality, year: i32) -> String {
         "seasonality-chart",
         "Sezonowość bieżącego miesiąca",
         840.0,
+        "",
     ));
     for tick in 0..=4 {
         let fraction = f64::from(tick) / 4.0;

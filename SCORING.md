@@ -71,8 +71,12 @@ bez kalibracji na WIG20. Brak wyceny i dynamiki rok do roku.
 
 ## Sentiment: zmiana ujawnionych pozycji krótkich
 
-Porównywane są sumy procentów pozycji: najnowszy `shorts.json` i najnowszy starszy
-snapshot tego samego ISIN **z wcześniejszego dnia UTC**, bez wymogu pełnych 24 godzin.
+Model `v2-weekly-sentiment` porównuje ostatni zapisany odczyt bieżącego tygodnia ISO
+z ostatnim odczytem bezpośrednio poprzedniego tygodnia, dla tego samego ISIN.
+Tygodnie zaczynają się w poniedziałek i są wyznaczane według daty pobrania UTC.
+Bieżący tydzień jest niepełny; jego najnowszy odczyt może zmieniać punkt.
+Brak odczytu w którymkolwiek z tych tygodni daje `null`; nie pomijamy luk.
+Zapisanych rankingów starszej wersji nie przeliczamy wstecz.
 Na posiadacza zostaje jeden najnowszy wpis, bez sumowania historycznych zgłoszeń.
 
 - Suma wzrosła → **−1**.

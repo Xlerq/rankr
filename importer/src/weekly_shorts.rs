@@ -1,8 +1,8 @@
-//! Presentation-only weekly observations; sentiment scoring still uses its original pair.
+//! Weekly board and sentiment use the same ISO weeks and archived observations.
 
 use std::collections::BTreeMap;
 
-use chrono::{DateTime, Datelike, Duration, NaiveDate, Utc};
+use chrono::{DateTime, NaiveDate, Utc};
 use rust_decimal::Decimal;
 
 use crate::charts::ShortTotal;
@@ -18,11 +18,7 @@ pub(crate) fn group(totals: &[ShortTotal]) -> Vec<WeeklyShort> {
     let mut selected = BTreeMap::<NaiveDate, &ShortTotal>::new();
     for observation in totals {
         let date = observation.fetched_at.date_naive();
-        let week = date
-            .checked_sub_signed(Duration::days(i64::from(
-                date.weekday().num_days_from_monday(),
-            )))
-            .unwrap_or(date);
+        let week = crate::sentiment::week_start(date);
         let entry = selected.entry(week).or_insert(observation);
         if observation.fetched_at >= entry.fetched_at {
             *entry = observation;
@@ -41,8 +37,6 @@ pub(crate) fn group(totals: &[ShortTotal]) -> Vec<WeeklyShort> {
 pub(crate) struct BoardRow {
     pub code: String,
     pub weekly: BTreeMap<NaiveDate, WeeklyShort>,
-    pub newer: Option<ShortTotal>,
-    pub older: Option<ShortTotal>,
     pub sentiment_score: Option<i8>,
 }
 
@@ -51,7 +45,11 @@ pub(crate) struct KnfBoard {
     pub rows: Vec<BoardRow>,
 }
 
-pub(crate) fn board(index: &crate::company_archive::ArchiveIndex, codes: &[String]) -> KnfBoard {
+pub(crate) fn board(
+    index: &crate::company_archive::ArchiveIndex,
+    codes: &[String],
+    as_of: NaiveDate,
+) -> KnfBoard {
     let mut weeks = std::collections::BTreeSet::new();
     let rows = codes
         .iter()
@@ -63,6 +61,7 @@ pub(crate) fn board(index: &crate::company_archive::ArchiveIndex, codes: &[Strin
             let observations = snapshots
                 .iter()
                 .rev()
+                .filter(|snapshot| snapshot.fetched_at.date_naive() <= as_of)
                 .map(|snapshot| ShortTotal {
                     fetched_at: snapshot.fetched_at,
                     total: snapshot
@@ -72,16 +71,8 @@ pub(crate) fn board(index: &crate::company_archive::ArchiveIndex, codes: &[Strin
                         .sum(),
                 })
                 .collect::<Vec<_>>();
-            let (newer, older) = crate::ranking::shorts_pair(&snapshots);
+            let (newer, older) = crate::ranking::shorts_pair(&snapshots, as_of);
             let sentiment_score = crate::sentiment::score(older.as_ref(), newer.as_ref());
-            let total = |snapshot: crate::model::ShortsSnapshot| ShortTotal {
-                fetched_at: snapshot.fetched_at,
-                total: snapshot
-                    .positions
-                    .iter()
-                    .map(|position| position.net_short_position_percent)
-                    .sum(),
-            };
             let weekly = group(&observations)
                 .into_iter()
                 .map(|observation| {
@@ -92,8 +83,6 @@ pub(crate) fn board(index: &crate::company_archive::ArchiveIndex, codes: &[Strin
             BoardRow {
                 code: code.clone(),
                 weekly,
-                newer: newer.map(total),
-                older: older.map(total),
                 sentiment_score,
             }
         })

@@ -342,7 +342,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn an_intraday_register_change_updates_sentiment_against_the_previous_utc_day() {
+    async fn an_intraday_register_change_updates_sentiment_against_the_previous_iso_week() {
         let root = tempfile::tempdir().unwrap();
         let company = crate::history::YahooSymbolMap::bundled()
             .unwrap()
@@ -351,13 +351,13 @@ mod tests {
         let companies = [company.clone()];
         let mut requests = 0;
         for (timestamp, total, expected) in [
-            ("2026-11-10T20:00:00Z", "2.81", None),
+            ("2026-11-06T20:00:00Z", "2.81", None),
             ("2026-11-11T10:00:00Z", "2.81", Some(0)),
             ("2026-11-11T16:00:00Z", "2.75", Some(1)),
         ] {
             let body = serde_json::json!({"status":"success", "total":1, "records":[{
                 "ISIN":company.isin, "HOLDER_FULL_NAME":"Holder", "NET_SHORT_POSITION_O":total,
-                "POSITION_DATE":"2026-11-09", "MODIFY_DATE":&timestamp[..10]
+                "POSITION_DATE":"2026-11-05", "MODIFY_DATE":&timestamp[..10]
             }]})
             .to_string();
             let fetched_at = timestamp.parse().unwrap();
