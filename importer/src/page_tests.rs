@@ -504,7 +504,7 @@ fn company_loading_is_independent_of_other_company_archives_and_matches_ranking(
 }
 
 #[test]
-fn candles_and_scores_share_one_svg_and_the_same_calendar_positions() {
+fn candles_and_scores_share_a_compressed_axis_and_keep_score_only_dates() {
     let directory = tempfile::tempdir().unwrap();
     let root = directory.path();
     write_json(root, "history.json", &ohlc_history("KGHM"));
@@ -549,8 +549,14 @@ fn candles_and_scores_share_one_svg_and_the_same_calendar_positions() {
             .unwrap()
     };
     assert!(x(saturday) > x(friday));
+    let first = html
+        .select(&Selector::parse(".candle[data-date='2020-01-02']").unwrap())
+        .next()
+        .unwrap();
+    // Six years and a one-day gap each take exactly one observed-date step.
+    assert!(((x(friday) - x(first)) - (x(saturday) - x(friday))).abs() < 0.00001);
     for mark in [friday, saturday] {
-        assert!(mark.value().attr("y").unwrap().parse::<f64>().unwrap() >= 640.0);
+        assert!(mark.value().attr("y").unwrap().parse::<f64>().unwrap() >= 386.0);
     }
     assert!(
         text(&html, ".price-score-chart .time-axis .axis-label")
@@ -714,14 +720,14 @@ fn scorecard_has_points_and_navigation_without_charts_or_explanations() {
 }
 
 #[test]
-fn charts_fill_the_container_and_keep_a_tall_pixel_height() {
+fn history_chart_fills_the_container_at_a_compact_height() {
     let directory = tempfile::tempdir().unwrap();
     write_json(directory.path(), "history.json", &ohlc_history("KGHM"));
     let html = ParsedHtml::parse_document(&history_page(&card(directory.path(), "KGHM"), as_of()));
     let svgs: Vec<_> = html.select(&Selector::parse("svg").unwrap()).collect();
     assert_eq!(svgs.len(), 1);
     assert_eq!(svgs[0].value().attr("width"), Some("100%"));
-    assert_eq!(svgs[0].value().attr("height"), Some("900"));
+    assert_eq!(svgs[0].value().attr("height"), Some("520"));
     assert!(svgs[0].value().attr("viewBox").is_none());
     assert!(!include_str!("page.css").contains("max-width: 1200px"));
     assert!(text(&html, ".source-note, footer, .legend, .missing").is_empty());
@@ -1068,6 +1074,12 @@ fn history_has_interaction_controls_and_keeps_missing_scores_out_of_the_chart() 
     let mut company = card(directory.path(), "KGHM");
     let start = NaiveDate::from_ymd_opt(2026, 8, 1).unwrap();
     company.candles = (0..50)
+        .filter(|offset| {
+            (start + Duration::days(*offset))
+                .weekday()
+                .num_days_from_monday()
+                < 5
+        })
         .map(|offset| {
             let base = rust_decimal::Decimal::from(100 + offset);
             crate::charts::OhlcCandle {

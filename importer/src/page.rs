@@ -328,7 +328,7 @@ fn render_chart(card: &CompanyCard, as_of: NaiveDate, codes: &[String]) -> Strin
     let mut body = page_heading("Historia punktów", as_of);
     body.push_str(&global_links("/historia"));
     body.push_str(&company_selector("/historia", &card.row.code, codes));
-    body.push_str("<p class=\"view-guide\">Świece pokazują ceny, a dolne słupki wyłącznie zapisane oceny. Dawnych punktów nie odtwarzamy. Domyślnie widzisz okres od pierwszego zapisu oceny; przycisk „Całość” odsłania starsze ceny. Przeciągnij wykres, aby go przesunąć; Ctrl + kółko myszy zmienia powiększenie.</p>");
+    body.push_str("<p class=\"view-guide\">Świece pokazują ceny, a dolne słupki wyłącznie zapisane oceny. Dni bez świecy i zapisanej oceny są pomijane na osi. Dawnych punktów nie odtwarzamy. Domyślnie widzisz okres od pierwszego zapisu oceny; przycisk „Całość” odsłania starsze ceny. Przeciągnij wykres, aby go przesunąć; Ctrl + kółko myszy zmienia powiększenie.</p>");
     body.push_str(&crate::charts::render(
         &card.candles,
         &card.currency,

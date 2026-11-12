@@ -1,6 +1,6 @@
 //! SVG geometry only. Scoring continues to use Decimal and its existing formulas.
 
-use std::fmt::Write;
+use std::{collections::BTreeSet, fmt::Write};
 
 use chrono::{DateTime, NaiveDate, Utc};
 use rust_decimal::{Decimal, prelude::ToPrimitive};
@@ -25,60 +25,57 @@ pub(crate) struct ShortTotal {
 // in CSS pixels, so resizing a wide window never flattens the image or its text.
 const LEFT: f64 = 6.0;
 const RIGHT: f64 = 94.0;
-const PRICE_TOP: f64 = 48.0;
-const PRICE_BOTTOM: f64 = 560.0;
-const SCORE_TOP: f64 = 640.0;
-const SCORE_BOTTOM: f64 = 840.0;
+const PRICE_TOP: f64 = 36.0;
+const PRICE_BOTTOM: f64 = 336.0;
+const SCORE_TOP: f64 = 386.0;
+const SCORE_BOTTOM: f64 = 470.0;
 
+/// One slot per observed date. Closed-market days without a score take no space.
+/// A score recorded without a candle keeps its own date; it is never moved to a session.
 struct DateAxis {
-    start: NaiveDate,
-    days: i64,
+    dates: Vec<NaiveDate>,
     step: f64,
 }
 
 impl DateAxis {
     fn new(dates: impl Iterator<Item = NaiveDate>) -> Option<Self> {
-        let (start, end) = dates.fold(None, |range, date| match range {
-            None => Some((date, date)),
-            Some((start, end)) => Some((date.min(start), date.max(end))),
-        })?;
-        let days = (end - start).num_days() + 1;
-        Some(Self {
-            start,
-            days,
-            step: (RIGHT - LEFT) / days as f64,
-        })
+        let dates: Vec<_> = dates.collect::<BTreeSet<_>>().into_iter().collect();
+        if dates.is_empty() {
+            return None;
+        }
+        let step = (RIGHT - LEFT) / dates.len() as f64;
+        Some(Self { dates, step })
     }
 
     fn x(&self, date: NaiveDate) -> f64 {
-        LEFT + ((date - self.start).num_days() as f64 + 0.5) * self.step
+        let index = self
+            .dates
+            .binary_search(&date)
+            .expect("date belongs to the chart axis");
+        LEFT + (index as f64 + 0.5) * self.step
     }
 
     fn draw(&self, svg: &mut String, y: f64) {
-        let ticks = (self.days - 1).min(5);
+        let ticks = (self.dates.len() - 1).min(5);
         for tick in 0..=ticks {
-            let offset = if ticks == 0 {
+            let index = if ticks == 0 {
                 0
             } else {
-                (self.days - 1) * tick / ticks
+                (self.dates.len() - 1) * tick / ticks
             };
-            if let Some(date) = self
-                .start
-                .checked_add_signed(chrono::Duration::days(offset))
-            {
-                let anchor = if tick == 0 {
-                    "start"
-                } else if tick == ticks {
-                    "end"
-                } else {
-                    "middle"
-                };
-                let _ = write!(
-                    svg,
-                    "<text class=\"axis-label\" x=\"{:.4}%\" y=\"{y}\" text-anchor=\"{anchor}\">{date}</text>",
-                    self.x(date)
-                );
-            }
+            let date = self.dates[index];
+            let anchor = if tick == 0 {
+                "start"
+            } else if tick == ticks {
+                "end"
+            } else {
+                "middle"
+            };
+            let _ = write!(
+                svg,
+                "<text class=\"axis-label\" x=\"{:.4}%\" y=\"{y}\" text-anchor=\"{anchor}\">{date}</text>",
+                self.x(date)
+            );
         }
     }
 }
@@ -99,30 +96,30 @@ pub(crate) fn render(candles: &[OhlcCandle], currency: &str, scores: &[SavedScor
         candles
             .iter()
             .map(|c| c.date)
-            .chain(scores.iter().map(|s| s.date)),
+            .chain(scores.iter().filter(|s| s.score.is_some()).map(|s| s.date)),
     ) {
         html.push_str(r#"<div class="chart-controls" hidden aria-label="Zakres historii">
-<button type="button" data-range="scores">Od pierwszej oceny</button><button type="button" data-range="90">3 miesiące</button><button type="button" data-range="365">Rok</button><button type="button" data-range="all">Całość</button>
+<button type="button" data-range="scores">Od pierwszej oceny</button><button type="button" data-range="90">3 mies.</button><button type="button" data-range="365">Rok</button><button type="button" data-range="all">Całość</button>
 <button type="button" data-zoom="0.5" aria-label="Powiększ wykres">+</button><button type="button" data-zoom="2" aria-label="Pomniejsz wykres">−</button>
-<button type="button" data-pan="-0.5">Wcześniej</button><button type="button" data-pan="0.5">Później</button>
-<label>Od <input type="date" data-from></label><label>Do <input type="date" data-to></label><button type="button" data-apply>Pokaż</button><output class="chart-range" data-range-label></output></div>"#);
-        let end = axis.start + chrono::Duration::days(axis.days - 1);
+<button type="button" data-pan="-0.5" aria-label="Wcześniej">←</button><button type="button" data-pan="0.5" aria-label="Później">→</button>
+<details class="chart-dates"><summary>Daty</summary><div><label>Od <input type="date" data-from></label><label>Do <input type="date" data-to></label><button type="button" data-apply>Pokaż</button></div></details><output class="chart-range" data-range-label></output></div>"#);
+        let end = axis.dates.last().unwrap();
         let attrs = format!(
             "data-domain-start=\"{}\" data-domain-end=\"{end}\" tabindex=\"0\"",
-            axis.start
+            axis.dates[0]
         );
-        let mut svg = svg_start("price-score-chart", "Cena i zapisane wyniki", 900.0, &attrs);
+        let mut svg = svg_start("price-score-chart", "Cena i zapisane wyniki", 520.0, &attrs);
         let _ = write!(
             svg,
-            "<text class=\"panel-label\" x=\"6%\" y=\"26\">Cena {}</text><g class=\"price-chart\">",
+            "<text class=\"panel-label\" x=\"6%\" y=\"22\">Cena {}</text><g class=\"price-chart\">",
             escape(currency)
         );
         draw_prices(&mut svg, candles, &axis);
-        svg.push_str("</g><text class=\"panel-label\" x=\"6%\" y=\"610\">Wynik</text><g class=\"score-chart\">");
+        svg.push_str("</g><text class=\"panel-label\" x=\"6%\" y=\"366\">Wynik</text><g class=\"score-chart\">");
         draw_scores(&mut svg, scores, &axis);
         svg.push_str("</g><g class=\"time-axis\">");
-        axis.draw(&mut svg, 878.0);
-        svg.push_str("</g><line class=\"chart-cursor\" x1=\"6%\" x2=\"6%\" y1=\"48\" y2=\"840\" visibility=\"hidden\"/>");
+        axis.draw(&mut svg, 506.0);
+        svg.push_str("</g><line class=\"chart-cursor\" x1=\"6%\" x2=\"6%\" y1=\"36\" y2=\"470\" visibility=\"hidden\"/>");
         svg_end(&mut svg);
         html.push_str(&svg);
         html.push_str("<div class=\"chart-tooltip\" data-tooltip aria-live=\"off\"></div>");
@@ -188,7 +185,7 @@ fn draw_prices(svg: &mut String, candles: &[OhlcCandle], axis: &DateAxis) {
         };
         let body_top = y(candle.open.max(candle.close));
         let body_height = (y(candle.open) - y(candle.close)).abs().max(1.0);
-        let body_width = (axis.step * 0.65).min(0.8);
+        let body_width = (axis.step * 0.65).min(1.2);
         let _ = write!(
             svg,
             "<g class=\"candle {class}\" data-date=\"{}\" data-x=\"{x:.6}\" data-open=\"{}\" data-high=\"{}\" data-low=\"{}\" data-close=\"{}\"><title>{}: O {} · H {} · L {} · C {}</title><line x1=\"{x:.6}%\" y1=\"{:.2}\" x2=\"{x:.6}%\" y2=\"{:.2}\"/><rect x=\"{:.6}%\" y=\"{body_top:.2}\" width=\"{body_width:.6}%\" height=\"{body_height:.2}\"/></g>",
@@ -213,21 +210,40 @@ fn draw_scores(svg: &mut String, scores: &[SavedScore], axis: &DateAxis) {
     if scores.iter().all(|score| score.score.is_none()) {
         return;
     }
-    let max_score = scores
+    let min = scores
         .iter()
         .filter_map(|s| s.score)
-        .map(|s| f64::from(s).abs())
-        .fold(1.0, f64::max);
-    let middle = (SCORE_TOP + SCORE_BOTTOM) / 2.0;
-    let scale = (SCORE_BOTTOM - SCORE_TOP) / 2.0 / max_score;
-    for value in [-max_score, 0.0, max_score] {
+        .min()
+        .unwrap_or(0)
+        .min(0);
+    let max = scores
+        .iter()
+        .filter_map(|s| s.score)
+        .max()
+        .unwrap_or(0)
+        .max(0);
+    let (min, max) = if min == max {
+        (-1.0, 1.0)
+    } else {
+        (f64::from(min), f64::from(max))
+    };
+    let scale = (SCORE_BOTTOM - SCORE_TOP) / (max - min);
+    let middle = SCORE_TOP + max * scale;
+    for (index, value) in [min, 0.0, max].into_iter().enumerate() {
+        let hidden = index == 1 && (min == 0.0 || max == 0.0);
+        let _ = write!(
+            svg,
+            "<g class=\"score-tick\" style=\"{}\">",
+            if hidden { "display:none" } else { "" }
+        );
         horizontal_tick(svg, middle - value * scale, &format!("{value:.0}"));
+        svg.push_str("</g>");
     }
     for saved in scores {
         let Some(value) = saved.score else { continue };
         let x = axis.x(saved.date);
         let y = middle - f64::from(value) * scale;
-        let bar_width = (axis.step * 0.65).min(1.5);
+        let bar_width = (axis.step * 0.65).min(1.2);
         if value == 0 {
             let _ = write!(
                 svg,

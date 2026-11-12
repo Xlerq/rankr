@@ -22,16 +22,25 @@
     function panWindow(range, domain, days) {
         return clampWindow(range.start + days, range.end + days, domain);
     }
-    function xForDay(day, range) {
-        return 6 + (day - range.start + 0.5) / span(range) * 88;
+    function xForIndex(index, range) {
+        return 6 + (index - range.start + 0.5) / span(range) * 88;
     }
-    const inside = (day, range) => day >= range.start && day <= range.end;
+    // The axis contains only actual candles and numerical saved scores, sorted by date.
+    function observedDates(candleDays, scoreDays) {
+        return Array.from(new Set([...candleDays, ...scoreDays])).sort((a, b) => a - b);
+    }
+    function rangeForDates(dates, from, to) {
+        if (![from, to].every(Number.isFinite)) return null;
+        if (from > to) [from, to] = [to, from];
+        const start = dates.findIndex(day => day >= from);
+        const end = dates.findLastIndex(day => day <= to);
+        return start < 0 || end < start ? null : { start, end };
+    }
+    const inside = (index, range) => index >= range.start && index <= range.end;
 
     function mount(panel) {
         const svg = panel.querySelector(".price-score-chart");
         if (!svg) return;
-        const domain = { start: parseDay(svg.dataset.domainStart), end: parseDay(svg.dataset.domainEnd) };
-        if (!Number.isFinite(domain.start) || !Number.isFinite(domain.end)) return;
         const first = parseDay(panel.dataset.firstScore);
         const candles = Array.from(svg.querySelectorAll(".candle"), node => ({
             node, day: parseDay(node.dataset.date),
@@ -42,17 +51,23 @@
         const scores = Array.from(svg.querySelectorAll("[data-score]"), node => ({
             node, day: parseDay(node.dataset.date), value: Number(node.dataset.score)
         }));
+        const dates = observedDates(candles.map(c => c.day), scores.map(s => s.day));
+        if (!dates.length) return;
+        const domain = { start: 0, end: dates.length - 1 };
+        const indices = new Map(dates.map((day, index) => [day, index]));
+        for (const point of [...candles, ...scores]) point.index = indices.get(point.day);
         const candleByDay = new Map(candles.map(candle => [candle.day, candle]));
         const scoreByDay = new Map(scores.map(score => [score.day, score.value]));
         const priceTicks = Array.from(svg.querySelectorAll(".price-chart .grid-line"));
-        const scoreTicks = Array.from(svg.querySelectorAll(".score-chart .grid-line"));
+        const scoreTicks = Array.from(svg.querySelectorAll(".score-tick"));
         const timeLabels = Array.from(svg.querySelectorAll(".time-axis text"));
         const from = panel.querySelector("[data-from]");
         const to = panel.querySelector("[data-to]");
         const tooltip = panel.querySelector("[data-tooltip]");
         const cursor = svg.querySelector(".chart-cursor");
         const percent = value => value.toFixed(6) + "%";
-        let range = clampWindow(Number.isFinite(first) ? first : Math.max(domain.start, domain.end - 364), domain.end, domain);
+        const lastDay = dates.at(-1);
+        let range = rangeForDates(dates, Number.isFinite(first) ? first : lastDay - 364, lastDay) || domain;
         let drag = null;
 
         function ticks(nodes, values, visible) {
@@ -66,18 +81,18 @@
         function draw(next) {
             if (!next) return;
             range = next;
-            const visible = candles.filter(candle => inside(candle.day, range));
+            const visible = candles.filter(candle => inside(candle.index, range));
             let low = Infinity, high = -Infinity;
             for (const candle of visible) { low = Math.min(low, candle.low); high = Math.max(high, candle.high); }
             const padding = Math.max((high - low) * 0.06, high * 0.005, 0.01);
             const bottom = Math.max(0, low - padding), top = high + padding;
-            const y = value => 48 + (top - value) / (top - bottom) * 512;
-            const width = Math.min(88 / span(range) * 0.65, 0.8);
+            const y = value => 36 + (top - value) / (top - bottom) * 300;
+            const width = Math.min(88 / span(range) * 0.65, 1.2);
             for (const candle of candles) {
-                const show = inside(candle.day, range);
+                const show = inside(candle.index, range);
                 candle.node.style.display = show ? "" : "none";
                 if (!show) continue;
-                const x = xForDay(candle.day, range);
+                const x = xForIndex(candle.index, range);
                 candle.wick.setAttribute("x1", percent(x)); candle.wick.setAttribute("x2", percent(x));
                 candle.wick.setAttribute("y1", y(candle.high)); candle.wick.setAttribute("y2", y(candle.low));
                 candle.body.setAttribute("x", percent(x - width / 2)); candle.body.setAttribute("width", percent(width));
@@ -85,33 +100,45 @@
                 candle.body.setAttribute("height", Math.max(1, Math.abs(y(candle.open) - y(candle.close))));
             }
             ticks(priceTicks, priceTicks.map((_, i) => (top - i / 4 * (top - bottom)).toFixed(2)), visible.length > 0);
-            const visibleScores = scores.filter(score => inside(score.day, range));
-            const max = visibleScores.reduce((max, score) => Math.max(max, Math.abs(score.value)), 1);
-            const barWidth = Math.min(88 / span(range) * 0.65, 1.5);
+            const visibleScores = scores.filter(score => inside(score.index, range));
+            let minScore = 0, maxScore = 0;
+            for (const score of visibleScores) { minScore = Math.min(minScore, score.value); maxScore = Math.max(maxScore, score.value); }
+            if (minScore === maxScore) { minScore = -1; maxScore = 1; }
+            const scoreY = value => 386 + (maxScore - value) / (maxScore - minScore) * 84;
+            const baseline = scoreY(0);
+            const barWidth = Math.min(88 / span(range) * 0.65, 1.2);
             for (const score of scores) {
-                const show = inside(score.day, range);
+                const show = inside(score.index, range);
                 score.node.style.display = show ? "" : "none";
                 if (!show) continue;
-                const x = xForDay(score.day, range), y = 740 - score.value / max * 100;
+                const x = xForIndex(score.index, range), y = scoreY(score.value);
                 if (score.value === 0) {
                     score.node.setAttribute("x1", percent(x - barWidth / 2)); score.node.setAttribute("x2", percent(x + barWidth / 2));
+                    score.node.setAttribute("y1", baseline); score.node.setAttribute("y2", baseline);
                 } else {
                     score.node.setAttribute("x", percent(x - barWidth / 2)); score.node.setAttribute("width", percent(barWidth));
-                    score.node.setAttribute("y", Math.min(740, y)); score.node.setAttribute("height", Math.abs(y - 740));
+                    score.node.setAttribute("y", Math.min(baseline, y)); score.node.setAttribute("height", Math.abs(y - baseline));
                 }
             }
-            ticks(scoreTicks, [-max, 0, max].map(String), visibleScores.length > 0);
+            scoreTicks.forEach((group, index) => {
+                const value = [minScore, 0, maxScore][index];
+                group.style.display = visibleScores.length && !(index === 1 && (minScore === 0 || maxScore === 0)) ? "" : "none";
+                const y = scoreY(value);
+                const line = group.querySelector("line");
+                line.setAttribute("y1", y); line.setAttribute("y2", y);
+                group.querySelectorAll("text").forEach(label => { label.textContent = value; label.setAttribute("y", y + 5); });
+            });
             const count = Math.min(timeLabels.length, span(range), 6);
             timeLabels.forEach((label, index) => {
                 label.style.display = index < count ? "" : "none";
                 if (index >= count) return;
-                const day = range.start + (count === 1 ? 0 : Math.floor((span(range) - 1) * index / (count - 1)));
-                label.textContent = iso(day); label.setAttribute("x", percent(xForDay(day, range)));
+                const position = range.start + (count === 1 ? 0 : Math.floor((span(range) - 1) * index / (count - 1)));
+                label.textContent = iso(dates[position]); label.setAttribute("x", percent(xForIndex(position, range)));
                 label.setAttribute("text-anchor", index === 0 ? "start" : index === count - 1 ? "end" : "middle");
             });
-            from.value = iso(range.start); to.value = iso(range.end);
-            panel.querySelector("[data-range-label]").textContent = iso(range.start) + " — " + iso(range.end);
-            svg.dataset.visibleStart = iso(range.start); svg.dataset.visibleEnd = iso(range.end);
+            from.value = iso(dates[range.start]); to.value = iso(dates[range.end]);
+            panel.querySelector("[data-range-label]").textContent = iso(dates[range.start]) + " — " + iso(dates[range.end]);
+            svg.dataset.visibleStart = iso(dates[range.start]); svg.dataset.visibleEnd = iso(dates[range.end]);
             cursor.setAttribute("visibility", "hidden"); tooltip.textContent = "";
         }
         function pointerFraction(event) {
@@ -119,18 +146,25 @@
             return Math.max(0, Math.min(1, ((event.clientX - bounds.left) / bounds.width - 0.06) / 0.88));
         }
         function showValue(event) {
-            const day = Math.min(range.end, range.start + Math.floor(pointerFraction(event) * span(range)));
+            const index = Math.min(range.end, range.start + Math.floor(pointerFraction(event) * span(range)));
+            const day = dates[index];
             const candle = candleByDay.get(day), value = scoreByDay.get(day);
             const price = candle ? `O ${candle.open} · H ${candle.high} · L ${candle.low} · C ${candle.close}` : "brak świecy";
             tooltip.textContent = `${iso(day)} · ${price} · Ocena: ${value === undefined ? "brak" : value}`;
-            const x = percent(xForDay(day, range)); cursor.setAttribute("x1", x); cursor.setAttribute("x2", x);
+            const x = percent(xForIndex(index, range)); cursor.setAttribute("x1", x); cursor.setAttribute("x2", x);
             cursor.setAttribute("visibility", "visible");
         }
-        for (const input of [from, to]) { input.min = iso(domain.start); input.max = iso(domain.end); }
-        panel.querySelector("[data-apply]").addEventListener("click", () => draw(clampWindow(parseDay(from.value), parseDay(to.value), domain)));
+        for (const input of [from, to]) { input.min = iso(dates[0]); input.max = iso(lastDay); }
+        panel.querySelector("[data-apply]").addEventListener("click", () => {
+            const next = rangeForDates(dates, parseDay(from.value), parseDay(to.value));
+            from.setCustomValidity(next ? "" : "Brak zapisów w wybranym okresie.");
+            if (next) { draw(next); panel.querySelector(".chart-dates").open = false; }
+            else from.reportValidity();
+        });
+        from.addEventListener("input", () => from.setCustomValidity(""));
         panel.querySelectorAll("[data-range]").forEach(button => button.addEventListener("click", () => {
             const choice = button.dataset.range;
-            draw(choice === "all" ? domain : clampWindow(choice === "scores" ? (Number.isFinite(first) ? first : domain.start) : domain.end - Number(choice) + 1, domain.end, domain));
+            draw(choice === "all" ? domain : rangeForDates(dates, choice === "scores" ? (Number.isFinite(first) ? first : dates[0]) : lastDay - Number(choice) + 1, lastDay));
         }));
         panel.querySelectorAll("[data-zoom]").forEach(button => button.addEventListener("click", () => draw(zoomWindow(range, domain, Number(button.dataset.zoom)))));
         panel.querySelectorAll("[data-pan]").forEach(button => button.addEventListener("click", () => draw(panWindow(range, domain, Math.round(span(range) * Number(button.dataset.pan)) || Math.sign(Number(button.dataset.pan))))));
@@ -160,6 +194,6 @@
         });
         draw(range); panel.querySelector(".chart-controls").hidden = false;
     }
-    if (typeof module !== "undefined" && module.exports) module.exports = { clampWindow, zoomWindow, panWindow, xForDay, parseDay, iso };
+    if (typeof module !== "undefined" && module.exports) module.exports = { clampWindow, zoomWindow, panWindow, xForIndex, observedDates, rangeForDates, parseDay, iso };
     if (typeof document !== "undefined") document.querySelectorAll("[data-history-chart]").forEach(mount);
 })();

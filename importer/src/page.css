@@ -118,7 +118,7 @@ dd { margin: 0; min-height: 1.5em; font-size: 16px; overflow-wrap: anywhere; }
 .knf-guide a { color: var(--text); text-decoration: underline; text-underline-offset: 3px; }
 .knf-board .sentiment-point { text-align: center; }
 .view-guide { margin: 0 0 22px; max-width: 85rem; color: var(--muted); font-size: 16px; line-height: 1.6; }
-.chart-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding: 8px 8px 18px; }
+.chart-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding: 4px 8px 12px; }
 .chart-controls[hidden] { display: none; }
 .chart-controls button, .chart-controls input { font: inherit; color: var(--text); background: var(--bg); border: 1px solid var(--line); padding: 7px 11px; }
 .chart-controls button { cursor: pointer; }
@@ -130,3 +130,8 @@ dd { margin: 0; min-height: 1.5em; font-size: 16px; overflow-wrap: anywhere; }
 .chart-cursor { stroke: var(--muted); stroke-width: 1; stroke-dasharray: 4 4; pointer-events: none; }
 .chart-tooltip { min-height: 1.5em; margin: 8px 18px; font-size: 16px; }
 .price-score-chart:focus-visible { outline: 1px solid var(--muted); }
+
+.chart-dates { position: relative; }
+.chart-dates summary { cursor: pointer; padding: 7px 11px; border: 1px solid var(--line); background: var(--bg); }
+.chart-dates > div { position: absolute; z-index: 2; top: 100%; left: 0; display: flex; flex-wrap: wrap; gap: 10px; min-width: 280px; padding: 14px; background: var(--panel); border: 1px solid var(--line); }
+.plot .price-score-chart { min-width: 560px; }
